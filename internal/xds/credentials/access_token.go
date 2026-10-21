@@ -32,17 +32,18 @@ import (
 const accessTokenCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.call_credentials.access_token.v3.AccessTokenCredentials"
 
 func init() {
-	RegisterCallCredsBuilder(accessTokenCredsTypeURL, func(config *anypb.Any) (credentials.PerRPCCredentials, func(), error) {
+	RegisterCallCredsParser(accessTokenCredsTypeURL, func(config *anypb.Any) (BuildableCallCreds, error) {
 		var accessToken accesstokenpb.AccessTokenCredentials
 		if err := anypb.UnmarshalTo(config, &accessToken, proto.UnmarshalOptions{}); err != nil {
-			return nil, nil, fmt.Errorf("credentials: failed to unmarshal AccessTokenCredentials: %v", err)
+			return nil, fmt.Errorf("credentials: failed to unmarshal AccessTokenCredentials: %v", err)
 		}
 		if accessToken.GetToken() == "" {
-			return nil, nil, fmt.Errorf("credentials: access token must be non-empty")
+			return nil, fmt.Errorf("credentials: access token must be non-empty")
 		}
-		// These credentials hold no resources; the no-op cleanup satisfies
-		// the registry contract.
-		return &accessTokenCallCreds{token: accessToken.GetToken()}, func() {}, nil
+		token := accessToken.GetToken()
+		return &CallCreds{identity: protoIdentity(config), build: func() (credentials.PerRPCCredentials, func(), error) {
+			return &accessTokenCallCreds{token: token}, func() {}, nil
+		}}, nil
 	})
 }
 

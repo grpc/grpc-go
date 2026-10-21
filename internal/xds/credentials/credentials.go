@@ -17,15 +17,14 @@
  */
 
 // Package credentials provides the credentials used for xDS-configured side
-// channels (gRFC A102): built channel and call credentials paired with the
+// channels (gRFC A102): buildable channel and call credentials paired with the
 // identity of the configuration they were built from, and registries of
-// credential builders keyed by proto type URL.
+// credential parsers keyed by proto type URL.
 package credentials
 
 import (
 	"bytes"
 	"fmt"
-	"sync"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
@@ -44,81 +43,99 @@ const (
 )
 
 func init() {
-	RegisterChannelCredsBuilder(insecureCredsTypeURL, func(*anypb.Any, CertProviderConfigResolver) (credentials.Bundle, func(), error) {
-		return insecure.NewBundle(), func() {}, nil
+	RegisterChannelCredsParser(insecureCredsTypeURL, func(config *anypb.Any, _ CertProviderConfigResolver) (BuildableChannelCreds, error) {
+		return newChannelCreds(config, func() (credentials.Bundle, func(), error) { return insecure.NewBundle(), func() {}, nil }), nil
 	})
-	RegisterChannelCredsBuilder(googleDefaultCredsTypeURL, func(*anypb.Any, CertProviderConfigResolver) (credentials.Bundle, func(), error) {
-		return google.NewDefaultCredentials(), func() {}, nil
+	RegisterChannelCredsParser(googleDefaultCredsTypeURL, func(config *anypb.Any, _ CertProviderConfigResolver) (BuildableChannelCreds, error) {
+		return newChannelCreds(config, func() (credentials.Bundle, func(), error) { return google.NewDefaultCredentials(), func() {}, nil }), nil
 	})
-	// The xds credential resolves to its required fallback credential, whose
-	// builder is looked up in the registry: a side-channel target is not an
-	// xDS cluster, so there is no xDS security configuration for it.
-	RegisterChannelCredsBuilder(xdsCredsTypeURL, func(config *anypb.Any, resolver CertProviderConfigResolver) (credentials.Bundle, func(), error) {
-		var xdsCfg xdscredspb.XdsCredentials
-		if err := anypb.UnmarshalTo(config, &xdsCfg, proto.UnmarshalOptions{}); err != nil {
-			return nil, nil, fmt.Errorf("credentials: failed to unmarshal XdsCredentials: %v", err)
+	// Side channels have no xDS cluster security configuration. Resolve the
+	// required fallback without building it, preserving the outer identity.
+	RegisterChannelCredsParser(xdsCredsTypeURL, func(config *anypb.Any, resolver CertProviderConfigResolver) (BuildableChannelCreds, error) {
+		var cfg xdscredspb.XdsCredentials
+		if err := anypb.UnmarshalTo(config, &cfg, proto.UnmarshalOptions{}); err != nil {
+			return nil, fmt.Errorf("credentials: failed to unmarshal XdsCredentials: %v", err)
 		}
-		fallback := xdsCfg.GetFallbackCredentials()
+		fallback := cfg.GetFallbackCredentials()
 		if fallback == nil {
-			return nil, nil, fmt.Errorf("credentials: xds credentials missing required fallback credentials")
+			return nil, fmt.Errorf("credentials: xds credentials missing required fallback credentials")
 		}
-		if b := GetChannelCredsBuilder(fallback.GetTypeUrl()); b != nil {
-			return b(fallback, resolver)
+		parser := GetChannelCredsParser(fallback.GetTypeUrl())
+		if parser == nil {
+			return nil, fmt.Errorf("credentials: unsupported fallback credentials type %q in xds credentials", fallback.GetTypeUrl())
 		}
-		return nil, nil, fmt.Errorf("credentials: unsupported fallback credentials type %q in xds credentials", fallback.GetTypeUrl())
+		parsed, err := parser(fallback, resolver)
+		if err != nil {
+			return nil, err
+		}
+		return newChannelCreds(config, parsed.Build), nil
 	})
 }
 
 // CertProviderConfigResolver resolves certificate provider instance names to
 // their configuration. It is implemented by the bootstrap config, and
-// declared here so that credential builders do not depend on the bootstrap
+// declared here so that credential parsers do not depend on the bootstrap
 // package.
 type CertProviderConfigResolver interface {
 	CertProviderConfigs() map[string]*certprovider.BuildableConfig
 }
 
-// ChannelCredsBuilder builds a channel credentials bundle from a GrpcService
-// channel credentials plugin config. The resolver gives access to the
-// certificate provider instances configured in the bootstrap config; builders
-// that do not reference them ignore it. The returned function releases the
-// resources held by the bundle when it is no longer needed.
-type ChannelCredsBuilder func(config *anypb.Any, resolver CertProviderConfigResolver) (credentials.Bundle, func(), error)
+// BuildableChannelCreds is validated channel credential configuration.
+// Parsed configurations hold no acquired resources. Bootstrap adapters borrow
+// credentials whose lifetime remains owned by bootstrap.
+// Build acquires resources for one channel; the returned function releases
+// them after the channel closes. Build must clean up partial acquisitions on error.
+// Each successful Build must be released independently, even when providers
+// are shared internally.
+type BuildableChannelCreds interface {
+	Identity() Identity
+	Build() (credentials.Bundle, func(), error)
+}
 
-// CallCredsBuilder builds per-RPC credentials from a GrpcService call
-// credentials plugin config. The returned function releases the resources
-// held by the credentials when they are no longer needed.
-type CallCredsBuilder func(config *anypb.Any) (credentials.PerRPCCredentials, func(), error)
+// BuildableCallCreds is validated call credential configuration, with the same
+// acquisition and release contract as BuildableChannelCreds.
+type BuildableCallCreds interface {
+	Identity() Identity
+	Build() (credentials.PerRPCCredentials, func(), error)
+}
+
+// ChannelCredsParser validates a plugin and resolves bootstrap references.
+// It must not acquire resources.
+type ChannelCredsParser func(*anypb.Any, CertProviderConfigResolver) (BuildableChannelCreds, error)
+
+// CallCredsParser validates a call credentials plugin without acquiring resources.
+type CallCredsParser func(*anypb.Any) (BuildableCallCreds, error)
 
 var (
-	// channelCredsBuilders is a map from proto type URL to
-	// ChannelCredsBuilder.
-	channelCredsBuilders = make(map[string]ChannelCredsBuilder)
-	// callCredsBuilders is a map from proto type URL to CallCredsBuilder.
-	callCredsBuilders = make(map[string]CallCredsBuilder)
+	// channelCredsParsers is a map from proto type URL to
+	// ChannelCredsParser.
+	channelCredsParsers = make(map[string]ChannelCredsParser)
+	// callCredsParsers is a map from proto type URL to CallCredsParser.
+	callCredsParsers = make(map[string]CallCredsParser)
 )
 
-// RegisterChannelCredsBuilder registers the builder for the given proto type
+// RegisterChannelCredsParser registers the parser for the given proto type
 // URL. Must be called at init time. Not thread safe.
-func RegisterChannelCredsBuilder(typeURL string, b ChannelCredsBuilder) {
-	channelCredsBuilders[typeURL] = b
+func RegisterChannelCredsParser(typeURL string, b ChannelCredsParser) {
+	channelCredsParsers[typeURL] = b
 }
 
-// GetChannelCredsBuilder returns the builder registered for the given proto
+// GetChannelCredsParser returns the parser registered for the given proto
 // type URL, or nil if there is none.
-func GetChannelCredsBuilder(typeURL string) ChannelCredsBuilder {
-	return channelCredsBuilders[typeURL]
+func GetChannelCredsParser(typeURL string) ChannelCredsParser {
+	return channelCredsParsers[typeURL]
 }
 
-// RegisterCallCredsBuilder registers the builder for the given proto type
+// RegisterCallCredsParser registers the parser for the given proto type
 // URL. Must be called at init time. Not thread safe.
-func RegisterCallCredsBuilder(typeURL string, b CallCredsBuilder) {
-	callCredsBuilders[typeURL] = b
+func RegisterCallCredsParser(typeURL string, b CallCredsParser) {
+	callCredsParsers[typeURL] = b
 }
 
-// GetCallCredsBuilder returns the builder registered for the given proto type
+// GetCallCredsParser returns the parser registered for the given proto type
 // URL, or nil if there is none.
-func GetCallCredsBuilder(typeURL string) CallCredsBuilder {
-	return callCredsBuilders[typeURL]
+func GetCallCredsParser(typeURL string) CallCredsParser {
+	return callCredsParsers[typeURL]
 }
 
 // Identity identifies the configuration a credential was built from.
@@ -136,31 +153,38 @@ func (i Identity) Equal(other Identity) bool {
 	return i.Type == other.Type && bytes.Equal(i.Data, other.Data)
 }
 
-// ChannelCreds pairs a built credentials bundle with the identity of the
-// configuration it was built from.
+// ChannelCreds is buildable channel credential configuration.
 type ChannelCreds struct {
-	bundle   credentials.Bundle
 	identity Identity
-	cleanup  func()
+	build    func() (credentials.Bundle, func(), error)
 }
 
-// NewChannelCreds pairs the given bundle with its identity. cleanup releases
-// the resources held by the bundle and is run by Close; it must be nil when
-// the bundle is owned by another component (e.g. the bootstrap config), in
-// which case Close is a no-op.
-func NewChannelCreds(bundle credentials.Bundle, identity Identity, cleanup func()) *ChannelCreds {
-	if cleanup != nil {
-		cleanup = sync.OnceFunc(cleanup)
-	}
-	return &ChannelCreds{bundle: bundle, identity: identity, cleanup: cleanup}
+func protoIdentity(config *anypb.Any) Identity {
+	return Identity{Type: config.GetTypeUrl(), Data: bytes.Clone(config.GetValue())}
 }
 
-// Bundle returns the built credentials bundle.
-func (c *ChannelCreds) Bundle() credentials.Bundle {
-	return c.bundle
+func newChannelCreds(config *anypb.Any, build func() (credentials.Bundle, func(), error)) *ChannelCreds {
+	return &ChannelCreds{identity: protoIdentity(config), build: build}
 }
 
-// Equal reports whether c and other were built from the same configuration.
+// NewChannelCreds adapts a bundle owned by bootstrap. Build borrows the bundle
+// and returns a no-op release; bootstrap remains responsible for cleanup.
+func NewChannelCreds(bundle credentials.Bundle, identity Identity) *ChannelCreds {
+	identity.Data = bytes.Clone(identity.Data)
+	return &ChannelCreds{identity: identity, build: func() (credentials.Bundle, func(), error) {
+		return bundle, func() {}, nil
+	}}
+}
+
+// Build acquires credentials for a channel.
+func (c *ChannelCreds) Build() (credentials.Bundle, func(), error) { return c.build() }
+
+// Identity returns the source configuration identity.
+func (c *ChannelCreds) Identity() Identity {
+	return Identity{Type: c.identity.Type, Data: bytes.Clone(c.identity.Data)}
+}
+
+// Equal compares credential configuration identities.
 func (c *ChannelCreds) Equal(other *ChannelCreds) bool {
 	if c == nil || other == nil {
 		return c == other
@@ -168,45 +192,30 @@ func (c *ChannelCreds) Equal(other *ChannelCreds) bool {
 	return c.identity.Equal(other.identity)
 }
 
-// Identity returns the identity of the configuration the channel credentials
-// were built from.
-func (c *ChannelCreds) Identity() Identity {
-	return c.identity
-}
-
-// Close releases the resources held by the bundle, if owned. It is
-// idempotent.
-func (c *ChannelCreds) Close() {
-	if c.cleanup != nil {
-		c.cleanup()
-	}
-}
-
-// CallCreds pairs built per-RPC credentials with the identity of the
-// configuration they were built from.
+// CallCreds is buildable call credential configuration.
 type CallCreds struct {
-	creds    credentials.PerRPCCredentials
 	identity Identity
-	cleanup  func()
+	build    func() (credentials.PerRPCCredentials, func(), error)
 }
 
-// NewCallCreds pairs the given per-RPC credentials with their identity.
-// cleanup releases the resources held by the credentials and is run by Close;
-// it must be nil when the credentials are owned by another component (e.g.
-// the bootstrap config), in which case Close is a no-op.
-func NewCallCreds(creds credentials.PerRPCCredentials, identity Identity, cleanup func()) *CallCreds {
-	if cleanup != nil {
-		cleanup = sync.OnceFunc(cleanup)
-	}
-	return &CallCreds{creds: creds, identity: identity, cleanup: cleanup}
+// NewCallCreds adapts call credentials owned by bootstrap. Build borrows them
+// and returns a no-op release.
+func NewCallCreds(creds credentials.PerRPCCredentials, identity Identity) *CallCreds {
+	identity.Data = bytes.Clone(identity.Data)
+	return &CallCreds{identity: identity, build: func() (credentials.PerRPCCredentials, func(), error) {
+		return creds, func() {}, nil
+	}}
 }
 
-// Credentials returns the built per-RPC credentials.
-func (c *CallCreds) Credentials() credentials.PerRPCCredentials {
-	return c.creds
+// Build acquires call credentials for a channel.
+func (c *CallCreds) Build() (credentials.PerRPCCredentials, func(), error) { return c.build() }
+
+// Identity returns the source configuration identity.
+func (c *CallCreds) Identity() Identity {
+	return Identity{Type: c.identity.Type, Data: bytes.Clone(c.identity.Data)}
 }
 
-// Equal reports whether c and other were built from the same configuration.
+// Equal compares credential configuration identities.
 func (c *CallCreds) Equal(other *CallCreds) bool {
 	if c == nil || other == nil {
 		return c == other
@@ -214,16 +223,18 @@ func (c *CallCreds) Equal(other *CallCreds) bool {
 	return c.identity.Equal(other.identity)
 }
 
-// Identity returns the identity of the configuration the per-RPC credentials
-// were built from.
-func (c *CallCreds) Identity() Identity {
-	return c.identity
+// EqualChannelCreds compares buildable channel credential identities.
+func EqualChannelCreds(a, b BuildableChannelCreds) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Identity().Equal(b.Identity())
 }
 
-// Close releases the resources held by the credentials, if owned. It is
-// idempotent.
-func (c *CallCreds) Close() {
-	if c.cleanup != nil {
-		c.cleanup()
+// EqualCallCreds compares buildable call credential identities.
+func EqualCallCreds(a, b BuildableCallCreds) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
 	}
+	return a.Identity().Equal(b.Identity())
 }

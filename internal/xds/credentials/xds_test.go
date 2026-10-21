@@ -30,9 +30,9 @@ import (
 
 const xdsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.xds.v3.XdsCredentials"
 
-// Tests that building xds channel credentials fails on malformed configs and
+// Tests that parsing xds channel credentials fails on malformed configs and
 // on missing or unsupported fallback credentials.
-func (s) TestXDSCredsBuild_Errors(t *testing.T) {
+func (s) TestXDSCredsParse_Errors(t *testing.T) {
 	missingFallback, err := anypb.New(&xdscredspb.XdsCredentials{})
 	if err != nil {
 		t.Fatalf("Failed to marshal XdsCredentials: %v", err)
@@ -67,7 +67,7 @@ func (s) TestXDSCredsBuild_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := xdscreds.GetChannelCredsBuilder(xdsCredsTypeURL)(tt.config, nil)
+			_, err := xdscreds.GetChannelCredsParser(xdsCredsTypeURL)(tt.config, nil)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("Build returned error %v, want error containing %q", err, tt.wantErr)
 			}
