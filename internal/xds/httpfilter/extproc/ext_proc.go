@@ -974,8 +974,8 @@ type clientStream struct {
 
 	procStreamFailed      *grpcsync.Event // fired when external processor stream has closed and RPC should be failed
 	procStreamBypass      *grpcsync.Event // fired when the external processor stream should be bypassed or drained
-	requestBypass         *grpcsync.Event // fired when the external processor signals that client side messages should be bypassed or drained
-	responseBypass        *grpcsync.Event // fired when the external processor signals that server side messages should be bypassed or drained
+	requestBypass         *grpcsync.Event // fired when the external processor signals that client requests should be bypassed or drained
+	responseBypass        *grpcsync.Event // fired when the external processor signals that server response should be bypassed or drained
 	requestDrainComplete  atomic.Bool     // tracks whether client-side drain complete response has been received
 	responseDrainComplete *grpcsync.Event // fired when server-side drain complete response has been received
 	requestEOSSent        atomic.Bool
