@@ -89,9 +89,20 @@ func NewClient(opts ClientOptions) func() {
 	ac.logger = igrpclog.NewPrefixLogger(logger, opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
 
 	// Start a timer that will fire after the initial assignment timeout. If a
-	// valid assignment is not received before the timer fires, the
+	// result is not received before the timer fires, the onAssignment or
 	// onAssignmentError callback will be invoked.
+	//
+	// Even though ac is only returned at the end of this function to the
+	// caller, there is still a data race here:
+	// - time.AfterFunc() may fire and run its callback before the value
+	//   returned from it is written to ac.initialAssignmentTimer. This may
+	//   happen when opts.InitialAssignmentTimeout is very small and this
+	//   goroutine get preempted before ac.initialAssignmentTimer is set.
+	// - If ac.reportError is called before ac.initialAssignmentTimer is set,
+	//   it may observe a nil timer and behave incorrectly.
+	ac.mu.Lock()
 	ac.initialAssignmentTimer = time.AfterFunc(opts.InitialAssignmentTimeout, func() { ac.reportError(errInitialAssignmentTimeout) })
+	ac.mu.Unlock()
 
 	go ac.run(ctx)
 	return ac.close
