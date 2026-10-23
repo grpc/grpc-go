@@ -115,3 +115,30 @@ func TestValidate(t *testing.T) {
 		}
 	}
 }
+
+func TestDecodeBinHeader(t *testing.T) {
+	for _, test := range []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{in: "", want: ""},
+		{in: "Zm9vAGJhcg==", want: "foo\x00bar"}, // Padded.
+		{in: "Zm9vAGJhcg", want: "foo\x00bar"},   // Unpadded.
+		{in: "YWJj", want: "abc"},                // No padding needed.
+		{in: "AP8=", want: "\x00\xff"},
+		{in: "AP8", want: "\x00\xff"},
+		{in: "AP8==", wantErr: true}, // Wrong padding.
+		{in: "not base64!", wantErr: true},
+		{in: "AP8-_w", wantErr: true}, // URL-safe alphabet.
+	} {
+		got, err := DecodeBinHeader(test.in)
+		if (err != nil) != test.wantErr {
+			t.Errorf("DecodeBinHeader(%q) returned error %v, want error: %v", test.in, err, test.wantErr)
+			continue
+		}
+		if !test.wantErr && string(got) != test.want {
+			t.Errorf("DecodeBinHeader(%q) = %q, want %q", test.in, got, test.want)
+		}
+	}
+}
