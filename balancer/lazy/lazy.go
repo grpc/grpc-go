@@ -83,11 +83,15 @@ type lazyBalancer struct {
 	delegate              balancer.Balancer
 	latestClientConnState *balancer.ClientConnState
 	latestResolverError   error
+	closed                bool
 }
 
 func (lb *lazyBalancer) Close() {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
+	lb.closed = true
+	lb.latestClientConnState = nil
+	lb.latestResolverError = nil
 	if lb.delegate != nil {
 		lb.delegate.Close()
 		lb.delegate = nil
@@ -97,6 +101,9 @@ func (lb *lazyBalancer) Close() {
 func (lb *lazyBalancer) ResolverError(err error) {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
+	if lb.closed {
+		return
+	}
 	if lb.delegate != nil {
 		lb.delegate.ResolverError(err)
 		return
@@ -107,6 +114,9 @@ func (lb *lazyBalancer) ResolverError(err error) {
 func (lb *lazyBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
+	if lb.closed {
+		return nil
+	}
 	if lb.delegate != nil {
 		return lb.delegate.UpdateClientConnState(ccs)
 	}
@@ -124,6 +134,9 @@ func (lb *lazyBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnSta
 func (lb *lazyBalancer) ExitIdle() {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
+	if lb.closed {
+		return
+	}
 	if lb.delegate != nil {
 		lb.delegate.ExitIdle()
 		return
