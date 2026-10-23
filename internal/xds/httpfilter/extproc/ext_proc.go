@@ -974,6 +974,7 @@ type clientStream struct {
 
 	procStreamFailed      *grpcsync.Event // fired when external processor stream has closed and RPC should be failed
 	procStreamBypass      *grpcsync.Event // fired when the external processor stream should be bypassed or drained
+	procSendClosed        atomic.Bool     // ensures the external processor stream is half-closed at most once
 	requestBypass         *grpcsync.Event // fired when the external processor signals that client requests should be bypassed or drained
 	responseBypass        *grpcsync.Event // fired when the external processor signals that server response should be bypassed or drained
 	requestDrainComplete  atomic.Bool     // tracks whether client-side drain complete response has been received
@@ -1724,6 +1725,9 @@ func (cs *clientStream) applyMutations(mutation *v3procservicepb.HeaderMutation,
 // closeProcSend gracefully half-closes the external processor stream across the
 // background send goroutine by pushing a nil sentinel onto miscSendCh.
 func (cs *clientStream) closeProcSend() {
+	if !cs.procSendClosed.CompareAndSwap(false, true) {
+		return
+	}
 	select {
 	case cs.controlSendCh <- nil:
 	case <-cs.ctx.Done():
@@ -2163,6 +2167,7 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		case <-cs.procStreamFailed.Done():
 		case <-cs.ctx.Done():
 		}
+		cs.waitForResponseDrain()
 		cs.responseTrailers = cs.responseHeader
 		cs.fireResponseTrailerReady()
 		cs.maybeHalfCloseProcStream()
@@ -2189,8 +2194,36 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		}
 	}
 
+	if !cs.waitForResponseDrain() {
+		return
+	}
 	cs.fireResponseTrailerReady()
 	cs.maybeHalfCloseProcStream()
+}
+
+// waitForResponseDrain blocks until an in-progress response drain completes.
+// After request_drain_responses, the external processor may still send body
+// responses for messages it received before the drain, followed by
+// drain_complete, and the data plane must not pass upstream data (including
+// trailers) downstream until then. responseTrailerReady must not fire earlier,
+// because the receive loop and maybeHalfCloseProcStream treat it as the end of
+// the response direction. It returns false if the processor stream failed or
+// the context is done.
+func (cs *clientStream) waitForResponseDrain() bool {
+	// Response drain is only defined for GRPC response body mode.
+	if cs.config.processingModes.responseBodyMode != modeSend || !cs.responseBypass.HasFired() {
+		return true
+	}
+	select {
+	case <-cs.responseDrainComplete.Done():
+		return true
+	case <-cs.procStreamBypass.Done():
+		return true
+	case <-cs.procStreamFailed.Done():
+		return false
+	case <-cs.ctx.Done():
+		return false
+	}
 }
 
 func (cs *clientStream) waitForTrailerProcessing(recvErr error) error {

@@ -7467,6 +7467,153 @@ func (s) TestBidirectionalDraining_ResponseDrainIgnoredAfterTrailers(t *testing.
 	}
 }
 
+// TestBidirectionalDraining_ResponseDrain_TrailersBeforeDrainComplete tests the
+// scenario where the backend finishes the RPC after the external processor has
+// requested a response drain, but before the processor has echoed
+// drain_complete. It verifies that the filter keeps the processor stream open
+// until the drain completes, accepts the drain_complete echo, delivers the
+// response mutated by the processor, and completes the RPC with OK.
+//
+// A response drain skips sending trailers to the processor, but the filter
+// must not treat the response direction as finished until it receives
+// drain_complete: until then, the processor may still send response bodies,
+// including the drain_complete echo itself. Per the ext_proc drain protocol,
+// the data plane must not pass upstream data, including trailers, downstream
+// until it sees drain_complete.
+func (s) TestBidirectionalDraining_ResponseDrain_TrailersBeforeDrainComplete(t *testing.T) {
+	const respBodyS1Mutated = "s1_mutated"
+
+	// The processor closes this channel to let the backend finish the RPC. It is
+	// closed only after the filter has started the response drain, so the
+	// backend's trailers reach the filter while the drain is in progress.
+	finishBackend := make(chan struct{})
+
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive response body s1, and reply with a mutated s1 that also
+		// requests a response drain.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseBody() == nil {
+			return fmt.Errorf("proc server got %v, want ResponseBody", req)
+		}
+		drainResp := responseBodyResponse(marshalStreamingResponse(t, respBodyS1Mutated))
+		drainResp.RequestDrainResponses = true
+		if err := stream.Send(drainResp); err != nil {
+			return err
+		}
+
+		// The filter acknowledges the drain request with drain_complete,
+		// meaning it has stopped sending response bodies to the processor.
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if !req.GetResponseBody().GetDrainComplete() {
+			return fmt.Errorf("proc server got %v, want ResponseBody with drain_complete", req)
+		}
+
+		// Let the backend finish, and hold back the drain_complete echo long
+		// enough for the backend's trailers to reach the filter. The filter must
+		// keep the processor stream open meanwhile, because the drain is not
+		// complete until the processor echoes drain_complete. A premature
+		// half-close shows up here as Recv() returning io.EOF.
+		close(finishBackend)
+		recvErrCh := make(chan error, 1)
+		go func() {
+			_, err := stream.Recv()
+			recvErrCh <- err
+		}()
+		select {
+		case err := <-recvErrCh:
+			return fmt.Errorf("proc server Recv() returned %v before drain_complete was echoed, want the stream to stay open", err)
+		case <-time.After(defaultTestShortTimeout):
+		}
+
+		// Echo drain_complete to finish the drain. This is a response body
+		// message, which the filter must accept even though it has already read
+		// the backend's trailers.
+		if err := stream.Send(responseBodyDrainCompleteResponse()); err != nil {
+			return err
+		}
+
+		// Both directions are now complete, so the filter half-closes the
+		// stream.
+		if err := <-recvErrCh; err != io.EOF {
+			return fmt.Errorf("proc server Recv() returned %v, want io.EOF", err)
+		}
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if got, want := string(in.GetPayload().GetBody()), reqBodyC1; got != want {
+				return fmt.Errorf("backend server received unexpected request body %q, want %q", got, want)
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte(respBodyS1)},
+			}); err != nil {
+				return err
+			}
+			<-finishBackend
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Send c1 and half-close.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Receive s1 as mutated by ExtProc: the processor's reply to a response
+	// body sent before the drain must still be delivered.
+	resp, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if got, want := string(resp.GetPayload().GetBody()), respBodyS1Mutated; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
+	}
+
+	// The RPC must end with the backend's OK status, not an Internal error from
+	// the filter.
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want io.EOF", err)
+	}
+}
+
 // TestBidirectionalDraining_TerminationWithoutDrainFails tests the scenario
 // where the external processor stream terminates with OK status after receiving
 // a request or response body message without initiating a drain sequence, even
