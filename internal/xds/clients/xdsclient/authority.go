@@ -600,7 +600,7 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *ServerConfig)
 
 	// At this point, we are guaranteed that we have received a response from a
 	// higher priority server compared to the current active server. So, we
-	// revert to the higher priorty server and close all lower priority ones.
+	// revert to the higher priority server and close all lower priority ones.
 	a.activeXDSChannel = a.xdsChannelConfigs[serverIdx]
 
 	// Close all lower priority channels.
