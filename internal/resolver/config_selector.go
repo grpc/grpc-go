@@ -54,19 +54,7 @@ type RPCConfig struct {
 	// policy or affect timeout or metadata.
 	Context      context.Context
 	MethodConfig serviceconfig.MethodConfig // configuration to use for this RPC
-	OnCommitted  func()                     // Called when the RPC has been committed (retries no longer possible)
 	Interceptor  any
-}
-
-// ServerInterceptor is an interceptor for incoming RPC's on gRPC server side.
-type ServerInterceptor interface {
-	// AllowRPC checks if an incoming RPC is allowed to proceed based on
-	// information about connection RPC was received on, and HTTP Headers. This
-	// information will be piped into context.
-	AllowRPC(ctx context.Context) error // TODO: Make this a real interceptor for filters such as rate limiting.
-	// Close closes the interceptor. Once called, no new calls to NewStream are
-	// accepted. Ongoing calls to NewStream are allowed to complete.
-	Close()
 }
 
 type csKeyType string

@@ -38,81 +38,116 @@ var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
 	e.SetMaxDynamicTableSizeLimit(v)
 }
 
-// itemNodePool is used to reduce heap allocations.
-var itemNodePool = sync.Pool{
-	New: func() any {
-		return &itemNode{}
-	},
+const (
+	// itemListInitialCapacity is the capacity of an itemList's ring buffer
+	// when it is first allocated. It must be a power of 2. It is kept small
+	// since every outStream has its own itemList and unary RPCs typically
+	// queue at most two items (a data frame and trailers) per stream.
+	itemListInitialCapacity = 4
+	// itemListShrinkFloor is the capacity at or below which an itemList's
+	// ring buffer is never shrunk. It must be a power of 2. This prevents
+	// repeated reallocations when the queue length oscillates at small sizes,
+	// which is the common case for the control buffer.
+	itemListShrinkFloor = 64
+)
+
+// itemList is a FIFO queue backed by a ring buffer.
+//
+// The length of buf is always zero or a power of 2, which allows indices to be
+// wrapped using a bitmask instead of a modulo operation. The buffer is
+// allocated lazily, doubles in size when full and is halved when it becomes a
+// quarter full (as long as it is larger than itemListShrinkThreshold), so that
+// a burst of queued items doesn't pin memory forever.
+//
+// The zero value is an empty list ready to use. itemList is not safe for
+// concurrent use.
+type itemList[T any] struct {
+	buf   []T
+	head  int // Index of the first item in buf.
+	count int // Number of items in the list.
 }
 
-type itemNode struct {
-	it   any
-	next *itemNode
-}
-
-type itemList struct {
-	head *itemNode
-	tail *itemNode
-}
-
-func (il *itemList) enqueue(i any) {
-	n := itemNodePool.Get().(*itemNode)
-	n.next = nil
-	n.it = i
-	if il.tail == nil {
-		il.head, il.tail = n, n
-		return
+func (il *itemList[T]) enqueue(i T) {
+	if il.count == len(il.buf) {
+		il.resize(max(itemListInitialCapacity, 2*il.count))
 	}
-	il.tail.next = n
-	il.tail = n
+	il.buf[(il.head+il.count)&(len(il.buf)-1)] = i
+	il.count++
 }
 
 // peek returns the first item in the list without removing it from the
-// list.
-func (il *itemList) peek() any {
-	return il.head.it
-}
-
-func (il *itemList) dequeue() any {
-	if il.head == nil {
-		return nil
+// list. It returns the zero value of T if the list is empty.
+func (il *itemList[T]) peek() T {
+	if il.count == 0 {
+		var zero T
+		return zero
 	}
-	i := il.head.it
-	temp := il.head
-	il.head = il.head.next
-	itemNodePool.Put(temp)
-	if il.head == nil {
-		il.tail = nil
+	return il.buf[il.head]
+}
+
+// dequeue removes and returns the first item in the list. It returns the zero
+// value of T if the list is empty.
+func (il *itemList[T]) dequeue() T {
+	var zero T
+	if il.count == 0 {
+		return zero
 	}
-	return i
+	ret := il.buf[il.head]
+	il.buf[il.head] = zero // Allow the item to be garbage collected.
+	il.head = (il.head + 1) & (len(il.buf) - 1)
+	il.count--
+	if len(il.buf) > itemListShrinkFloor && il.count*4 == len(il.buf) {
+		il.resize(len(il.buf) / 2)
+	}
+	return ret
 }
 
-func (il *itemList) dequeueAll() *itemNode {
-	h := il.head
-	il.head, il.tail = nil, nil
-	return h
+// dequeueAll removes all the items from the list, calling f on each of them in
+// FIFO order, and releases the underlying buffer.
+func (il *itemList[T]) dequeueAll(f func(T)) {
+	mask := len(il.buf) - 1
+	for i := range il.count {
+		f(il.buf[(il.head+i)&mask])
+	}
+	*il = itemList[T]{}
 }
 
-func (il *itemList) isEmpty() bool {
-	return il.head == nil
+func (il *itemList[T]) isEmpty() bool {
+	return il.count == 0
 }
 
-// maxQueuedControlBufferItems is the maximum number of frames (other than
-// HEADERS and DATA) that we will buffer before preventing new reads from
-// occurring on the transport.  These are control frames sent in response to
-// client requests, or frames that result in work being scheduled, such as
-// RST_STREAM due to bad headers or settings acks.
-var maxQueuedControlBufferItems = int(envconfig.ControlBufferThrottleLimit)
+// resize reallocates the ring buffer with the given capacity, which must be a
+// power of 2 and at least il.count, and moves the items to the front of it.
+func (il *itemList[T]) resize(capacity int) {
+	buf := make([]T, capacity)
+	if il.head+il.count <= len(il.buf) {
+		copy(buf, il.buf[il.head:il.head+il.count])
+	} else {
+		n := copy(buf, il.buf[il.head:])
+		copy(buf[n:], il.buf[:il.count-n])
+	}
+	il.buf = buf
+	il.head = 0
+}
+
+// maxQueuedTransportResponseFrames is the maximum number of "transport
+// response" frames that we will buffer before preventing new reads from
+// occurring on the transport. These are control frames sent in response to
+// peer requests, or frames that result in work being scheduled, such as
+// RST_STREAM due to bad headers, settings acks, or ping acks.
+var maxQueuedTransportResponseFrames = int(envconfig.ControlBufferThrottleLimit)
 
 type cbItem interface {
-	isThrottled() bool
+	isTransportResponseFrame() bool
 }
 
-// throttledItem represents every item in the controlBuffer to which the overall
-// throttling limit applies, other than outgoing HEADERS and DATA frames.
-type throttledItem struct{}
+// nonTransportResponseFrame represents items in the controlBuffer that are not
+// queued in response to peer control/reset frames (for example,
+// locally-initiated or flow-controlled items). These items are not counted
+// against the maxQueuedTransportResponseFrames limit.
+type nonTransportResponseFrame struct{}
 
-func (throttledItem) isThrottled() bool { return true }
+func (nonTransportResponseFrame) isTransportResponseFrame() bool { return false }
 
 // The following defines various control items which could flow through
 // the control buffer of transport. They represent different aspects of
@@ -120,12 +155,13 @@ func (throttledItem) isThrottled() bool { return true }
 
 // registerStream is used to register an incoming stream with loopy writer.
 type registerStream struct {
-	throttledItem
+	nonTransportResponseFrame
 	streamID uint32
 	wq       *writeQuota
 }
 
 type clientHeaders struct {
+	nonTransportResponseFrame
 	streamID   uint32
 	hf         []hpack.HeaderField
 	initStream func(uint32) error
@@ -134,9 +170,8 @@ type clientHeaders struct {
 	onOrphaned func(error)
 }
 
-func (*clientHeaders) isThrottled() bool { return false }
-
 type serverHeaders struct {
+	nonTransportResponseFrame
 	streamID  uint32
 	hf        []hpack.HeaderField
 	endStream bool
@@ -144,24 +179,30 @@ type serverHeaders struct {
 	cleanup   *cleanupStream
 }
 
-func (h *serverHeaders) isThrottled() bool { return false }
-
 type cleanupStream struct {
-	throttledItem
 	streamID uint32
 	rst      bool
 	rstCode  http2.ErrCode
 	onWrite  func()
 }
 
+// isTransportResponseFrame returns true since cleanupStream either results in a
+// RST_STREAM frame being sent on the wire or in non-trivial work being
+// performed when under a Rapid Reset attack.
+func (*cleanupStream) isTransportResponseFrame() bool { return true }
+
 type earlyAbortStream struct {
-	throttledItem
 	streamID uint32
 	rst      bool
 	hf       []hpack.HeaderField // Pre-built header fields
 }
 
+// isTransportResponseFrame returns true since earlyAbortStream results in a
+// HEADERS frame being sent on the wire, and possibly a RST_STREAM frame.
+func (*earlyAbortStream) isTransportResponseFrame() bool { return true }
+
 type dataFrame struct {
+	nonTransportResponseFrame
 	streamID   uint32
 	endStream  bool
 	h          []byte
@@ -172,36 +213,40 @@ type dataFrame struct {
 	onEachWrite func()
 }
 
-func (*dataFrame) isThrottled() bool { return false }
-
 type incomingWindowUpdate struct {
-	throttledItem
 	streamID  uint32
 	increment uint32
 }
 
+// isTransportResponseFrame returns true to prevent the server from a
+// WINDOW_UPDATE flood attack.
+func (*incomingWindowUpdate) isTransportResponseFrame() bool { return true }
+
 type outgoingWindowUpdate struct {
-	throttledItem
+	nonTransportResponseFrame
 	streamID  uint32
 	increment uint32
 }
 
 type incomingSettings struct {
-	throttledItem
 	ss []http2.Setting
 }
 
+// isTransportResponseFrame returns true since incomingSettings results in a
+// SETTINGS ACK frame being sent on the wire.
+func (*incomingSettings) isTransportResponseFrame() bool { return true }
+
 type outgoingSettings struct {
-	throttledItem
+	nonTransportResponseFrame
 	ss []http2.Setting
 }
 
 type incomingGoAway struct {
-	throttledItem
+	nonTransportResponseFrame
 }
 
 type goAway struct {
-	throttledItem
+	nonTransportResponseFrame
 	code      http2.ErrCode
 	debugData []byte
 	headsUp   bool
@@ -209,13 +254,14 @@ type goAway struct {
 }
 
 type ping struct {
-	throttledItem
 	ack  bool
 	data [8]byte
 }
 
+func (p *ping) isTransportResponseFrame() bool { return p.ack }
+
 type outFlowControlSizeRequest struct {
-	throttledItem
+	nonTransportResponseFrame
 	resp chan uint32
 }
 
@@ -225,7 +271,7 @@ type outFlowControlSizeRequest struct {
 // can inspect settled accounting values (such as bytesOutStanding) after loopyWriter
 // has run to completion without any data races.
 type outStreamRequestForTesting struct {
-	throttledItem
+	nonTransportResponseFrame
 	streamID uint32
 	resp     chan *outStream
 }
@@ -235,7 +281,7 @@ type outStreamRequestForTesting struct {
 // (by the client or server).  The transport itself will close after the reader
 // encounters the EOF caused by the connection closure.
 type closeConnection struct {
-	throttledItem
+	nonTransportResponseFrame
 }
 
 type outStreamState int
@@ -249,7 +295,7 @@ const (
 type outStream struct {
 	id               uint32
 	state            outStreamState
-	itl              *itemList
+	itl              itemList[cbItem]
 	bytesOutStanding int
 	wq               *writeQuota
 	reader           mem.Reader
@@ -316,30 +362,32 @@ func (l *outStreamList) dequeue() *outStream {
 // shouldn't be confused with an HTTP2 frame, although some of the control
 // frames like dataFrame and headerFrame do go out on wire as HTTP2 frames.
 type controlBuffer struct {
-	wakeupCh chan struct{}   // Unblocks readers waiting for something to read.
-	done     <-chan struct{} // Closed when the transport is done.
+	wakeupCh         chan struct{}   // Unblocks readers waiting for something to read.
+	done             <-chan struct{} // Closed when the transport is done.
+	enableThrottling bool            // Indicates if throttling is enabled.
 
 	// Mutex guards all the fields below, except trfChan which can be read
 	// atomically without holding mu.
 	mu              sync.Mutex
-	consumerWaiting bool      // True when readers are blocked waiting for new data.
-	closed          bool      // True when the controlbuf is finished.
-	list            *itemList // List of queued control frames.
+	consumerWaiting bool             // True when readers are blocked waiting for new data.
+	closed          bool             // True when the controlbuf is finished.
+	list            itemList[cbItem] // List of queued control frames.
 
 	// transportResponseFrames counts the number of queued items that represent
-	// the response of an action initiated by the peer.  trfChan is created
-	// when transportResponseFrames >= maxQueuedTransportResponseFrames and is
-	// closed and nilled when transportResponseFrames drops below the
-	// threshold.  Both fields are protected by mu.
+	// the response of an action initiated by the peer. When enableThrottling is
+	// true, trfChan is created when transportResponseFrames >=
+	// maxQueuedControlBufferItems and is closed and nilled when
+	// transportResponseFrames drops below the threshold. Both fields are
+	// protected by mu.
 	transportResponseFrames int
 	trfChan                 atomic.Pointer[chan struct{}]
 }
 
-func newControlBuffer(done <-chan struct{}) *controlBuffer {
+func newControlBuffer(done <-chan struct{}, enableThrottling bool) *controlBuffer {
 	return &controlBuffer{
-		wakeupCh: make(chan struct{}, 1),
-		list:     &itemList{},
-		done:     done,
+		wakeupCh:         make(chan struct{}, 1),
+		done:             done,
+		enableThrottling: enableThrottling,
 	}
 }
 
@@ -390,9 +438,9 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 		c.consumerWaiting = false
 	}
 	c.list.enqueue(it)
-	if it.isThrottled() {
+	if c.enableThrottling && it.isTransportResponseFrame() {
 		c.transportResponseFrames++
-		if c.transportResponseFrames == maxQueuedControlBufferItems {
+		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
 			// We are adding the frame that puts us over the threshold; create
 			// a throttling channel.
 			ch := make(chan struct{})
@@ -446,9 +494,9 @@ func (c *controlBuffer) getOnceLocked() (any, error) {
 	if c.list.isEmpty() {
 		return nil, nil
 	}
-	h := c.list.dequeue().(cbItem)
-	if h.isThrottled() {
-		if c.transportResponseFrames == maxQueuedControlBufferItems {
+	h := c.list.dequeue()
+	if c.enableThrottling && h.isTransportResponseFrame() {
+		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
 			// We are removing the frame that put us over the
 			// threshold; close and clear the throttling channel.
 			ch := c.trfChan.Swap(nil)
@@ -473,8 +521,8 @@ func (c *controlBuffer) finish() {
 	// There may be headers for streams in the control buffer.
 	// These streams need to be cleaned out since the transport
 	// is still not aware of these yet.
-	for head := c.list.dequeueAll(); head != nil; head = head.next {
-		switch v := head.it.(type) {
+	c.list.dequeueAll(func(it cbItem) {
+		switch v := it.(type) {
 		case *clientHeaders:
 			v.onOrphaned(ErrConnClosing)
 		case *dataFrame:
@@ -482,7 +530,7 @@ func (c *controlBuffer) finish() {
 				v.data.Free()
 			}
 		}
-	}
+	})
 
 	// In case throttle() is currently in flight, it needs to be unblocked.
 	// Otherwise, the transport may not close, since the transport is closed by
@@ -683,7 +731,6 @@ func (l *loopyWriter) registerStreamHandler(h *registerStream) {
 	str := &outStream{
 		id:    h.streamID,
 		state: empty,
-		itl:   &itemList{},
 		wq:    h.wq,
 	}
 	l.estdStreams[h.streamID] = str
@@ -718,7 +765,6 @@ func (l *loopyWriter) clientHeaderHandler(hdr *clientHeaders) error {
 	str := &outStream{
 		id:    hdr.streamID,
 		state: empty,
-		itl:   &itemList{},
 		wq:    hdr.wq,
 	}
 	// l.draining is set when handling GoAway. In which case, we want to avoid
@@ -823,13 +869,13 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		delete(l.estdStreams, c.streamID)
 		str.reader.Close()
 		str.deleteSelf()
-		for head := str.itl.dequeueAll(); head != nil; head = head.next {
-			if df, ok := head.it.(*dataFrame); ok {
+		str.itl.dequeueAll(func(it cbItem) {
+			if df, ok := it.(*dataFrame); ok {
 				if !df.processing {
 					df.data.Free()
 				}
 			}
-		}
+		})
 	}
 	if c.rst { // If RST_STREAM needs to be sent.
 		if err := l.framer.fr.WriteRSTStream(c.streamID, c.rstCode); err != nil {

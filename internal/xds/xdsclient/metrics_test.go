@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -37,6 +38,42 @@ import (
 
 	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter.
 )
+
+// TestMetricUnits verifies the units of the metrics registered by the xDS client.
+func (s) TestMetricUnits(t *testing.T) {
+	tests := []struct {
+		descriptor *estats.MetricDescriptor
+		wantUnit   string
+	}{
+		{
+			descriptor: xdsClientResourceUpdatesValidMetric.Descriptor(),
+			wantUnit:   "{resource}",
+		},
+		{
+			descriptor: xdsClientResourceUpdatesInvalidMetric.Descriptor(),
+			wantUnit:   "{resource}",
+		},
+		{
+			descriptor: xdsClientServerFailureMetric.Descriptor(),
+			wantUnit:   "{failure}",
+		},
+		{
+			descriptor: xdsClientConnectedMetric.Descriptor(),
+			wantUnit:   "{bool}",
+		},
+		{
+			descriptor: xdsClientResourcesMetric.Descriptor(),
+			wantUnit:   "{resource}",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.descriptor.Name, func(t *testing.T) {
+			if got := test.descriptor.Unit; got != test.wantUnit {
+				t.Errorf("%s unit = %q, want %q", test.descriptor.Name, got, test.wantUnit)
+			}
+		})
+	}
+}
 
 type noopListenerWatcher struct{}
 

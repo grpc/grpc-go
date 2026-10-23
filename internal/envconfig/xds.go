@@ -103,4 +103,8 @@ var (
 	// filter is enabled on the client side. For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A92-xds-ext-authz.md
 	XDSClientExtAuthzEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_EXT_AUTHZ_ON_CLIENT", false)
+
+	// XDSAutoshardingEnabled controls whether the autosharding LB policy is
+	// supported by the xDS LB policy registry. See gRFC A119 for more details.
+	XDSAutoshardingEnabled = boolFromEnv("GRPC_XDS_EXPERIMENTAL_ENABLE_AUTOSHARDING_LB", false)
 )

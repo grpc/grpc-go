@@ -25,7 +25,6 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
@@ -78,25 +77,13 @@ func parseAddress(socketAddress *v3corepb.SocketAddress) string {
 }
 
 func parseDropPolicy(dropPolicy *v3endpointpb.ClusterLoadAssignment_Policy_DropOverload) (OverloadDropConfig, error) {
-	percentage := dropPolicy.GetDropPercentage()
-	var (
-		numerator   = percentage.GetNumerator()
-		denominator uint32
-	)
-	switch percentage.GetDenominator() {
-	case v3typepb.FractionalPercent_HUNDRED:
-		denominator = 100
-	case v3typepb.FractionalPercent_TEN_THOUSAND:
-		denominator = 10000
-	case v3typepb.FractionalPercent_MILLION:
-		denominator = 1000000
-	default:
-		return OverloadDropConfig{}, fmt.Errorf("EDS response contains a drop policy with unsupported denominator: %v", percentage.GetDenominator())
+	fp, err := NewFractionalPercent(dropPolicy.GetDropPercentage())
+	if err != nil {
+		return OverloadDropConfig{}, fmt.Errorf("EDS response contains a drop policy with %v", err)
 	}
 	return OverloadDropConfig{
-		Category:    dropPolicy.GetCategory(),
-		Numerator:   numerator,
-		Denominator: denominator,
+		Category:       dropPolicy.GetCategory(),
+		DropPercentage: fp,
 	}, nil
 }
 

@@ -99,10 +99,31 @@ func (s *Stream) readTo(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// waitForPendingData polls the stream's inbound flow control every millisecond
+// until it reports n bytes of received but unread data. A stream can't receive
+// more than its window until the application reads, so pending data equal to
+// the window means the sender is blocked on stream-level flow control.
+func (s *Stream) waitForPendingData(ctx context.Context, n uint32) error {
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		s.fc.mu.Lock()
+		pending := s.fc.pendingData
+		s.fc.mu.Unlock()
+		if pending == n {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for %d bytes of pending data, got %d: %v", n, pending, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 type testStreamHandler struct {
-	t           *http2Server
-	notify      chan struct{}
-	getNotified chan struct{}
+	t      *http2Server
+	notify chan struct{}
 }
 
 type hType int
@@ -285,50 +306,14 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *ServerStream)
 		req = expectedRequestLarge
 		resp = expectedResponseLarge
 	}
-	var (
-		mu    sync.Mutex
-		total int
-	)
-	s.wq.replenish = func(n int) {
-		mu.Lock()
-		total += n
-		mu.Unlock()
-		s.wq.realReplenish(n)
-	}
-	getTotal := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return total
-	}
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		for {
-			select {
-			// Prevent goroutine from leaking.
-			case <-done:
-				return
-			default:
-			}
-			if getTotal() == defaultWindowSize {
-				// Signal the client to start reading and
-				// thereby send window update.
-				close(h.notify)
-				return
-			}
-			runtime.Gosched()
-		}
-	}()
 	p := make([]byte, len(req))
 
 	// Let the other side run out of stream-level window before
 	// starting to read and thereby sending a window update.
-	timer := time.NewTimer(time.Second * 10)
-	select {
-	case <-h.getNotified:
-		timer.Stop()
-	case <-timer.C:
-		t.Errorf("Server timed-out.")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := s.waitForPendingData(ctx, defaultWindowSize); err != nil {
+		t.Errorf("Server: %v", err)
 		return
 	}
 	_, err := s.readTo(p)
@@ -348,9 +333,7 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *ServerStream)
 		t.Errorf("server Write got %v, want <nil>", err)
 		return
 	}
-	// Read one more time to ensure that everything remains fine and
-	// that the goroutine, that we launched earlier to signal client
-	// to read, gets enough time to process.
+	// Read one more time to ensure that everything remains fine.
 	_, err = s.readTo(p)
 	if err != nil {
 		t.Errorf("s.Read(_) = _, %v, want _, nil", err)
@@ -510,8 +493,6 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 				wg.Done()
 			}()
 		case delayRead:
-			h.notify = make(chan struct{})
-			h.getNotified = make(chan struct{})
 			s.mu.Lock()
 			close(s.ready)
 			s.mu.Unlock()
@@ -787,6 +768,68 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 	}
 }
 
+// Tests that a truncated HEADERS frame for a new stream properly advances
+// maxStreamID, while an oversized frame on an illegal/lower stream is rejected
+// as a protocol error and preserves maxStreamID.
+func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
+	serverTransport := &http2Server{
+		controlBuf: newControlBuffer(make(<-chan struct{}), true),
+	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	tests := []struct {
+		name            string
+		streamID        uint32
+		truncated       bool
+		wantErr         string
+		wantMaxStreamID uint32
+	}{
+		{
+			name:            "truncated_header_advances_max_stream_id",
+			streamID:        3,
+			truncated:       true,
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "truncated_header_lower_stream_id_rejected_as_protocol_error",
+			streamID:        1,
+			truncated:       true,
+			wantErr:         "received an illegal stream id: 1",
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "reused_stream_id_rejected_as_protocol_error",
+			streamID:        3,
+			truncated:       false,
+			wantErr:         "received an illegal stream id: 3",
+			wantMaxStreamID: 3,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			frame := &http2.MetaHeadersFrame{
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: tc.streamID,
+						Type:     http2.FrameHeaders,
+					},
+				},
+				Truncated: tc.truncated,
+			}
+			err := serverTransport.operateHeaders(ctx, frame, func(*ServerStream) {})
+			if (err != nil) != (tc.wantErr != "") {
+				t.Fatalf("operateHeaders() failed with error = %v, wantErr %q", err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("operateHeaders() failed with error = %v, want error containing %q", err, tc.wantErr)
+			}
+			if serverTransport.maxStreamID != tc.wantMaxStreamID {
+				t.Fatalf("maxStreamID = %d, want %d", serverTransport.maxStreamID, tc.wantMaxStreamID)
+			}
+		})
+	}
+}
+
 func (s) TestClientSendAndReceive(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
@@ -928,9 +971,6 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	defer cancel()
 	defer server.stop()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
-	server.mu.Lock()
-	ready := server.ready
-	server.mu.Unlock()
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -942,49 +982,6 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 		t.Fatalf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 		return
 	}
-	// Wait for server's handler to be initialized
-	select {
-	case <-ready:
-	case <-ctx.Done():
-		t.Fatalf("Client timed out waiting for server handler to be initialized.")
-	}
-	server.mu.Lock()
-	serviceHandler := server.h
-	server.mu.Unlock()
-	var (
-		mu    sync.Mutex
-		total int
-	)
-	s.wq.replenish = func(n int) {
-		mu.Lock()
-		total += n
-		mu.Unlock()
-		s.wq.realReplenish(n)
-	}
-	getTotal := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return total
-	}
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		for {
-			select {
-			// Prevent goroutine from leaking in case of error.
-			case <-done:
-				return
-			default:
-			}
-			if getTotal() == defaultWindowSize {
-				// unblock server to be able to read and
-				// thereby send stream level window update.
-				close(serviceHandler.getNotified)
-				return
-			}
-			runtime.Gosched()
-		}
-	}()
 	// This write will cause client to run out of stream level,
 	// flow control and the other side won't send a window update
 	// until that happens.
@@ -995,10 +992,8 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 
 	// Wait for the other side to run out of stream level flow control before
 	// reading and thereby sending a window update.
-	select {
-	case <-serviceHandler.notify:
-	case <-ctx.Done():
-		t.Fatalf("Client timed out")
+	if err := s.waitForPendingData(ctx, defaultWindowSize); err != nil {
+		t.Fatalf("Client: %v", err)
 	}
 	if _, err := s.readTo(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
 		t.Fatalf("s.Read(_) = _, %v, want _, <nil>", err)
@@ -2857,7 +2852,7 @@ func newTestHTTP2Client(cs *ClientStream) *http2Client {
 		activeStreams: map[uint32]*ClientStream{
 			1: cs,
 		},
-		controlBuf: newControlBuffer(make(<-chan struct{})),
+		controlBuf: newControlBuffer(make(<-chan struct{}), false),
 	}
 }
 
@@ -3462,6 +3457,105 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	}
 }
 
+func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
+	const headerLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("second ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadMessageHeaderEOF(t *testing.T) {
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	err := stream.ReadMessageHeader(make([]byte, 5))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want not %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadPartialMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if _, err := stream.read(messageLen); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+	if _, err := stream.read(messageLen); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("second read(%d) error = %v, want %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	_, err := stream.read(messageLen)
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want not %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+}
+
 // Tests a scenario when the client doesn't send an RST frame when the
 // configured deadline is reached. The test verifies that the server sends an
 // RST stream only after the deadline is reached.
@@ -3922,7 +4016,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			activeStreams: map[uint32]*ClientStream{
 				0: ts,
 			},
-			controlBuf: newControlBuffer(make(<-chan struct{})),
+			controlBuf: newControlBuffer(make(<-chan struct{}), false),
 		}
 	}
 

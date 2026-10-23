@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -608,10 +609,10 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	if te.serverInitialWindowSize > 0 {
-		sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
+		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
 	}
 	if te.serverInitialConnWindowSize > 0 {
-		sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
+		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := ":0"
 	if te.e.network == "unix" {
@@ -668,16 +669,16 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		if err != nil {
 			te.t.Fatal("tls.LoadX509KeyPair(server1.pem, server1.key) failed: ", err)
 		}
+		p := &http.Protocols{}
+		p.SetHTTP2(true)
 		hs := &http.Server{
 			Handler:   s,
 			TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
-		}
-		if err := http2.ConfigureServer(hs, &http2.Server{MaxConcurrentStreams: te.maxStream}); err != nil {
-			te.t.Fatal("http2.ConfigureServer(_, _) failed: ", err)
+			HTTP2:     &http.HTTP2Config{MaxConcurrentStreams: int(min(te.maxStream, math.MaxInt32))},
+			Protocols: p,
 		}
 		te.srv = wrapHS{hs}
-		tlsListener := tls.NewListener(lis, hs.TLSConfig)
-		go hs.Serve(tlsListener)
+		go hs.ServeTLS(lis, "", "")
 		return lis
 	}
 
@@ -819,10 +820,10 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
 	if te.clientInitialWindowSize > 0 {
-		opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
+		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
 	}
 	if te.clientInitialConnWindowSize > 0 {
-		opts = append(opts, grpc.WithStaticConnWindowSize(te.clientInitialConnWindowSize))
+		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
@@ -4765,14 +4766,20 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 		defer close(handlerDone)
-		// Block on serverTester receiving RST_STREAM. This ensures server has closed
-		// stream before stream.Recv().
+		// Block on serverTester receiving RST_STREAM. This ensures server has
+		// closed stream before stream.Recv().
 		<-frameCheckingDone
-		data, err := stream.Recv()
-		if err == nil {
-			t.Errorf("unexpected data received in func server method: '%v'", data)
+		// Depending on whether the context cancellation (due to the illegal data
+		// RST_STREAM) or the buffered EOF (from the initial HEADERS END_STREAM) is
+		// selected first in recvBufferReader, stream.Recv() can return either
+		// io.EOF or Canceled.
+		if _, err := stream.Recv(); err != io.EOF && status.Code(err) != codes.Canceled {
+			t.Errorf("stream.Recv() returned error = %v, expected EOF or canceled error", err)
+		}
+		if err := stream.SendMsg(nil); err == nil {
+			t.Error("stream.SendMsg() returned nil, expected cancel error")
 		} else if status.Code(err) != codes.Canceled {
-			t.Errorf("expected canceled error, instead received '%v'", err)
+			t.Errorf("stream.SendMsg() returned error = %v, expected cancel error", err)
 		}
 		return nil
 	}}
@@ -6081,30 +6088,23 @@ func testServerMaxHeaderListSizeClientIntentionalViolation(t *testing.T, e env) 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	cc, dw := te.clientConnWithConnControl()
-	tc := &testServiceClientWrapper{TestServiceClient: testgrpc.NewTestServiceClient(cc)}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	stream, err := tc.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want _, <nil>", tc, err)
-	}
-	rcw := dw.getRawConnWrapper()
-	val := make([]string, 512)
-	for i := range val {
-		val[i] = "a"
-	}
-	// allow for client to send the initial header
-	time.Sleep(100 * time.Millisecond)
-	rcw.writeHeaders(http2.HeadersFrameParam{
-		StreamID:      tc.getCurrentStreamID(),
-		BlockFragment: rcw.encodeHeader("oversize", strings.Join(val, "")),
-		EndStream:     false,
-		EndHeaders:    true,
+	te.withServerTester(func(st *serverTester) {
+		val := slices.Repeat([]string{"a"}, 512)
+		st.writeHeaders(http2.HeadersFrameParam{
+			StreamID: 1,
+			BlockFragment: st.encodeHeader(
+				":method", "POST",
+				":path", "/grpc.testing.TestService/FullDuplexCall",
+				":authority", "localhost",
+				"content-type", "application/grpc",
+				"te", "trailers",
+				"oversize", strings.Join(val, ""),
+			),
+			EndStream:  false,
+			EndHeaders: true,
+		})
+		st.wantRSTStream(http2.ErrCodeFrameSize)
 	})
-	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.Internal {
-		t.Fatalf("stream.Recv() = _, %v, want _, error code: %v", err, codes.Internal)
-	}
 }
 
 func (s) TestClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T) {
@@ -7511,5 +7511,144 @@ func (s) TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders(t *testing.T
 				t.Fatalf("EmptyCall() failed with code: %v, want: %v; full error: %v", got, tc.wantCode, err)
 			}
 		})
+	}
+}
+
+// rpcEndStatsHandler signals done once the server-side RPC handler has called
+// WriteStatus (which invokes finishStream and sets s.state = streamDone) and
+// exited processRPC.
+type rpcEndStatsHandler struct {
+	done *grpcsync.Event
+}
+
+func (h *rpcEndStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+
+func (h *rpcEndStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
+	if _, ok := rs.(*stats.End); ok {
+		h.done.Fire()
+	}
+}
+
+func (h *rpcEndStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+func (h *rpcEndStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
+
+// readNextNonControlFrame reads the next HTTP/2 frame from st, skipping flow
+// control WINDOW_UPDATE frames and server-initiated (non-ACK) PING frames.
+func readNextNonControlFrame(st *serverTester) (http2.Frame, error) {
+	for {
+		f, err := st.readFrame()
+		if err != nil {
+			return nil, err
+		}
+		switch f := f.(type) {
+		case *http2.WindowUpdateFrame:
+			continue
+		case *http2.PingFrame:
+			if !f.IsAck() {
+				continue
+			}
+			return f, nil
+		default:
+			return f, nil
+		}
+	}
+}
+
+// Test verifies that a second DATA+END_STREAM frame sent on a stream that
+// has already transitioned to streamDone (while still in activeStreams due
+// to zero peer flow-control window) does not panic the server's HandleStreams
+// reader goroutine via a nil mem.Buffer Free() in recvBuffer.put().
+func (s) TestDataFrameAfterStreamDone(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer lis.Close()
+
+	sh := &rpcEndStatsHandler{done: grpcsync.NewEvent()}
+	srv := grpc.NewServer(grpc.StatsHandler(sh))
+	healthgrpc.RegisterHealthServer(srv, health.NewServer())
+	go srv.Serve(lis)
+	defer srv.Stop()
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial server: %v", err)
+	}
+	defer conn.Close()
+
+	st := newServerTesterFromConn(t, conn)
+	// Advertise SETTINGS_INITIAL_WINDOW_SIZE = 0 so the unary response DATA
+	// frame and trailing HEADERS (cleanupStream) remain buffered in
+	// loopyWriter, keeping Stream in t.activeStreams after finishStream sets
+	// s.state = streamDone.
+	st.greetWithSettings(http2.Setting{
+		ID:  http2.SettingInitialWindowSize,
+		Val: 0,
+	})
+
+	// Open Stream 1 with initial HEADERS (EndStream=false) to invoke the
+	// unary Health/Check handler on the server.
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.health.v1.Health/Check",
+			":scheme", "http",
+			":authority", "localhost",
+			"content-type", "application/grpc",
+			"te", "trailers",
+		),
+		EndStream:  false,
+		EndHeaders: true,
+	})
+
+	// Send an empty request message (a 5-byte gRPC Length-Prefixed-Message
+	// header: Compressed-Flag=0, Message-Length=0) with EndStream=true. The
+	// message lets the unary handler run and produce a response DATA frame;
+	// EndStream half-closes the client side, setting s.buf.err = io.EOF and
+	// moving the server stream from streamActive to streamReadDone.
+	st.writeData(1, true, []byte{0, 0, 0, 0, 0})
+
+	// Read the server's initial response HEADERS frame.
+	f, err := readNextNonControlFrame(st)
+	if err != nil {
+		t.Fatalf("Error reading response HEADERS frame from server: %v", err)
+	}
+	if f.Header().Type != http2.FrameHeaders {
+		t.Fatalf("Received frame %v; want response HEADERS frame", f)
+	}
+
+	// Wait for the server's unary handler to finish, call finishStream
+	// (transitioning s.state from streamReadDone to streamDone), and exit.
+	select {
+	case <-sh.done.Done():
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timed out waiting for server unary handler to finish stream")
+	}
+
+	// Send a second DATA frame with EndStream=true on the same stream now that
+	// its state is streamDone (while still present in t.activeStreams).
+	// This triggers a second s.write(recvMsg{err: io.EOF}) with a nil buffer
+	// into recvBuffer.put() when b.err is already non-nil.
+	st.writeData(1, true, nil)
+
+	// Send a PING frame after the second DATA frame and verify the server's
+	// HandleStreams reader goroutine did not panic and replies with PING ACK.
+	pingData := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
+	if err := st.fr.WritePing(false, pingData); err != nil {
+		t.Fatalf("Error writing PING frame: %v", err)
+	}
+	f, err = readNextNonControlFrame(st)
+	if err != nil {
+		t.Fatalf("Error reading PING ACK frame from server: %v", err)
+	}
+	if pf, ok := f.(*http2.PingFrame); !ok || !pf.IsAck() || pf.Data != pingData {
+		t.Fatalf("Received frame %v; want PING ACK with data %v", f, pingData)
 	}
 }

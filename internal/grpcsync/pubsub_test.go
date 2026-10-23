@@ -81,7 +81,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 			select {
 			case m := <-ts1.onMsgCh:
 				if m != i {
-					t.Errorf("Received unexpected message: %q; want: %q", m, i)
+					t.Errorf("Received unexpected message: %d; want: %d", m, i)
 					return
 				}
 			case <-time.After(defaultTestTimeout):
@@ -102,7 +102,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 	select {
 	case m := <-ts2.onMsgCh:
 		if m != numPublished-1 {
-			t.Fatalf("Received unexpected message: %q; want: %q", m, numPublished-1)
+			t.Fatalf("Received unexpected message: %d; want: %d", m, numPublished-1)
 		}
 	case <-time.After(defaultTestShortTimeout):
 		t.Fatal("Timeout when expecting the onMessage() callback to be invoked")
@@ -122,7 +122,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 			select {
 			case m := <-ts1.onMsgCh:
 				if m != i {
-					t.Errorf("Received unexpected message: %q; want: %q", m, i)
+					t.Errorf("Received unexpected message: %d; want: %d", m, i)
 					return
 				}
 			case <-time.After(defaultTestTimeout):
@@ -138,7 +138,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 			select {
 			case m := <-ts2.onMsgCh:
 				if m != i {
-					t.Errorf("Received unexpected message: %q; want: %q", m, i)
+					t.Errorf("Received unexpected message: %d; want: %d", m, i)
 					return
 				}
 			case <-time.After(defaultTestTimeout):
@@ -187,7 +187,7 @@ func (s) TestPubSub_PublishMsgs_BeforeRegisterSub(t *testing.T) {
 	select {
 	case d := <-ts.onMsgCh:
 		if d != numPublished-1 {
-			t.Fatalf("Unexpected message received: %q; %q", d, numPublished-1)
+			t.Fatalf("Unexpected message received: %d; %d", d, numPublished-1)
 		}
 
 	case <-time.After(defaultTestShortTimeout):

@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -152,7 +153,18 @@ type ClientStream interface {
 // RecvMsg parities based on the nature of stream.
 type clientStreamWrapper struct {
 	ClientStream
-	desc *StreamDesc
+	desc            *StreamDesc
+	closeSendCalled atomic.Bool
+}
+
+// CloseSend closes the send direction of the stream. The implementation ensures
+// that CloseSend is only called once on the underlying ClientStream, even if
+// CloseSend is called multiple times on the wrapper.
+func (w *clientStreamWrapper) CloseSend() error {
+	if w.closeSendCalled.Swap(true) {
+		return nil
+	}
+	return w.ClientStream.CloseSend()
 }
 
 // SendMsg sends message m across the stream. For RPCs where client can call
@@ -176,20 +188,22 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	// CloseSend is needed because in some scenarios (e.g., xDS), the same
-	// interceptors are used to process both unary and streaming RPCs. Calling
-	// CloseSend signals to those interceptors that no more messages are on the
-	// way.
-	if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
+	// In some scenarios (e.g., xDS), the same interceptors process both unary and
+	// streaming RPCs, relying on CloseSend to signal that no more messages are on
+	// the way. Although protobuf-generated stubs already invoke CloseSend for
+	// server-streaming RPCs, it is explicitly called here to ensure downstream
+	// interceptors are also notified when callers interact with the ClientStream
+	// API directly.
+	if err := w.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}
 	return nil
 
 }
 
-// RecvMsg receives message m from the stream. For RPCs that call RecvMsg only
-// once i.e. only client streaming RPCs, it calls the underlying RecvMsg a
-// second time after receiving the first message to get the trailers.
+// RecvMsg receives message m from the stream. For non-server-streaming RPCs
+// (unary and client-streaming), it calls the underlying RecvMsg a second time
+// after receiving the first message to get the trailers.
 func (w *clientStreamWrapper) RecvMsg(m any) error {
 	err := w.ClientStream.RecvMsg(m)
 	if err != nil {
@@ -208,19 +222,6 @@ func (w *clientStreamWrapper) RecvMsg(m any) error {
 		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 	}
 	return err
-}
-
-// defaultStreamInterceptor is a StreamClientInterceptor which wraps the
-// ClientStream and is always invoked as the first interceptor. It consolidates
-// behavior for different RPC types at the level closest to the application,
-// which simplifies the underlying stream implementation and other interceptors
-// by avoiding duplicate or scattered handling.
-func defaultStreamInterceptor(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
-	cs, err := streamer(ctx, desc, cc, method, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
 }
 
 // NewStream creates a new Stream for the client side. This is typically
@@ -328,9 +329,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	mc := &emptyMethodConfig
-	var onCommit func()
 	newStream := func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, nameResolutionDelayed, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method, Authority: cc.authority}
@@ -352,16 +352,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		mc = &rpcConfig.MethodConfig
 
-		if rpcConfig.OnCommitted != nil {
-			onCommit = rpcConfig.OnCommitted
-			// Register an OnFinish CallOption with the OnCommitted callback to
-			// ensure it is invoked on stream termination, even if the stream
-			// fails early before committing. Implementations of OnCommitted are
-			// expected to be idempotent (e.g., guarded by sync.Once), since both
-			// onCommit and OnFinish may run for a single RPC.
-			opts = append(opts, OnFinish(func(error) { rpcConfig.OnCommitted() }))
-		}
-
 		if rpcConfig.Interceptor != nil {
 			rpcInfo.Context = nil
 			ns := newStream
@@ -379,7 +369,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}
 
-	return newStream(ctx, opts...)
+	cs, err := newStream(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
 }
 
 // determineSendCompressors sets our outgoing compression according to the
@@ -408,7 +402,7 @@ func determineSendCompressors(c *callInfo, dopts *dialOptions, callHdr *transpor
 	return cp, comp, nil
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
@@ -471,7 +465,6 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		compressorV1:        compressorV1,
 		cancel:              cancel,
 		firstAttempt:        true,
-		onCommit:            onCommit,
 		nameResolutionDelay: nameResolutionDelayed,
 	}
 	if !cc.dopts.disableRetry {
@@ -525,21 +518,35 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	if desc != unaryStreamDesc {
-		// Listen on cc and stream contexts to cleanup when the user closes the
-		// ClientConn or cancels the stream context.  In all other cases, an error
-		// should already be injected into the recv buffer by the transport, which
-		// the client will eventually receive, and then we will cancel the stream's
-		// context in clientStream.finish.
-		go func() {
-			select {
-			case <-cc.ctx.Done():
-				cs.finish(ErrClientConnClosing)
-			case <-ctx.Done():
-				cs.finish(toRPCErr(ctx.Err()))
-			}
-		}()
+		// Register callbacks on the cc and stream contexts to clean up when the
+		// user closes the ClientConn or cancels the stream context. In all other
+		// cases, an error should already be injected into the recv buffer by the
+		// transport, which the client will eventually receive, and then we will
+		// cancel the stream's context and stop these callbacks in
+		// clientStream.finish.
+		cs.registerCancellationHandlers()
 	}
 	return cs, nil
+}
+
+// registerCancellationHandlers registers callbacks to clean up the stream when the
+// RPC context expires or the ClientConn is closed.
+func (cs *clientStream) registerCancellationHandlers() {
+	// Hold mu so that a callback firing before registration completes (e.g.
+	// because its context is already done) cannot run finish() concurrently
+	// with the assignments below.
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	onCtxDone := func() {
+		if cs.cc.ctx.Err() != nil {
+			cs.finish(ErrClientConnClosing)
+			return
+		}
+		cs.finish(toRPCErr(cs.ctx.Err()))
+	}
+
+	cs.stopStreamWatcher = context.AfterFunc(cs.ctx, onCtxDone)
+	cs.stopConnWatcher = context.AfterFunc(cs.cc.ctx, onCtxDone)
 }
 
 // newAttemptLocked creates a new csAttempt without a transport or stream.
@@ -710,9 +717,11 @@ type clientStream struct {
 	// method is the only place where we need to check if the attempt is nil.
 	attempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
-	onCommit         func()
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
+
+	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
+	stopConnWatcher   func() bool // stops the callback registered to run on ClientConn context expiration
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -903,8 +912,8 @@ type csAttempt struct {
 }
 
 func (cs *clientStream) commitAttemptLocked() {
-	if !cs.committed && cs.onCommit != nil {
-		cs.onCommit()
+	if cs.committed {
+		return
 	}
 	cs.committed = true
 	for _, op := range cs.replayBuffer {
@@ -1319,6 +1328,12 @@ func (cs *clientStream) finish(err error) {
 		return
 	}
 	cs.finished = true
+	if cs.stopStreamWatcher != nil {
+		cs.stopStreamWatcher()
+	}
+	if cs.stopConnWatcher != nil {
+		cs.stopConnWatcher()
+	}
 	cs.commitAttemptLocked()
 	attemptCreated := cs.attempt != nil
 	if attemptCreated {
@@ -1544,26 +1559,41 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 	}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
-		// Listen on stream context to cleanup when the stream context is
-		// canceled.  Also listen for the addrConn's context in case the
-		// addrConn is closed or reconnects to a different address.  In all
-		// other cases, an error should already be injected into the recv
+		// Register a callback on the stream context to clean up when the stream
+		// context is canceled. Also register one on the addrConn's context in
+		// case the addrConn is closed or reconnects to a different address. In
+		// all other cases, an error should already be injected into the recv
 		// buffer by the transport, which the client will eventually receive,
-		// and then we will cancel the stream's context in
-		// addrConnStream.finish.
-		go func() {
-			ac.mu.Lock()
-			acCtx := ac.ctx
-			ac.mu.Unlock()
-			select {
-			case <-acCtx.Done():
-				as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
-			case <-ctx.Done():
-				as.finish(toRPCErr(ctx.Err()))
-			}
-		}()
+		// and then we will cancel the stream's context and stop these callbacks
+		// in addrConnStream.finish.
+		as.registerCancellationHandlers()
 	}
 	return &clientStreamWrapper{ClientStream: as, desc: desc}, nil
+}
+
+// registerCancellationHandlers registers callbacks to clean up the stream when the
+// RPC context expires or the SubConn is closed.
+func (as *addrConnStream) registerCancellationHandlers() {
+	as.ac.mu.Lock()
+	acCtx := as.ac.ctx
+	as.ac.mu.Unlock()
+
+	// Hold mu so that a callback firing before registration completes (e.g.
+	// because its context is already done) cannot run finish() concurrently
+	// with the assignments below.
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	onCtxDone := func() {
+		if acCtx.Err() != nil {
+			as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
+			return
+		}
+		as.finish(toRPCErr(as.ctx.Err()))
+	}
+
+	as.stopStreamWatcher = context.AfterFunc(as.ctx, onCtxDone)
+	as.stopConnWatcher = context.AfterFunc(acCtx, onCtxDone)
 }
 
 type addrConnStream struct {
@@ -1578,6 +1608,9 @@ type addrConnStream struct {
 	codec            baseCodec
 	sendCompressorV0 Compressor
 	sendCompressorV1 encoding.Compressor
+
+	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
+	stopConnWatcher   func() bool // stops the callback registered to run on SubConn context expiration
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -1677,6 +1710,13 @@ func (as *addrConnStream) finish(err error) {
 	if alreadyFinished {
 		return
 	}
+	if as.stopStreamWatcher != nil {
+		as.stopStreamWatcher()
+	}
+	if as.stopConnWatcher != nil {
+		as.stopConnWatcher()
+	}
+
 	if err == io.EOF {
 		// Ending a stream with EOF indicates a success.
 		err = nil

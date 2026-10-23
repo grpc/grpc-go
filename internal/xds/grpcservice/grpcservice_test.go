@@ -403,10 +403,12 @@ func (s) TestConfigDialTLS(t *testing.T) {
 	}
 }
 
-func (s) TestConfigEqual(t *testing.T) {
+func (s) TestConfigEqualAndKey(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
 	protoInsecure := xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil)
 	jsonInsecure := xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
+	callCredA := xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-a")}, nil)
+	callCredB := xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-b")}, nil)
 
 	tests := []struct {
 		name string
@@ -415,8 +417,26 @@ func (s) TestConfigEqual(t *testing.T) {
 	}{
 		{
 			name: "equal",
-			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 1, InitialMetadata: metadata.Pairs("k", "v")},
-			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil), Timeout: 1, InitialMetadata: metadata.Pairs("k", "v")},
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 1, InitialMetadata: metadata.Pairs("k", "v"), CallCredentials: []*xdscreds.CallCreds{callCredA}},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil), Timeout: 1, InitialMetadata: metadata.Pairs("k", "v"), CallCredentials: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-a")}, nil)}},
+			want: true,
+		},
+		{
+			name: "equal_nil_and_empty_identity_data",
+			a:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure", Data: nil}, nil)},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure", Data: []byte{}}, nil)},
+			want: true,
+		},
+		{
+			name: "equal_nil_and_empty_metadata_and_call_creds",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: nil, CallCredentials: nil},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.MD{}, CallCredentials: []*xdscreds.CallCreds{}},
+			want: true,
+		},
+		{
+			name: "equal_multiple_metadata_keys",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k1", "v1", "k2", "v2", "k1", "v3")},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k2", "v2", "k1", "v1", "k1", "v3")},
 			want: true,
 		},
 		{
@@ -432,6 +452,26 @@ func (s) TestConfigEqual(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "different_initial_metadata_value_order",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k", "v1", "k", "v2")},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k", "v2", "k", "v1")},
+			want: false,
+		},
+		{
+			name: "equal_nil_and_empty_metadata_values",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.MD{"k": nil}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.MD{"k": {}}},
+			want: true,
+		},
+		{
+			// Both values are invalid UTF-8: encoding them as JSON strings
+			// would map both to "\ufffd\u0001".
+			name: "different_binary_metadata_invalid_utf8",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k-bin", "\x80\x01")},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k-bin", "\x81\x01")},
+			want: false,
+		},
+		{
 			name: "different_targets",
 			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
 			b:    &Config{TargetURI: "dns:///other:443", ChannelCredentials: protoInsecure},
@@ -444,11 +484,27 @@ func (s) TestConfigEqual(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "different_channel_creds_data",
+			a:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: []byte("a")}, nil)},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: []byte("b")}, nil)},
+			want: false,
+		},
+		{
 			name: "different_call_creds",
 			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
-			b: &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{
-				xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token"}, nil),
-			}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredA}},
+			want: false,
+		},
+		{
+			name: "different_call_creds_data",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredA}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredB}},
+			want: false,
+		},
+		{
+			name: "different_call_creds_order",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredA, callCredB}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredB, callCredA}},
 			want: false,
 		},
 	}
@@ -456,6 +512,10 @@ func (s) TestConfigEqual(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if got := test.a.Equal(test.b); got != test.want {
 				t.Errorf("Equal() = %v, want %v", got, test.want)
+			}
+			keyA, keyB := test.a.Key(), test.b.Key()
+			if got := (keyA == keyB); got != test.want {
+				t.Errorf("Key() equality = %v (a.Key() = %q, b.Key() = %q), want %v", got, keyA, keyB, test.want)
 			}
 		})
 	}
