@@ -1406,7 +1406,7 @@ func autoshardingProto(targetURI, autoshardingTarget string) *v3autoshardingpb.A
 func grpcServiceKeyForInsecureTarget(targetURI string) string {
 	gs := &grpcservice.Config{
 		TargetURI:          targetURI,
-		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 	}
 	return gs.Key()
 }
