@@ -72,7 +72,7 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 // If it's not possible to extract a token from the file, UNAVAILABLE is
 // returned.
 // If the token is extracted but invalid, then UNAUTHENTICATED is returned.
-// If errors are encoutered, a backoff is applied before retrying.
+// If errors are encountered, a backoff is applied before retrying.
 func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
