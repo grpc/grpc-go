@@ -192,7 +192,7 @@ type allowedGRPCServiceJSON struct {
 // allowed_grpc_services field is enabled. Per gRFC A102 the field has no
 // dedicated env var; it is guarded by the env vars of its consuming features.
 func allowedGRPCServicesEnabled() bool {
-	return envconfig.XDSClientExtProcEnabled || envconfig.XDSAutoshardingEnabled
+	return envconfig.XDSClientExtProcEnabled || envconfig.XDSAutoshardingEnabled || envconfig.XDSClientExtAuthzEnabled
 }
 
 // AllowedGRPCServices maps a target URI to the credentials gRPC may use for

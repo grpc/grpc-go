@@ -149,6 +149,18 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 				{Header: &v3corepb.HeaderValue{Key: "a", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{},
+			wantErr: true,
+		},
+		{
+			name: "DisallowExprMatch_DisallowIsErrorIsTrue_NoPartialMutation",
+			hmr:  &HeaderMutationRules{DisallowExpr: regexp.MustCompile("^a1$"), DisallowIsError: true},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+				{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{"initial": []string{"val"}},
+			wantMD:  metadata.MD{"initial": []string{"val"}},
 			wantErr: true,
 		},
 		{
@@ -376,11 +388,10 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			if err := tt.hmr.ApplyAdditions(tt.hvos, tt.inputMD); (err != nil) != tt.wantErr {
 				t.Fatalf("ApplyAdditions() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantErr {
-				return
-			}
-			if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
-				t.Fatalf("ApplyAdditions() returned diff in metadata (-want +got):\n%s", diff)
+			if tt.wantMD != nil {
+				if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
+					t.Fatalf("ApplyAdditions() returned diff in metadata (-want +got):\n%s", diff)
+				}
 			}
 		})
 	}
@@ -421,6 +432,15 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 			hmr:             &HeaderMutationRules{DisallowExpr: regexp.MustCompile("^a$"), DisallowIsError: true},
 			headersToRemove: []string{"a"},
 			inputMD:         metadata.MD{"a": []string{"1"}},
+			wantMD:          metadata.MD{"a": []string{"1"}},
+			wantErr:         true,
+		},
+		{
+			name:            "DisallowExprMatch_DisallowIsErrorIsTrue_NoPartialMutation",
+			hmr:             &HeaderMutationRules{DisallowExpr: regexp.MustCompile("^a1$"), DisallowIsError: true},
+			headersToRemove: []string{"k1", "a1"},
+			inputMD:         metadata.MD{"k1": []string{"v1"}, "a1": []string{"v1"}},
+			wantMD:          metadata.MD{"k1": []string{"v1"}, "a1": []string{"v1"}},
 			wantErr:         true,
 		},
 		{
@@ -521,11 +541,10 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 			if err := tt.hmr.ApplyRemovals(tt.headersToRemove, tt.inputMD); (err != nil) != tt.wantErr {
 				t.Fatalf("ApplyRemovals() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantErr {
-				return
-			}
-			if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
-				t.Fatalf("ApplyRemovals() returned diff in metadata (-want +got):\n%s", diff)
+			if tt.wantMD != nil {
+				if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
+					t.Fatalf("ApplyRemovals() returned diff in metadata (-want +got):\n%s", diff)
+				}
 			}
 		})
 	}
