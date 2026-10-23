@@ -27,10 +27,10 @@ import (
 
 var logger = grpclog.Component("xds")
 
-func prefixLogger(c *LRSClient) *internalgrpclog.PrefixLogger {
+func prefixLogger(c *Client) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, clientPrefix(c))
 }
 
-func clientPrefix(c *LRSClient) string {
+func clientPrefix(c *Client) string {
 	return fmt.Sprintf("[lrs-client %p] ", c)
 }

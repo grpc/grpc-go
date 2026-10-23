@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
 )
 
-func (s) TestXDSClient_New(t *testing.T) {
+func (s) TestClient_New(t *testing.T) {
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 
 	tests := []struct {
@@ -110,7 +110,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 	}
 }
 
-func (s) TestXDSClient_Close(t *testing.T) {
+func (s) TestClient_Close(t *testing.T) {
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := Config{
 		Node:             clients.Node{ID: "node-id"},

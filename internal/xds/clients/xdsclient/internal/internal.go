@@ -28,5 +28,5 @@ var (
 	// ResourceWatchStateForTesting gets the watch state for the resource
 	// identified by the given resource type and resource name. Returns a
 	// non-nil error if there is no such resource being watched.
-	ResourceWatchStateForTesting any // func(*xdsclient.XDSClient, xdsclient.ResourceType, string) error
+	ResourceWatchStateForTesting any // func(*xdsclient.Client, xdsclient.ResourceType, string) error
 )
