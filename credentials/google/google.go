@@ -39,7 +39,7 @@ type DefaultCredentialsOptions struct {
 	// PerRPCCreds is a per RPC credentials that is passed to a bundle.
 	PerRPCCreds credentials.PerRPCCredentials
 	// ALTSPerRPCCreds is a per RPC credentials that, if specified, will
-	// supercede PerRPCCreds above for and only for ALTS connections.
+	// supersede PerRPCCreds above for and only for ALTS connections.
 	ALTSPerRPCCreds credentials.PerRPCCredentials
 }
 
