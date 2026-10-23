@@ -284,6 +284,74 @@ func (s) TestParse(t *testing.T) {
 				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
 			},
 		},
+		{
+			// A binary header value in the string value field is base64
+			// encoded; it must be decoded so the metadata carries the
+			// raw bytes the transport expects to encode onto the wire.
+			name: "initial_metadata_bin_header_base64_decoded",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "data-bin", Value: "aGVsbG8="},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{"data-bin": {"hello"}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
+			name: "initial_metadata_bin_header_unpadded_base64_decoded",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "data-bin", Value: "aGVsbG8"},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{"data-bin": {"hello"}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
+			// raw_value already carries bytes; it is used as-is.
+			name: "initial_metadata_bin_header_raw_value_not_decoded",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "data-bin", Value: "aGVsbG8=", RawValue: []byte("hello")},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{"data-bin": {"hello"}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
+			name: "initial_metadata_bin_header_invalid_base64",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "data-bin", Value: "!!!"},
+				}
+				return gs
+			}(),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "invalid base64",
+		},
 	}
 
 	for _, test := range tests {
