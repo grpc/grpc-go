@@ -89,9 +89,20 @@ func NewClient(opts ClientOptions) func() {
 	ac.logger = igrpclog.NewPrefixLogger(logger, opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
 
 	// Start a timer that will fire after the initial assignment timeout. If a
-	// valid assignment is not received before the timer fires, the
+	// result is not received before the timer fires, the onAssignment or
 	// onAssignmentError callback will be invoked.
+	//
+	// Even though ac is only returned at the end of this function to the
+	// caller, there is still a data race here:
+	// - time.AfterFunc() may fire and run its callback before the value
+	//   returned from it is written to ac.initialAssignmentTimer. This may
+	//   happen when opts.InitialAssignmentTimeout is very small and this
+	//   goroutine get preempted before ac.initialAssignmentTimer is set.
+	// - If ac.reportError is called before ac.initialAssignmentTimer is set,
+	//   it may observe a nil timer and behave incorrectly.
+	ac.mu.Lock()
 	ac.initialAssignmentTimer = time.AfterFunc(opts.InitialAssignmentTimeout, func() { ac.reportError(errInitialAssignmentTimeout) })
+	ac.mu.Unlock()
 
 	go ac.run(ctx)
 	return ac.close
@@ -148,9 +159,9 @@ type autoshardingClient struct {
 	// and the initial assignment timer's after func that invokes the callback
 	// to report an error.
 	mu                      sync.Mutex
+	initialAssignmentTimer  *time.Timer
 	validAssignmentReported bool
 	closed                  bool
-	initialAssignmentTimer  *time.Timer
 }
 
 // run is the main loop of the autosharding client. It maintains a streaming RPC
@@ -567,10 +578,22 @@ func (c *autoshardingClient) reportError(err error) {
 		c.logger.Infof("Reporting error: %v", err)
 	}
 
-	if !c.validAssignmentReported {
-		if c.onAssignmentError != nil {
-			c.onAssignmentError(err)
-		}
+	if c.validAssignmentReported {
+		return
+	}
+
+	// If the timer fired concurrently with a non-timer error that acquired mu
+	// first and already stopped initialAssignmentTimer, drop the timer error so
+	// it does not overwrite the more informative error.
+	if errors.Is(err, errInitialAssignmentTimeout) && c.initialAssignmentTimer == nil {
+		return
+	}
+	if c.initialAssignmentTimer != nil {
+		c.initialAssignmentTimer.Stop()
+		c.initialAssignmentTimer = nil
+	}
+	if c.onAssignmentError != nil {
+		c.onAssignmentError(err)
 	}
 }
 
