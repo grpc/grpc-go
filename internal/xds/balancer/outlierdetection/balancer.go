@@ -655,6 +655,10 @@ func (b *outlierDetectionBalancer) run() {
 func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	// Stop cannot cancel a timer callback that has already started.
+	if b.closed.HasFired() {
+		return
+	}
 	b.timerStartTime = time.Now()
 
 	for _, epInfo := range b.endpoints.All() {
