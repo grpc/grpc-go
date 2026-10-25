@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
@@ -43,7 +44,10 @@ func (d *routeConfigResourceDecoder) Decode(resource *xdsclient.AnyProto, opts x
 	if opts.ServerConfig != nil {
 		serverCfg = d.serverConfigs[*opts.ServerConfig]
 	}
-	name, rc, err := unmarshalRouteConfigResource(resource.ToAny(), d.bootstrapConfig, serverCfg)
+	name, rc, err := unmarshalRouteConfigResource(&anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
+	}, d.bootstrapConfig, serverCfg)
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err
