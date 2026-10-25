@@ -90,6 +90,32 @@ func (s) TestXDSClient_New(t *testing.T) {
 			},
 			wantErr: "",
 		},
+		{
+			name: "invalid node metadata",
+			config: Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"invalid": make(chan int)},
+				},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(configs),
+				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+			},
+			wantErr: "failed to convert node metadata",
+		},
+		{
+			name: "valid node metadata",
+			config: Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"env": "prod", "version": 1.0},
+				},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(configs),
+				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+			},
+			wantErr: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
