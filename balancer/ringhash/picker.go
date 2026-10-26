@@ -77,14 +77,17 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		// Per gRFC A61, because of sticky-TF with PickFirst's auto reconnect on TF,
 		// we ignore all TF subchannels and find the first ring entry in READY,
 		// CONNECTING or IDLE.  If that entry is in IDLE, we need to initiate a
-		// connection. The idlePicker returned by the LazyLB or the new Pickfirst
-		// should do this automatically.
+		// connection. This goes through endpointsharding's ExitIdle instead of
+		// the child's idlePicker, so that closed children are skipped.
 		for i := 0; i < ringSize; i++ {
 			index := (e.idx + i) % ringSize
 			es := p.endpointState(p.ring.items[index])
 			switch es.state.ConnectivityState {
-			case connectivity.Ready, connectivity.Connecting, connectivity.Idle:
+			case connectivity.Ready, connectivity.Connecting:
 				return es.state.Picker.Pick(info)
+			case connectivity.Idle:
+				es.exitIdle()
+				return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 			case connectivity.TransientFailure:
 			default:
 				panic(fmt.Sprintf("Found child balancer in unknown state: %v", es.state.ConnectivityState))

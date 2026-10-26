@@ -167,6 +167,30 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	}
 }
 
+// Tests that when the picked endpoint is IDLE, the picker calls the endpoint's
+// exitIdle function instead of the child's picker, so that endpointsharding can
+// skip children that are already closed.
+func (s) TestPickerIdleEndpointCallsExitIdle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ring, epStates := testRingAndEndpointStates([]connectivity.State{connectivity.Idle})
+	exitIdleCalled := false
+	es := epStates[testSubConns[0].String()]
+	es.exitIdle = func() { exitIdleCalled = true }
+	epStates[testSubConns[0].String()] = es
+	p := &picker{
+		ring:           ring,
+		endpointStates: epStates,
+	}
+	if _, err := p.Pick(balancer.PickInfo{Ctx: iringhash.SetXDSRequestHash(ctx, 0)}); err != balancer.ErrNoSubConnAvailable {
+		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
+	}
+	if !exitIdleCalled {
+		t.Fatal("Pick() did not call exitIdle on the IDLE endpoint")
+	}
+}
+
 func (s) TestPickerNoRequestHash(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
