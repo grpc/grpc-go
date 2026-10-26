@@ -1097,10 +1097,12 @@ func (s) TestNewStreamOnDrainingTransport(t *testing.T) {
 	// Leave the stream open, then drain the transport.
 	ct.GracefulClose()
 
+	// No deadline: on unpatched code this never returns.
+	ctxNoDeadline, cancelNoDeadline := context.WithCancel(context.Background())
+	defer cancelNoDeadline()
 	done := make(chan error, 1)
 	go func() {
-		// No deadline: on unpatched code this never returns.
-		_, err := ct.NewStream(context.Background(), &CallHdr{}, nil)
+		_, err := ct.NewStream(ctxNoDeadline, &CallHdr{}, nil)
 		done <- err
 	}()
 	select {
