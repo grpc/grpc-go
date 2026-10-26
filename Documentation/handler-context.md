@@ -34,24 +34,24 @@ if ok {
 }
 ```
 
-`AuthInfo` describes the transport authentication and is nil when transport
-security is not being used.
+`AuthInfo` describes the transport authentication and may be nil when the
+transport does not provide authentication information. When the server uses
+`insecure.NewCredentials()`, `AuthInfo` is non-nil, its `AuthType` is
+`"insecure"`, and its security level is `NoSecurity`.
 
 ## RPC method
 
 The full name of an RPC has the form `/service/method`.
 
-### Unary RPC
-
-For a unary RPC, use [Method] with the handler context:
+Use [Method] with the handler context to get the full method name. This works
+for both unary and streaming RPCs, including contexts passed to interceptors:
 
 ```go
 method, ok := grpc.Method(ctx)
 ```
 
-### Streaming RPC
-
-For a streaming RPC, use [MethodFromServerStream] with the server stream:
+For streaming RPCs, [MethodFromServerStream] is a shortcut that gets the method
+from the server stream's context. Interceptors can also use `info.FullMethod`.
 
 ```go
 method, ok := grpc.MethodFromServerStream(stream)
@@ -64,6 +64,12 @@ A server handler can send metadata back to the client with [SetHeader],
 these functions. In a streaming handler, call the corresponding methods on the
 server stream.
 
+`SetHeader` adds metadata to the response headers. The headers are sent when
+`SendHeader` is called, when the first response message is sent, or when the
+handler returns and the RPC status is sent. `SendHeader` can be called only
+once. `SetHeader` and `SendHeader` return an error if called after the headers
+have been sent. `SetTrailer` adds metadata that is sent with the RPC status.
+
 See the [metadata documentation] for more examples of sending and receiving
 headers and trailers in unary and streaming RPCs on both the client and server.
 
@@ -71,10 +77,10 @@ headers and trailers in unary and streaming RPCs on both the client and server.
 
 The following examples show how to use the context in unary and streaming handlers.
 
-### Unary RPC
+### Unary Call
 
 ```go
-func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someResponse, error) {
+func (s *server) SomeRPC(ctx context.Context, in *pb.SomeRequest) (*pb.SomeResponse, error) {
     // get metadata and method
     md, _ := metadata.FromIncomingContext(ctx)
     method, _ := grpc.Method(ctx)
@@ -85,11 +91,11 @@ func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someRespo
     // create and set trailer
     grpc.SetTrailer(ctx, metadata.Pairs("x-request-id", "example"))
 
-    return &pb.someResponse{}, nil
+    return &pb.SomeResponse{}, nil
 }
 ```
 
-### Streaming RPC
+### Streaming Call
 
 ```go
 func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) error {
