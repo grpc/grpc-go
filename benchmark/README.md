@@ -1,4 +1,4 @@
-﻿# benchmark
+﻿# Benchmark
 
 This directory contains gRPC-Go's benchmarking utilities and libraries.
 
@@ -111,12 +111,12 @@ compression, etc.) you can vary between runs.
    Higher `TotalOps` and throughput (`ReqT/op`, `RespT/op`) are better.
    `SendOps` and `RecvOps` are only filled in for the `unconstrained`
    workload, so they show `NaN%` otherwise.
-
-   Results are noisy. Two runs of the same code can differ by several
-   percent or more, especially with short `-benchtime` values. Use a longer
-   `-benchtime`, run on an otherwise idle machine, and treat small
-   differences with caution.
-
+   Note: Latency and throughput measurements can vary by several percent
+   between identical runs, especially with short `-benchtime` durations or high
+   simulated latency (where total operations are low). For more reliable
+   comparisons, use a longer `-benchtime` (e.g. `10s` or more), run on an
+   otherwise idle machine, and treat small latency/throughput differences with
+   caution.
 ### Common flags
 
 - `-benchtime` - how long to run each benchmark configuration (default `1s`).
@@ -125,6 +125,7 @@ compression, etc.) you can vary between runs.
 - `-maxConcurrentCalls` - number of concurrent RPCs (default `1,8,64,512`).
 - `-reqSizeBytes` / `-respSizeBytes` - request and response payload sizes in
   bytes.
+  Both default to `1,1024,1048576`, so a run covers 3 sizes each by default.
 - `-latency` - simulated one-way network latency (default `0s,40ms`).
 - `-kbps` - simulated network throughput in kbps, where `0` means unlimited
   (default `0,10240`).
