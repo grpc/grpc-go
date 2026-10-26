@@ -871,6 +871,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 
 		t.mu.Lock()
 		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
+			t.streamQuota++
 			t.mu.Unlock()
 			// The caller must not wait for quota here: nothing will wake
 			// it up. A draining transport is only closed once its last
