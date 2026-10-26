@@ -855,6 +855,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 	firstTry := true
 	var ch chan struct{}
 	transportDrainRequired := false
+	transportClosing := false
 	checkForStreamQuota := func() bool {
 		if t.streamQuota <= 0 { // Can go negative if server decreases it.
 			if firstTry {
@@ -871,6 +872,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 		t.mu.Lock()
 		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
 			t.mu.Unlock()
+			// The caller must not wait for quota here: nothing will wake
+			// it up. A draining transport is only closed once its last
+			// stream ends, and goAway is only closed by a server GOAWAY,
+			// so waiting would park a deadline-less NewStream forever
+			// behind a long-lived stream.
+			transportClosing = true
 			return false // Don't create a stream if the transport is already closed.
 		}
 
@@ -924,6 +931,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 		}
 		if hdrListSizeErr != nil {
 			return nil, &NewStreamError{Err: hdrListSizeErr}
+		}
+		if transportClosing {
+			return nil, &NewStreamError{Err: ErrConnClosing, AllowTransparentRetry: true}
 		}
 		firstTry = false
 		select {
