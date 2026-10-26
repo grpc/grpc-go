@@ -77,8 +77,8 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		// Per gRFC A61, because of sticky-TF with PickFirst's auto reconnect on TF,
 		// we ignore all TF subchannels and find the first ring entry in READY,
 		// CONNECTING or IDLE.  If that entry is in IDLE, we need to initiate a
-		// connection. This goes through endpointsharding's ExitIdle instead of
-		// the child's idlePicker, so that closed children are skipped.
+		// connection. Use the endpoint's exitIdle rather than its picker, so
+		// that endpointsharding ignores the call if the child was closed.
 		for i := 0; i < ringSize; i++ {
 			index := (e.idx + i) % ringSize
 			es := p.endpointState(p.ring.items[index])

@@ -167,9 +167,8 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	}
 }
 
-// Tests that when the picked endpoint is IDLE, the picker calls the endpoint's
-// exitIdle function instead of the child's picker, so that endpointsharding can
-// skip children that are already closed.
+// Tests that the picker calls exitIdle on an IDLE endpoint instead of using its
+// picker.
 func (s) TestPickerIdleEndpointCallsExitIdle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
