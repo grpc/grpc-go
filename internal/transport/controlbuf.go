@@ -435,6 +435,16 @@ type controlBuffer struct {
 	// consumer goroutine, without holding mu.
 	consumerList itemList[cbItem]
 
+	// transportResponseFrames counts the number of queued items (in list and
+	// consumerList) that represent the response of an action initiated by the
+	// peer (as determined by cbItem.isTransportResponseFrame for this side).
+	// It is incremented by producers in the same critical section that
+	// enqueues the frame, and decremented by the consumer without holding mu.
+	// Incrementing in that critical section isn't required for correctness
+	// (see updateThrottleLocked); it only ensures that the count is never too
+	// low, since the consumer can't dequeue a frame before it is counted.
+	transportResponseFrames atomic.Int64
+
 	// Mutex guards all the fields below.
 	mu              sync.Mutex
 	consumerWaiting bool             // True when readers are blocked waiting for new data.
@@ -449,13 +459,6 @@ type controlBuffer struct {
 	// maxQueuedTransportResponseFrames and is closed and nilled when
 	// transportResponseFrames drops below the threshold.
 	trfChan atomic.Pointer[chan struct{}]
-
-	// transportResponseFrames counts the number of queued items (in list and
-	// consumerList) that represent the response of an action initiated by the
-	// peer (as determined by cbItem.isTransportResponseFrame for this side).
-	// It is incremented by producers while holding mu, and decremented by the
-	// consumer without holding mu.
-	transportResponseFrames atomic.Int64
 }
 
 func newControlBuffer(done <-chan struct{}, s side) *controlBuffer {
@@ -561,6 +564,11 @@ func (c *controlBuffer) get(block bool) (any, error) {
 		if c.closed.Load() {
 			return nil, ErrConnClosing
 		}
+		// closed is read without holding mu, so finish may set it right after
+		// the check above. Then this frame is returned, and the next call
+		// returns ErrConnClosing. This is benign: it is equivalent to finish
+		// being called right after get returns, which the slow path below
+		// doesn't prevent either.
 		return c.dequeueConsumerList(), nil
 	}
 	for {
@@ -655,7 +663,8 @@ func discardItem(it cbItem) {
 // control buffer, and attempts to do so will return ErrConnClosing.
 //
 // finish may be called from any goroutine, so it doesn't touch consumerList;
-// the consumer must call discardConsumerList once it is done.
+// the consumer goroutine must pass the frames left in consumerList to
+// discardItem once it stops calling get.
 func (c *controlBuffer) finish() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -677,13 +686,6 @@ func (c *controlBuffer) finish() {
 	if ch != nil {
 		close(*ch)
 	}
-}
-
-// discardConsumerList cleans up frames the consumer took from the control
-// buffer but didn't handle. It must only be called by the consumer goroutine,
-// after finish.
-func (c *controlBuffer) discardConsumerList() {
-	c.consumerList.dequeueAll(discardItem)
 }
 
 type side int
@@ -794,7 +796,7 @@ func (l *loopyWriter) run() (err error) {
 			l.framer.writer.Flush()
 		}
 		l.cbuf.finish()
-		l.cbuf.discardConsumerList()
+		l.cbuf.consumerList.dequeueAll(discardItem)
 	}()
 	for {
 		it, err := l.cbuf.get(true)

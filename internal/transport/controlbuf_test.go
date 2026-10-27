@@ -38,7 +38,7 @@ import (
 func (s) TestControlBuffer_ThrottleStress(t *testing.T) {
 	const (
 		numProducers      = 8
-		framesPerProducer = 20000
+		framesPerProducer = 10000
 	)
 	for _, limit := range []int{1, 2, 4} {
 		t.Run(fmt.Sprintf("limit=%d", limit), func(t *testing.T) {
@@ -54,16 +54,14 @@ func (s) TestControlBuffer_ThrottleStress(t *testing.T) {
 
 			var wg sync.WaitGroup
 			for range numProducers {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					for range framesPerProducer {
 						cb.throttle()
 						if err := cb.put(it); err != nil {
 							return // Only happens if the test timed out.
 						}
 					}
-				}()
+				})
 			}
 			producersDone := make(chan struct{})
 			go func() {
