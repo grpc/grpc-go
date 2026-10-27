@@ -21,89 +21,355 @@ package transport
 import (
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
+// TestItemList_FIFO verifies FIFO ordering across buffer growth, wrap-around
+// and shrinking by interleaving enqueues and dequeues.
+func (s) TestItemList_FIFO(t *testing.T) {
+	var il itemList[int]
+	// enqueue adds n consecutive integers to the list, starting with next. It
+	// returns the integer that follows the last one enqueued, which should be
+	// passed as next in the following call.
+	enqueue := func(next, n int) int {
+		for range n {
+			il.enqueue(next)
+			next++
+		}
+		return next
+	}
+	// dequeue removes n items from the list and verifies that they are
+	// consecutive integers starting with want, i.e. that items come out in the
+	// order they were enqueued. It returns the integer expected to be dequeued
+	// next, which should be passed as want in the following call.
+	dequeue := func(want, n int) int {
+		t.Helper()
+		for range n {
+			if il.isEmpty() {
+				t.Fatalf("isEmpty() = true, want false when expecting item %d", want)
+			}
+			if got := il.peek(); got != want {
+				t.Fatalf("peek() = %v, want %v", got, want)
+			}
+			if got := il.dequeue(); got != want {
+				t.Fatalf("dequeue() = %v, want %v", got, want)
+			}
+			want++
+		}
+		return want
+	}
+
+	// Offset the head so that subsequent growth has to handle wrap-around.
+	next := enqueue(0, 3)
+	want := dequeue(0, 2)
+	next = enqueue(next, 1000)
+	if got, wantCap := len(il.buf), 1024; got != wantCap {
+		t.Fatalf("len(il.buf) = %d, want %d", got, wantCap)
+	}
+	want = dequeue(want, 900)
+	if got := len(il.buf); got >= 1024 {
+		t.Fatalf("len(il.buf) = %d after draining, want buffer to have shrunk", got)
+	}
+	next = enqueue(next, 50)
+	dequeue(want, next-want)
+	if !il.isEmpty() {
+		t.Fatalf("isEmpty() = false, want true")
+	}
+	if got := il.dequeue(); got != 0 {
+		t.Fatalf("dequeue() on empty list = %v, want nil", got)
+	}
+	if got := len(il.buf); got > itemListShrinkFloor {
+		t.Fatalf("len(il.buf) = %d after draining, want <= %d", got, itemListShrinkFloor)
+	}
+	if diff := cmp.Diff(make([]int, len(il.buf)), il.buf); diff != "" {
+		t.Fatalf("il.buf mismatch after draining (-want +got):\n%s", diff)
+	}
+	if got, want := il.peek(), 0; got != want {
+		t.Fatalf("peek() = %d, want %d", got, want)
+	}
+}
+
+func (s) TestItemList_DequeueAll(t *testing.T) {
+	var il itemList[any]
+	il.dequeueAll(func(any) { t.Fatal("dequeueAll() called f on an empty list") })
+
+	// Offset the head so that the items wrap around the end of the buffer.
+	for i := range 3 {
+		il.enqueue(i)
+	}
+	il.dequeue()
+	il.dequeue()
+	for i := 3; i < 6; i++ {
+		il.enqueue(i)
+	}
+	var got []int
+	il.dequeueAll(func(it any) { got = append(got, it.(int)) })
+	want := []int{2, 3, 4, 5}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("dequeueAll() visited items diff (-want +got):\n%s", diff)
+	}
+	if !il.isEmpty() || il.buf != nil {
+		t.Errorf("list not reset after dequeueAll(): %+v", il)
+	}
+	if got := il.peek(); got != nil {
+		t.Fatalf("peek() = %v, want nil", got)
+	}
+}
+
+// Tests that the items that count towards the limit on a given side of the
+// transport throttle the control buffer once the limit is reached, and that
+// consuming one of them stops the throttling.
+//
+// Between them, this test and TestControlBuffer_NoThrottleForNonThrottledItems
+// list every cbItem type for each side. Add new cbItem types to one of them.
 func (s) TestControlBuffer_Throttle(t *testing.T) {
-	done := make(chan struct{})
-	defer close(done)
-	cb := newControlBuffer(done, true)
-
-	// Fill the control buffer up to the limit with throttled items.
-	for i := 0; i < maxQueuedTransportResponseFrames; i++ {
-		cb.put(&ping{ack: true})
+	tests := []struct {
+		name string
+		side side
+		item cbItem
+	}{
+		// All pings count, not only acks, since the peer can trigger a
+		// BDP ping with every DATA frame.
+		{name: "client_ping", side: clientSide, item: &ping{}},
+		{name: "client_pingAck", side: clientSide, item: &ping{ack: true}},
+		{name: "client_incomingSettings", side: clientSide, item: &incomingSettings{}},
+		{name: "client_incomingWindowUpdate", side: clientSide, item: &incomingWindowUpdate{}},
+		{name: "server_ping", side: serverSide, item: &ping{}},
+		{name: "server_pingAck", side: serverSide, item: &ping{ack: true}},
+		{name: "server_incomingSettings", side: serverSide, item: &incomingSettings{}},
+		{name: "server_incomingWindowUpdate", side: serverSide, item: &incomingWindowUpdate{}},
+		{name: "server_cleanupStream", side: serverSide, item: &cleanupStream{}},
+		{name: "server_earlyAbortStream", side: serverSide, item: &earlyAbortStream{}},
 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			done := make(chan struct{})
+			defer close(done)
+			cb := newControlBuffer(done, test.side)
 
-	// The next call to throttle should block.
-	throttleDone := make(chan struct{})
-	go func() {
-		cb.throttle()
-		close(throttleDone)
-	}()
+			// Fill the control buffer with items up to the limit.
+			for range maxQueuedTransportResponseFrames {
+				cb.put(test.item)
+			}
 
-	select {
-	case <-throttleDone:
-		t.Fatal("throttle() did not block when the buffer was full")
-	case <-time.After(defaultTestShortTimeout):
-	}
+			// The next call to throttle should block.
+			throttleDone := make(chan struct{})
+			go func() {
+				cb.throttle()
+				close(throttleDone)
+			}()
 
-	// Consume one item from the control buffer.
-	if _, err := cb.get(true); err != nil {
-		t.Fatalf("cb.get(true) failed: %v", err)
-	}
+			select {
+			case <-throttleDone:
+				t.Fatal("throttle() did not block when the buffer was full")
+			case <-time.After(defaultTestShortTimeout):
+			}
 
-	// Now throttle() should unblock.
-	select {
-	case <-throttleDone:
-	case <-time.After(time.Second):
-		t.Fatal("throttle() did not unblock after an item was consumed")
+			// Consume one item from the control buffer.
+			if _, err := cb.get(true); err != nil {
+				t.Fatalf("cb.get(true) failed: %v", err)
+			}
+
+			// Now throttle() should unblock.
+			select {
+			case <-throttleDone:
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("throttle() did not unblock after an item was consumed")
+			}
+		})
 	}
 }
 
+// Tests that the items that do not count towards the limit on a given side of
+// the transport never throttle the control buffer, however many are queued.
+//
+// Between them, this test and TestControlBuffer_Throttle list every cbItem
+// type for each side. Add new cbItem types to one of them.
 func (s) TestControlBuffer_NoThrottleForNonThrottledItems(t *testing.T) {
-	done := make(chan struct{})
-	defer close(done)
-	cb := newControlBuffer(done, true)
-
-	// Fill the control buffer with many more than limit number of non-throttled
-	// items.
-	for i := 0; i < maxQueuedTransportResponseFrames+10; i++ {
-		cb.put(&dataFrame{})
+	tests := []struct {
+		name string
+		side side
+		item cbItem
+	}{
+		{name: "client_registerStream", side: clientSide, item: &registerStream{}},
+		{name: "client_clientHeaders", side: clientSide, item: &clientHeaders{}},
+		{name: "client_serverHeaders", side: clientSide, item: &serverHeaders{}},
+		// The client queues at most one cleanupStream per stream it
+		// creates. Counting them can deadlock the client and the
+		// server (see https://github.com/grpc/grpc-go/issues/9330).
+		{name: "client_cleanupStream", side: clientSide, item: &cleanupStream{}},
+		// Streams cancelled by the client also send a RST_STREAM.
+		{name: "client_cleanupStreamWithRST", side: clientSide, item: &cleanupStream{rst: true}},
+		{name: "client_earlyAbortStream", side: clientSide, item: &earlyAbortStream{}},
+		{name: "client_dataFrame", side: clientSide, item: &dataFrame{}},
+		{name: "client_outgoingWindowUpdate", side: clientSide, item: &outgoingWindowUpdate{}},
+		{name: "client_outgoingSettings", side: clientSide, item: &outgoingSettings{}},
+		{name: "client_incomingGoAway", side: clientSide, item: &incomingGoAway{}},
+		{name: "client_goAway", side: clientSide, item: &goAway{}},
+		{name: "client_outFlowControlSizeRequest", side: clientSide, item: &outFlowControlSizeRequest{}},
+		{name: "client_outStreamRequestForTesting", side: clientSide, item: &outStreamRequestForTesting{}},
+		{name: "client_closeConnection", side: clientSide, item: closeConnection{}},
+		{name: "server_registerStream", side: serverSide, item: &registerStream{}},
+		{name: "server_clientHeaders", side: serverSide, item: &clientHeaders{}},
+		{name: "server_serverHeaders", side: serverSide, item: &serverHeaders{}},
+		{name: "server_dataFrame", side: serverSide, item: &dataFrame{}},
+		{name: "server_outgoingWindowUpdate", side: serverSide, item: &outgoingWindowUpdate{}},
+		{name: "server_outgoingSettings", side: serverSide, item: &outgoingSettings{}},
+		{name: "server_incomingGoAway", side: serverSide, item: &incomingGoAway{}},
+		{name: "server_goAway", side: serverSide, item: &goAway{}},
+		{name: "server_outFlowControlSizeRequest", side: serverSide, item: &outFlowControlSizeRequest{}},
+		{name: "server_outStreamRequestForTesting", side: serverSide, item: &outStreamRequestForTesting{}},
+		{name: "server_closeConnection", side: serverSide, item: closeConnection{}},
 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			done := make(chan struct{})
+			defer close(done)
+			cb := newControlBuffer(done, test.side)
 
-	// throttle() should not block.
-	throttled := make(chan struct{})
-	go func() {
-		cb.throttle()
-		close(throttled)
-	}()
+			// Queue more items than the limit.
+			for range maxQueuedTransportResponseFrames + 10 {
+				cb.put(test.item)
+			}
 
-	select {
-	case <-throttled:
-	case <-time.After(defaultTestShortTimeout):
-		t.Fatal("throttle() blocked for non-throttled items")
+			// This returns nil right away, since the control
+			// buffer is not throttled. Unlike throttle(), it
+			// fails instead of hanging if it is throttled.
+			if err := cb.throttleWithTimeout(defaultTestShortTimeout); err != nil {
+				t.Fatalf("throttleWithTimeout() = %v, want <nil>", err)
+			}
+		})
 	}
 }
 
-func (s) TestControlBuffer_ThrottlingDisabled(t *testing.T) {
-	done := make(chan struct{})
-	defer close(done)
-	cb := newControlBuffer(done, false)
-
-	// Fill the control buffer beyond the limit with throttled items.
-	for i := 0; i < maxQueuedTransportResponseFrames+10; i++ {
-		cb.put(&ping{ack: true})
+// Tests the different ways in which throttleWithTimeout returns.
+func (s) TestControlBuffer_ThrottleWithTimeout(t *testing.T) {
+	// newThrottledControlBuffer returns a control buffer that holds as
+	// many counted items as the limit, so it is throttled.
+	newThrottledControlBuffer := func(done <-chan struct{}) *controlBuffer {
+		cb := newControlBuffer(done, clientSide)
+		for range maxQueuedTransportResponseFrames {
+			cb.put(&ping{ack: true})
+		}
+		return cb
 	}
 
-	// throttle() should not block when throttling is disabled.
-	throttled := make(chan struct{})
-	go func() {
-		cb.throttle()
-		close(throttled)
-	}()
-
-	select {
-	case <-throttled:
-	case <-time.After(defaultTestShortTimeout):
-		t.Fatal("throttle() blocked when throttling was disabled")
+	// ensureThrottleWithTimeoutBlocks calls throttleWithTimeout in a new
+	// goroutine, and verifies that the call blocks. It returns a channel
+	// on which the call's return value is sent.
+	ensureThrottleWithTimeoutBlocks := func(t *testing.T, cb *controlBuffer) <-chan error {
+		t.Helper()
+		// The callers expect the call to return for another reason.
+		// This timeout never expires during the test.
+		const longTimeout = time.Hour
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cb.throttleWithTimeout(longTimeout)
+		}()
+		select {
+		case err := <-errCh:
+			t.Fatalf("throttleWithTimeout() = %v, want it to block", err)
+		case <-time.After(defaultTestShortTimeout):
+		}
+		return errCh
 	}
+
+	// waitForNilError waits for throttleWithTimeout to return, and
+	// verifies that it returned nil.
+	waitForNilError := func(t *testing.T, errCh <-chan error) {
+		t.Helper()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("throttleWithTimeout() = %v, want <nil>", err)
+			}
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("Timeout when waiting for throttleWithTimeout() to return")
+		}
+	}
+
+	// Tests that throttleWithTimeout returns nil right away when the
+	// control buffer is not throttled.
+	t.Run("NotThrottled", func(t *testing.T) {
+		done := make(chan struct{})
+		defer close(done)
+		cb := newControlBuffer(done, clientSide)
+		for range maxQueuedTransportResponseFrames - 1 {
+			cb.put(&ping{ack: true})
+		}
+		// If it blocks instead, it times out with an error.
+		if err := cb.throttleWithTimeout(defaultTestTimeout); err != nil {
+			t.Fatalf("throttleWithTimeout() = %v, want <nil>", err)
+		}
+	})
+
+	// Tests that throttleWithTimeout returns an error when the control
+	// buffer is still throttled after the timeout.
+	t.Run("TimesOut", func(t *testing.T) {
+		done := make(chan struct{})
+		defer close(done)
+		cb := newThrottledControlBuffer(done)
+		start := time.Now()
+		if err := cb.throttleWithTimeout(defaultTestShortTimeout); err == nil {
+			t.Fatal("throttleWithTimeout() = <nil>, want an error")
+		}
+		if elapsed := time.Since(start); elapsed < defaultTestShortTimeout {
+			t.Fatalf("throttleWithTimeout() returned after %v, want at least %v", elapsed, defaultTestShortTimeout)
+		}
+	})
+
+	// Tests that consuming an item that does not count towards the limit
+	// does not stop the throttling, so throttleWithTimeout times out.
+	t.Run("UncountedItemConsumed", func(t *testing.T) {
+		done := make(chan struct{})
+		defer close(done)
+		cb := newControlBuffer(done, clientSide)
+		cb.put(&outgoingWindowUpdate{})
+		for range maxQueuedTransportResponseFrames {
+			cb.put(&ping{ack: true})
+		}
+		// Consume the outgoingWindowUpdate, the first item queued.
+		if _, err := cb.get(false); err != nil {
+			t.Fatalf("cb.get(false) failed: %v", err)
+		}
+		if err := cb.throttleWithTimeout(defaultTestShortTimeout); err == nil {
+			t.Fatal("throttleWithTimeout() = <nil>, want an error")
+		}
+	})
+
+	// Tests that throttleWithTimeout returns nil when an item that counts
+	// towards the limit is consumed, which stops the throttling.
+	t.Run("CountedItemConsumed", func(t *testing.T) {
+		done := make(chan struct{})
+		defer close(done)
+		cb := newThrottledControlBuffer(done)
+		errCh := ensureThrottleWithTimeoutBlocks(t, cb)
+		if _, err := cb.get(false); err != nil {
+			t.Fatalf("cb.get(false) failed: %v", err)
+		}
+		waitForNilError(t, errCh)
+	})
+
+	// Tests that throttleWithTimeout returns nil when the done channel is
+	// closed, which happens when the transport closes.
+	t.Run("TransportDone", func(t *testing.T) {
+		done := make(chan struct{})
+		cb := newThrottledControlBuffer(done)
+		errCh := ensureThrottleWithTimeoutBlocks(t, cb)
+		close(done)
+		waitForNilError(t, errCh)
+	})
+
+	// Tests that throttleWithTimeout returns nil when the control buffer
+	// is finished, which happens when the loopy writer exits, for example
+	// because a write to the connection failed.
+	t.Run("ControlBufferFinished", func(t *testing.T) {
+		done := make(chan struct{})
+		defer close(done)
+		cb := newThrottledControlBuffer(done)
+		errCh := ensureThrottleWithTimeoutBlocks(t, cb)
+		cb.finish()
+		waitForNilError(t, errCh)
+	})
 }
