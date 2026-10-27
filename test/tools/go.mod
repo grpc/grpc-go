@@ -1,6 +1,6 @@
 module google.golang.org/grpc/test/tools
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/client9/misspell v0.3.4
