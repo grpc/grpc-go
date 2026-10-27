@@ -168,6 +168,12 @@ func (c *ChannelCreds) Equal(other *ChannelCreds) bool {
 	return c.identity.Equal(other.identity)
 }
 
+// Identity returns the identity of the configuration the channel credentials
+// were built from.
+func (c *ChannelCreds) Identity() Identity {
+	return c.identity
+}
+
 // Close releases the resources held by the bundle, if owned. It is
 // idempotent.
 func (c *ChannelCreds) Close() {
@@ -206,6 +212,12 @@ func (c *CallCreds) Equal(other *CallCreds) bool {
 		return c == other
 	}
 	return c.identity.Equal(other.identity)
+}
+
+// Identity returns the identity of the configuration the per-RPC credentials
+// were built from.
+func (c *CallCreds) Identity() Identity {
+	return c.identity
 }
 
 // Close releases the resources held by the credentials, if owned. It is

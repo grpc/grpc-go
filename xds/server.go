@@ -45,6 +45,17 @@ var (
 	}
 )
 
+func init() {
+	server.UnderlyingGRPCServer = func(s *GRPCServer) *grpc.Server {
+		if s == nil {
+			return nil
+		}
+		// Tests may replace the underlying server with a fake implementation.
+		gs, _ := s.gs.(*grpc.Server)
+		return gs
+	}
+}
+
 // grpcServer contains methods from grpc.Server which are used by the
 // GRPCServer type here. This is useful for overriding in unit tests.
 type grpcServer interface {

@@ -105,7 +105,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   gofmt -s -d -l . 2>&1 | fail_on_output
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
 
-  go mod tidy -compat=1.25
+  go mod tidy -compat=1.26
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 
@@ -136,6 +136,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
 
   # Error for duplicate imports not including grpc protos.
   noret_grep "(ST1019)\|\(other import of\)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
+balancer/autosharding/internal/proto"
 channelz/grpc_channelz_v1"
 go-control-plane/envoy
 grpclb/grpc_lb_v1"
@@ -205,6 +206,7 @@ GetContainsMatch
 GetExactMatch
 GetMatchSubjectAltNames
 GetPrefixMatch
+GetRequestDrain
 GetSafeRegexMatch
 GetSuffixMatch
 GetSourceIp

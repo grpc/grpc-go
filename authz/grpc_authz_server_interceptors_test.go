@@ -20,6 +20,7 @@ package authz_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -27,9 +28,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc/authz"
+	"google.golang.org/grpc/authz/audit"
 )
 
-const defaultTestTimeout = 10 * time.Second
+const (
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
+)
 
 func createTmpPolicyFile(t *testing.T, dirSuffix string, policy []byte) string {
 	t.Helper()
@@ -170,5 +175,96 @@ func (s) TestOnPolicyUpdate(t *testing.T) {
 	case <-updates:
 		t.Fatal("OnPolicyUpdate callback invoked more times than expected")
 	case <-sCtx.Done():
+	}
+}
+
+// fakeAuditLogger is an audit logger that discards every event.
+type fakeAuditLogger struct{}
+
+func (*fakeAuditLogger) Log(*audit.Event) {}
+
+// fakeAuditLoggerBuilder builds fakeAuditLogger for testing transient
+// policy load failures.
+type fakeAuditLoggerBuilder struct {
+	name string
+}
+
+func (b *fakeAuditLoggerBuilder) Name() string {
+	return b.name
+}
+
+func (*fakeAuditLoggerBuilder) Build(audit.LoggerConfig) audit.Logger {
+	return &fakeAuditLogger{}
+}
+
+func (*fakeAuditLoggerBuilder) ParseLoggerConfig(json.RawMessage) (audit.LoggerConfig, error) {
+	return nil, nil
+}
+
+// Test verifies that a reload failure does not cache the failed policy
+// contents, ensuring the file watcher retries unchanged contents on
+// subsequent refreshes once the transient error condition is resolved.
+func (s) TestFileWatcher_RetriesUnchangedPolicyAfterFailedReload(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	loggerName := fmt.Sprintf("authz_test_logger_%d", time.Now().UnixNano())
+
+	initialPolicy := `{"name": "authz", "allow_rules": [{"name": "allow_all"}]}`
+	// This policy is valid, but cannot be loaded until loggerName is registered.
+	pendingPolicy := fmt.Sprintf(`{
+		"name": "authz",
+		"allow_rules": [{"name": "allow_all"}],
+		"audit_logging_options": {
+			"audit_condition": "ON_DENY",
+			"audit_loggers": [{"name": %q, "config": {}, "is_optional": false}]
+		}
+	}`, loggerName)
+
+	updates := make(chan string, 1)
+	file := createTmpPolicyFile(t, "retries_unchanged_policy", []byte(initialPolicy))
+	opts := authz.FileWatcherOptions{
+		PolicyFile:      file,
+		RefreshDuration: defaultTestShortTimeout,
+		OnPolicyUpdate:  func(p string) { updates <- p },
+	}
+	i, err := authz.NewFileWatcherWithOptions(opts)
+	if err != nil {
+		t.Fatalf("NewFileWatcherWithOptions(%v) returned err: %v", opts, err)
+	}
+	defer i.Close()
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for initial policy to load")
+	case update := <-updates:
+		if update != initialPolicy {
+			t.Fatalf("Unexpected contents on first load of policy file: got=%v, want=%v", update, initialPolicy)
+		}
+	}
+
+	// Write the pending policy and wait to ensure it fails to load.
+	if err := os.WriteFile(file, []byte(pendingPolicy), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
+	}
+	sCtx, sCancel := context.WithTimeout(ctx, 2*defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case update := <-updates:
+		t.Fatalf("Policy loaded before its audit logger was registered: %v", update)
+	case <-sCtx.Done():
+	}
+
+	// Register the audit logger to resolve the error, allowing the watcher
+	// to successfully retry and load the unchanged policy.
+	audit.RegisterLoggerBuilder(&fakeAuditLoggerBuilder{name: loggerName})
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the policy to be retried")
+	case update := <-updates:
+		if update != pendingPolicy {
+			t.Fatalf("Unexpected contents after retry: got=%v, want=%v", update, pendingPolicy)
+		}
 	}
 }

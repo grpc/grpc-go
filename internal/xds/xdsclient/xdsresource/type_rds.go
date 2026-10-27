@@ -44,6 +44,9 @@ type RouteConfigUpdate struct {
 // Note that the domains in this slice can be a wildcard, not an exact string.
 // The consumer of this struct needs to find the best match for its hostname.
 type VirtualHost struct {
+	// Domains is the list of domains served by this virtual host. Host names
+	// are case-insensitive, so domains are folded to lower case when the
+	// resource is unmarshaled. See FindBestMatchingVirtualHostIndex.
 	Domains []string
 	// Routes contains a list of routes, each containing matchers and
 	// corresponding action.
@@ -123,7 +126,7 @@ type Route struct {
 	// Indicates if prefix/path matching should be case insensitive. The default
 	// is false (case sensitive).
 	CaseInsensitive bool
-	Headers         []*HeaderMatcher
+	Headers         []matcher.HeaderMatcher
 	Fraction        *uint32
 
 	HashPolicies []*HashPolicy
@@ -164,21 +167,4 @@ type WeightedCluster struct {
 	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
 	// the weighted cluster which may be present.
 	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
-}
-
-// HeaderMatcher represents header matchers. Exact, prefix, suffix and contains
-// matches are represented as a StringMatch.
-type HeaderMatcher struct {
-	Name         string
-	InvertMatch  *bool
-	RegexMatch   *regexp.Regexp
-	RangeMatch   *Int64Range
-	PresentMatch *bool
-	StringMatch  *matcher.StringMatcher
-}
-
-// Int64Range is a range for header range match.
-type Int64Range struct {
-	Start int64
-	End   int64
 }

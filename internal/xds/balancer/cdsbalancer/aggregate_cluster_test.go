@@ -90,8 +90,8 @@ func verifyDNSResolution(ctx context.Context, t *testing.T, dnsTargetCh chan res
 
 // Tests the case where the cluster resource requested is a leaf cluster. The
 // management server sends two updates for the same leaf cluster resource. The
-// test verifies that the load balancing configuration pushed to the priority LB
-// policy contains the expected discovery mechanism corresponding to the leaf
+// test verifies that the load balancing configuration pushed to the top-level
+// LB policy contains the expected configuration corresponding to the leaf
 // cluster, on both occasions.
 func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	tests := []struct {
@@ -105,43 +105,23 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			name:                  "eds",
 			firstClusterResource:  e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone),
 			secondClusterResource: e2e.DefaultCluster(clusterName, serviceName+"-new", e2e.SecurityLevelNone),
-			wantFirstChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-0-0": {
-						Config:                     createPriorityConfig(clusterName),
-						IgnoreReresolutionRequests: true,
-					},
-				},
-				Priorities: []string{"priority-0-0"},
-			},
-			wantSecondChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-1-0": {
-						Config:                     createPriorityConfig(clusterName),
-						IgnoreReresolutionRequests: true,
-					},
-				},
-				Priorities: []string{"priority-1-0"},
-			},
+			wantFirstChildCfg:     createLeafClusterConfig(clusterName, "priority-0-0", true),
+			wantSecondChildCfg:    createLeafClusterConfig(clusterName, "priority-1-0", true),
 		},
 		{
 			name:                  "dns",
 			firstClusterResource:  makeLogicalDNSClusterResource(clusterName, "dns_host", uint32(port)),
 			secondClusterResource: makeLogicalDNSClusterResource(clusterName, "dns_host_new", uint32(port)),
-			wantFirstChildCfg: &priority.LBConfig{
-				Children:   map[string]*priority.Child{"priority-0": {Config: createPriorityConfig(clusterName)}},
-				Priorities: []string{"priority-0"},
-			},
-			wantSecondChildCfg: &priority.LBConfig{
-				Children:   map[string]*priority.Child{"priority-1": {Config: createPriorityConfig(clusterName)}},
-				Priorities: []string{"priority-1"},
-			},
+			wantFirstChildCfg:     createLeafClusterConfig(clusterName, "priority-0", false),
+			wantSecondChildCfg:    createLeafClusterConfig(clusterName, "priority-1", false),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			lbCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
 			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 			// Push the first cluster resource through the management server and
@@ -154,12 +134,10 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 				Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 				SkipValidation: true,
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
-			if err := compareLoadBalancingConfig(ctx, lbCfgCh, test.wantFirstChildCfg); err != nil {
+			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, test.wantFirstChildCfg); err != nil {
 				t.Fatal(err)
 			}
 
@@ -170,7 +148,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
-			if err := compareLoadBalancingConfig(ctx, lbCfgCh, test.wantSecondChildCfg); err != nil {
+			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, test.wantSecondChildCfg); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -187,8 +165,10 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 // LogicalDNS and verifies that the load balancing configuration pushed to the
 // priority LB policy contains the expected config.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	dnsTargetCh, dnsR := setupDNS(t)
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
@@ -205,8 +185,6 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +215,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -270,22 +248,25 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-2"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // Tests the case where the cluster resource requested is an aggregate cluster
 // root pointing to two child clusters, one of type EDS and the other of type
-// LogicalDNS. The test verifies that the load balancing configuration pushed to
-// the priority LB policy contains the discovery mechanisms for both child
+// LogicalDNS. The test verifies that the load balancing configuration pushed
+// to the priority LB policy contains the discovery mechanisms for both child
 // clusters. The test then updates the root cluster resource requested by the
 // cds LB policy to a leaf cluster of type EDS and verifies the load balancing
-// configuration pushed to the priority LB policy contains a single discovery
-// mechanism.
+// configuration pushed to the outlier detection LB policy contains the leaf
+// cluster config.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	dnsTargetCh, dnsR := setupDNS(t)
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
+	odCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
@@ -301,8 +282,6 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +297,11 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+		t.Fatal(err)
+	}
+	wantODChildCfg := createPriorityConfig(edsClusterName).Config
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantODChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -337,16 +320,8 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	}
 	// Since the service name of the EDS cluster remains same, same priority name
 	// is used.
-	wantChildCfg = &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config:                     createPriorityConfig(clusterName),
-				IgnoreReresolutionRequests: true,
-			},
-		},
-		Priorities: []string{"priority-0-0"},
-	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	wantLeafChildCfg := createLeafClusterConfig(clusterName, "priority-0-0", true)
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -354,10 +329,13 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 // Tests the case where a requested cluster resource switches between being a
 // leaf and an aggregate cluster pointing to an EDS and LogicalDNS child
 // cluster. In each of these cases, the test verifies that the load balancing
-// configuration pushed to the priority LB policy contains the expected config.
+// configuration pushed to the top-level child policy contains the expected config.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	dnsTargetCh, dnsR := setupDNS(t)
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
+	odCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start off with the requested cluster being a leaf EDS cluster.
@@ -368,21 +346,11 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	wantChildCfg := &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config:                     createPriorityConfig(clusterName),
-				IgnoreReresolutionRequests: true,
-			},
-		},
-		Priorities: []string{"priority-0-0"},
-	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	wantLeafChildCfg := createLeafClusterConfig(clusterName, "priority-0-0", true)
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -404,7 +372,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	}
 	verifyDNSResolution(ctx, t, dnsTargetCh, dnsR, dnsHostName, dnsPort)
 
-	wantChildCfg = &priority.LBConfig{
+	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
 				Config:                     createPriorityConfig(edsClusterName),
@@ -414,7 +382,11 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+		t.Fatal(err)
+	}
+	wantODChildCfg := createPriorityConfig(edsClusterName).Config
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantODChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -429,16 +401,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	wantChildCfg = &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config:                     createPriorityConfig(clusterName),
-				IgnoreReresolutionRequests: true,
-			},
-		},
-		Priorities: []string{"priority-0-0"},
-	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -540,7 +503,9 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 // policy specifies cluster D only once. Also verifies that configuration is
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource having
@@ -565,8 +530,6 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -596,7 +559,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -607,7 +570,9 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // corresponding to cluster C is higher than that for cluster D. Also verifies
 // that the configuration is pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource that
@@ -632,8 +597,6 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -668,7 +631,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-1-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -682,7 +645,9 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 // where B is a leaf EDS cluster. Verifies that configuration is pushed to the
 // child policy and that an RPC can be successfully made.
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	const (
@@ -698,8 +663,6 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 		Clusters:       []*v3clusterpb.Cluster{makeAggregateClusterResource(clusterNameA, []string{clusterNameA})},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -752,7 +715,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -769,7 +732,9 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 // are expected to fail with code UNAVAILABLE and an error message specifying
 // that the aggregate cluster graph has no leaf clusters.
 func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	const (
@@ -788,8 +753,6 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 		},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -819,7 +782,9 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 // there is a leaf cluster in this graph , configuration should be pushed to the
 // child policy and RPCs should get routed to that leaf cluster.
 func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -845,8 +810,6 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -861,7 +824,7 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
