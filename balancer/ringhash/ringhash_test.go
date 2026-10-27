@@ -26,7 +26,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/experimental/balancer/weight"
 	"google.golang.org/grpc/internal/grpctest"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
@@ -60,6 +60,8 @@ func setupTest(t *testing.T, endpoints []resolver.Endpoint) (*testutils.Balancer
 	if b == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
+	t.Cleanup(func() { b.Close() })
+
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Endpoints: endpoints},
 		BalancerConfig: testConfig,

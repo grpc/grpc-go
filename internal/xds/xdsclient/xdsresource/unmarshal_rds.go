@@ -26,17 +26,17 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/xds/clients/xdsclient"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
 	"google.golang.org/grpc/internal/xds/matcher"
+	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
-func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (string, RouteConfigUpdate, error) {
+func unmarshalRouteConfigResource(r *anypb.Any, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (string, RouteConfigUpdate, error) {
 	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
@@ -50,11 +50,16 @@ func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
-	u, err := generateRDSUpdateFromRouteConfiguration(rc, opts)
+	if rc.GetName() == "" {
+		return "", RouteConfigUpdate{}, fmt.Errorf("empty resource name in route config resource")
+	}
+
+	u, err := generateRDSUpdateFromRouteConfiguration(rc, bc, sc)
 	if err != nil {
 		return rc.GetName(), RouteConfigUpdate{}, err
 	}
 	u.Raw = r
+
 	return rc.GetName(), u, nil
 }
 
@@ -74,7 +79,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (
 // field must be empty and whose route field must be set. Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, opts *xdsclient.DecodeOptions) (RouteConfigUpdate, error) {
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (RouteConfigUpdate, error) {
 	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	csps, err := processClusterSpecifierPlugins(rc.ClusterSpecifierPlugins)
 	if err != nil {
@@ -85,7 +90,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, o
 	// ignored and not emitted by the xdsclient.
 	var cspNames = make(map[string]bool)
 	for _, vh := range rc.GetVirtualHosts() {
-		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, opts)
+		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, bc, sc)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
@@ -96,12 +101,22 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, o
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
+		// Host names are case-insensitive. Fold the domains to lower case once
+		// here, so that virtual host matching on the data plane only needs to
+		// fold the request authority.
+		var domains []string
+		if ds := vh.GetDomains(); len(ds) > 0 {
+			domains = make([]string, len(ds))
+			for i, d := range ds {
+				domains[i] = strings.ToLower(d)
+			}
+		}
 		vhOut := &VirtualHost{
-			Domains:     vh.GetDomains(),
+			Domains:     domains,
 			Routes:      routes,
 			RetryConfig: rc,
 		}
-		cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig())
+		cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig(), bc, sc)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("virtual host %+v: %v", vh, err)
 		}
@@ -208,7 +223,7 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 	return cfg, nil
 }
 
-func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, opts *xdsclient.DecodeOptions) ([]*Route, map[string]bool, error) {
+func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, bc *bootstrap.Config, sc *bootstrap.ServerConfig) ([]*Route, map[string]bool, error) {
 	var routesRet []*Route
 	var cspNames = make(map[string]bool)
 	for _, r := range routes {
@@ -236,7 +251,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			route.Path = &pt.Path
 		case *v3routepb.RouteMatch_SafeRegex:
 			regex := pt.SafeRegex.GetRegex()
-			re, err := regexp.Compile(regex)
+			re, err := matcher.CompileSafeRegex(regex)
 			if err != nil {
 				return nil, nil, fmt.Errorf("route %+v contains an invalid regex %q", r, regex)
 			}
@@ -250,54 +265,19 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 		}
 
 		for _, h := range match.GetHeaders() {
-			var header HeaderMatcher
-			switch ht := h.GetHeaderMatchSpecifier().(type) {
-			case *v3routepb.HeaderMatcher_ExactMatch:
-				header.ExactMatch = &ht.ExactMatch
-			case *v3routepb.HeaderMatcher_SafeRegexMatch:
-				regex := ht.SafeRegexMatch.GetRegex()
-				re, err := regexp.Compile(regex)
-				if err != nil {
-					return nil, nil, fmt.Errorf("route %+v contains an invalid regex %q", r, regex)
-				}
-				header.RegexMatch = re
-			case *v3routepb.HeaderMatcher_RangeMatch:
-				header.RangeMatch = &Int64Range{
-					Start: ht.RangeMatch.Start,
-					End:   ht.RangeMatch.End,
-				}
-			case *v3routepb.HeaderMatcher_PresentMatch:
-				header.PresentMatch = &ht.PresentMatch
-			case *v3routepb.HeaderMatcher_PrefixMatch:
-				header.PrefixMatch = &ht.PrefixMatch
-			case *v3routepb.HeaderMatcher_SuffixMatch:
-				header.SuffixMatch = &ht.SuffixMatch
-			case *v3routepb.HeaderMatcher_StringMatch:
-				sm, err := matcher.StringMatcherFromProto(ht.StringMatch)
-				if err != nil {
-					return nil, nil, fmt.Errorf("route %+v has an invalid string matcher: %v", err, ht.StringMatch)
-				}
-				header.StringMatch = &sm
-			default:
-				return nil, nil, fmt.Errorf("route %+v has an unrecognized header matcher: %+v", r, ht)
+			header, err := headermatcher.FromProto(h)
+			if err != nil {
+				return nil, nil, fmt.Errorf("route %+v has an invalid header matcher: %v", r, err)
 			}
-			header.Name = h.GetName()
-			invert := h.GetInvertMatch()
-			header.InvertMatch = &invert
-			route.Headers = append(route.Headers, &header)
+			route.Headers = append(route.Headers, header)
 		}
 
 		if fr := match.GetRuntimeFraction(); fr != nil {
-			d := fr.GetDefaultValue()
-			n := d.GetNumerator()
-			switch d.GetDenominator() {
-			case v3typepb.FractionalPercent_HUNDRED:
-				n *= 10000
-			case v3typepb.FractionalPercent_TEN_THOUSAND:
-				n *= 100
-			case v3typepb.FractionalPercent_MILLION:
+			fp, err := NewFractionalPercent(fr.GetDefaultValue())
+			if err != nil {
+				return nil, nil, fmt.Errorf("route %+v has an invalid runtime_fraction: %v", r, err)
 			}
-			route.Fraction = &n
+			route.Fraction = &fp.PPM
 		}
 
 		switch r.GetAction().(type) {
@@ -305,7 +285,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			action := r.GetRoute()
 
 			if envconfig.XDSAuthorityRewrite {
-				if opts != nil && opts.ServerConfig != nil && opts.ServerConfig.SupportsServerFeature(xdsclient.ServerFeatureTrustedXDSServer) {
+				if sc != nil && sc.ServerFeaturesTrustedXDSServer() {
 					route.AutoHostRewrite = action.GetAutoHostRewrite().GetValue()
 				}
 			}
@@ -333,7 +313,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 						return nil, nil, fmt.Errorf("xds: total weight of clusters exceeds MaxUint32")
 					}
 					wc := WeightedCluster{Name: c.GetName(), Weight: w}
-					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
+					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig(), bc, sc)
 					if err != nil {
 						return nil, nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
 					}
@@ -399,7 +379,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			route.ActionType = RouteActionUnsupported
 		}
 
-		cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig())
+		cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig(), bc, sc)
 		if err != nil {
 			return nil, nil, fmt.Errorf("route %+v: %v", r, err)
 		}

@@ -30,6 +30,7 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
@@ -44,31 +45,35 @@ import (
 )
 
 // enableA86 enables A86 support for the duration of the test by:
-// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable
-// 2. Registering the proxy address converter, since this is otherwise done in init.
+//  1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT env var to true.
+//  2. Registering the proxy address converter (and restore original
+//     on cleanup).
 func enableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
-	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
-	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
-	})
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
 }
 
 // disableA86 disables A86 support for the duration of the test by:
-// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable to false
-// 2. Unregistering the proxy address converter (in case it was registered by init or previous test)
+//  1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT env var to false.
+//  2. Unregistering the proxy address converter for the duration of the test
+//     (and restoring the original on cleanup).
 func disableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
-	unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+	cleanup := UnregisterMetadataConverterForTesting(version.V3AddressURL)
+	t.Cleanup(cleanup)
 }
 
-func buildResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
+func buildResolverEndpoint(addr []string, host string) resolver.Endpoint {
 	address := []resolver.Address{}
 	for _, a := range addr {
 		address = append(address, resolver.Address{Addr: a})
 	}
 	resolverEndpoint := resolver.Endpoint{Addresses: address}
-	resolverEndpoint = SetHostname(resolverEndpoint, hostname)
+	resolverEndpoint = hostname.Set(resolverEndpoint, host)
 	return resolverEndpoint
 }
 
@@ -172,6 +177,23 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				clab0.addLocality("locality-2", 1, 0, []endpointOpts{{addrWithPort: "addr:997"}}, nil)
 				return clab0.Build()
 			}(),
+			want:    EndpointsUpdate{},
+			wantErr: true,
+		},
+		{
+			name: "unsupported-drop-denominator",
+			m: &v3endpointpb.ClusterLoadAssignment{
+				ClusterName: "test",
+				Policy: &v3endpointpb.ClusterLoadAssignment_Policy{
+					DropOverloads: []*v3endpointpb.ClusterLoadAssignment_Policy_DropOverload{{
+						Category: "test-drop",
+						DropPercentage: &v3typepb.FractionalPercent{
+							Numerator:   1,
+							Denominator: v3typepb.FractionalPercent_DenominatorType(7),
+						},
+					}},
+				},
+			},
 			want:    EndpointsUpdate{},
 			wantErr: true,
 		},
@@ -396,6 +418,7 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 
 func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 	baseCLA := &v3endpointpb.ClusterLoadAssignment{
+		ClusterName: "test-cluster",
 		Endpoints: []*v3endpointpb.LocalityLbEndpoints{
 			{
 				Locality: &v3corepb.Locality{Region: "r"},
@@ -550,12 +573,12 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:     "non-clusterLoadAssignment resource type",
+			name:     "non-clusterLoadAssignment_resourcetype",
 			resource: &anypb.Any{TypeUrl: version.V3HTTPConnManagerURL},
 			wantErr:  true,
 		},
 		{
-			name: "badly marshaled clusterLoadAssignment resource",
+			name: "badly_marshaled_clusterLoadAssignment_resource",
 			resource: &anypb.Any{
 				TypeUrl: version.V3EndpointsURL,
 				Value:   []byte{1, 2, 3, 4},
@@ -563,7 +586,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "bad endpoints resource",
+			name: "bad_endpoints_resource",
 			resource: testutils.MarshalAny(t, func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
 				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{addrWithPort: "addr1:314"}}, nil)
@@ -574,7 +597,18 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "v3 endpoints",
+			name: "endpoint_resource_with_empty_cluster_name",
+			resource: testutils.MarshalAny(t, func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("", nil)
+				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{addrWithPort: "addr1:314"}}, nil)
+				clab0.addLocality("locality-2", 1, 2, []endpointOpts{{addrWithPort: "addr2:159"}}, nil)
+				return clab0.Build()
+			}()),
+			wantName: "",
+			wantErr:  true,
+		},
+		{
+			name:     "v3_endpoints",
 			resource: v3EndpointsAny,
 			wantName: "test",
 			wantUpdate: EndpointsUpdate{
@@ -605,7 +639,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 endpoints wrapped",
+			name:     "v3_endpoints_wrapped",
 			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3EndpointsAny}),
 			wantName: "test",
 			wantUpdate: EndpointsUpdate{

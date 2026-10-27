@@ -33,12 +33,8 @@ type writeQuota struct {
 	// replenish writes on it when quota goes positive again.
 	ch chan struct{}
 	// done is triggered in error case.
-	done <-chan struct{}
-	// replenish is called by loopyWriter to give quota back to.
-	// It is implemented as a field so that it can be updated
-	// by tests.
-	replenish func(n int)
-	quota     int32
+	done  <-chan struct{}
+	quota int32
 }
 
 // init allows a writeQuota to be initialized in-place, which is useful for
@@ -48,7 +44,6 @@ func (w *writeQuota) init(sz int32, done <-chan struct{}) {
 	w.quota = sz
 	w.ch = make(chan struct{}, 1)
 	w.done = done
-	w.replenish = w.realReplenish
 }
 
 func (w *writeQuota) get(sz int32) error {
@@ -66,7 +61,8 @@ func (w *writeQuota) get(sz int32) error {
 	}
 }
 
-func (w *writeQuota) realReplenish(n int) {
+// replenish is called by loopyWriter to give quota back to the stream.
+func (w *writeQuota) replenish(n int) {
 	sz := int32(n)
 	newQuota := atomic.AddInt32(&w.quota, sz)
 	previousQuota := newQuota - sz
@@ -115,7 +111,6 @@ func (f *trInFlow) getSize() uint32 {
 	return atomic.LoadUint32(&f.effectiveWindowSize)
 }
 
-// TODO(mmukhi): Simplify this code.
 // inFlow deals with inbound flow control
 type inFlow struct {
 	mu sync.Mutex
@@ -174,14 +169,14 @@ func (f *inFlow) maybeAdjust(n uint32) uint32 {
 // onData is invoked when some data frame is received. It updates pendingData.
 func (f *inFlow) onData(n uint32) error {
 	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	f.pendingData += n
 	if f.pendingData+f.pendingUpdate > f.limit+f.delta {
 		limit := f.limit
 		rcvd := f.pendingData + f.pendingUpdate
-		f.mu.Unlock()
 		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", rcvd, limit)
 	}
-	f.mu.Unlock()
 	return nil
 }
 
@@ -189,8 +184,9 @@ func (f *inFlow) onData(n uint32) error {
 // to be sent to the peer.
 func (f *inFlow) onRead(n uint32) uint32 {
 	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	if f.pendingData == 0 {
-		f.mu.Unlock()
 		return 0
 	}
 	f.pendingData -= n
@@ -205,9 +201,7 @@ func (f *inFlow) onRead(n uint32) uint32 {
 	if f.pendingUpdate >= f.limit/4 {
 		wu := f.pendingUpdate
 		f.pendingUpdate = 0
-		f.mu.Unlock()
 		return wu
 	}
-	f.mu.Unlock()
 	return 0
 }

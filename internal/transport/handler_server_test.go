@@ -596,15 +596,6 @@ func (s) TestHandlerTransport_HandleStreams_StatsHandlers(t *testing.T) {
 	}
 }
 
-// TestHandlerTransport_Drain verifies that Drain() is not implemented
-// by `serverHandlerTransport`.
-func (s) TestHandlerTransport_Drain(t *testing.T) {
-	defer func() { recover() }()
-	st := newHandleStreamTest(t, nil)
-	st.ht.Drain("whatever")
-	t.Errorf("serverHandlerTransport.Drain() should have panicked")
-}
-
 // checkHeaderAndTrailer checks that the resulting header and trailer matches the expectation.
 func checkHeaderAndTrailer(t *testing.T, rw testHandlerResponseWriter, wantHeader, wantTrailer http.Header) {
 	// For trailer-only responses, the trailer values might be reported as part of the Header. They will however

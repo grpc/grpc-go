@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/hierarchy"
@@ -60,7 +61,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		cc:                       cc,
 		done:                     grpcsync.NewEvent(),
 		children:                 make(map[string]*childBalancer),
-		childBalancerStateUpdate: buffer.NewUnbounded(),
+		childBalancerStateUpdate: buffer.NewUnbounded[any](),
 	}
 
 	b.logger = prefixLogger(b)
@@ -96,7 +97,7 @@ type priorityBalancer struct {
 	cc                       balancer.ClientConn
 	bg                       *balancergroup.BalancerGroup
 	done                     *grpcsync.Event
-	childBalancerStateUpdate *buffer.Unbounded
+	childBalancerStateUpdate *buffer.Unbounded[any]
 
 	mu         sync.Mutex
 	childInUse string
@@ -153,7 +154,7 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		// The balancing policy name is changed, close the old child. But don't
 		// rebuild, rebuild will happen when syncing priorities.
 		if currentChild.balancerName != bb.Name() {
-			currentChild.stop()
+			currentChild.stop(true)
 			currentChild.updateBalancerName(bb.Name())
 		}
 
@@ -169,7 +170,7 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 	// Cleanup resources used by children removed from the config.
 	for name, oldChild := range b.children {
 		if _, ok := newConfig.Children[name]; !ok {
-			oldChild.stop()
+			oldChild.stop(!envconfig.EnablePriorityLBChildPolicyCache)
 			delete(b.children, name)
 		}
 	}
@@ -230,7 +231,7 @@ func (b *priorityBalancer) Close() {
 	// Stop the child policies, this is necessary to stop the init timers in the
 	// children.
 	for _, child := range b.children {
-		child.stop()
+		child.stop(true)
 	}
 }
 

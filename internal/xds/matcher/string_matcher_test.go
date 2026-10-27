@@ -128,7 +128,7 @@ func TestStringMatcherFromProto(t *testing.T) {
 					SafeRegex: &v3matcherpb.RegexMatcher{Regex: "good?regex?"},
 				},
 			},
-			wantMatcher: StringMatcher{regexMatch: regexp.MustCompile("good?regex?")},
+			wantMatcher: StringMatcher{regexMatch: regexp.MustCompile("^(?:good?regex?)$")},
 		},
 		{
 			desc: "regex with ignore case",
@@ -139,8 +139,7 @@ func TestStringMatcherFromProto(t *testing.T) {
 				IgnoreCase: true,
 			},
 			wantMatcher: StringMatcher{
-				regexMatch: regexp.MustCompile("good?regex?"),
-				ignoreCase: true,
+				regexMatch: regexp.MustCompile("^(?:good?regex?)$"),
 			},
 		},
 		{
@@ -186,7 +185,7 @@ func TestMatch(t *testing.T) {
 		suffixMatcherIgnoreCase   = NewSuffixStringMatcher("suffix", true)
 		containsMatcher           = NewContainsStringMatcher("contains", false)
 		containsMatcherIgnoreCase = NewContainsStringMatcher("contains", true)
-		regexMatcher              = NewRegexStringMatcher(regexp.MustCompile("good?regex?"))
+		regexMatcher              = NewRegexStringMatcher(regexp.MustCompile("^(?:good?regex?)$"))
 	)
 
 	tests := []struct {
@@ -313,4 +312,38 @@ func TestMatch(t *testing.T) {
 
 func newStringP(s string) *string {
 	return &s
+}
+
+func TestCompileSafeRegex(t *testing.T) {
+	tests := []struct {
+		desc      string
+		pattern   string
+		wantRegex string
+		wantErr   bool
+	}{
+		{
+			desc:      "ValidPattern",
+			pattern:   "abc",
+			wantRegex: "^(?:abc)$",
+		},
+		{
+			desc:    "UnmatchedParenthesis",
+			pattern: "abc(",
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			re, err := CompileSafeRegex(test.pattern)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("CompileSafeRegex(%q) returned error %q, wantErr=%v", test.pattern, err, test.wantErr)
+			}
+			if err == nil {
+				if re.String() != test.wantRegex {
+					t.Fatalf("CompileSafeRegex(%q) = %q, want %q", test.pattern, re.String(), test.wantRegex)
+				}
+			}
+		})
+	}
 }

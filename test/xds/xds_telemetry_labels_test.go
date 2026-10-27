@@ -21,21 +21,27 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	istats "google.golang.org/grpc/internal/stats"
+	"google.golang.org/grpc/experimental/stats/telemetry"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/stats"
+	"google.golang.org/protobuf/types/known/structpb"
+
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/stats"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const serviceNameKey = "service_name"
@@ -102,8 +108,117 @@ func (s) TestTelemetryLabels(t *testing.T) {
 	}
 }
 
+// Tests that telemetry labels for an aggregate cluster hierarchy reflect the
+// active leaf cluster receiving traffic, and correctly switch labels when
+// failing over to a secondary leaf cluster.
+func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	const (
+		xdsServiceName = "my-service-client-side-xds"
+		cluster1Name   = "cluster-1"
+		cluster2Name   = "cluster-2"
+
+		csmName1 = "service-1"
+		csmNs1   = "namespace-1"
+		csmName2 = "service-2"
+		csmNs2   = "namespace-2"
+	)
+
+	servers := make([]*stubserver.StubServer, 2)
+	for i := range 2 {
+		servers[i] = stubserver.StartTestService(t, nil)
+		defer servers[i].Stop()
+	}
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(xdsServiceName, "route-"+xdsServiceName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-"+xdsServiceName, xdsServiceName, xdsServiceName)},
+		Clusters: []*v3clusterpb.Cluster{
+			e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+				ClusterName: xdsServiceName,
+				Type:        e2e.ClusterTypeAggregate,
+				ChildNames:  []string{cluster1Name, cluster2Name},
+			}),
+			makeClusterResourceWithMetadata(cluster1Name, csmName1, csmNs1),
+			makeClusterResourceWithMetadata(cluster2Name, csmName2, csmNs2),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(cluster1Name, "localhost", []uint32{uint32(testutils.ParsePort(t, servers[0].Address))}),
+			e2e.DefaultEndpoint(cluster2Name, "localhost", []uint32{uint32(testutils.ParsePort(t, servers[1].Address))}),
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to create a new client to local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// Make RPC to primary cluster and verify primary telemetry labels.
+	peer := &peer.Peer{}
+	var gotLabels map[string]string
+	callCtx := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
+		gotLabels = l
+	})
+	if _, err := client.EmptyCall(callCtx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	if got, want := peer.Addr.String(), servers[0].Address; got != want {
+		t.Fatalf("EmptyCall() routed to %q, want %q", got, want)
+	}
+
+	wantLabels := map[string]string{
+		localityKey:       localityValue,
+		backendServiceKey: cluster1Name,
+	}
+	if diff := cmp.Diff(gotLabels, wantLabels); diff != "" {
+		t.Fatalf("Telemetry labels for primary cluster (-got +want): %v", diff)
+	}
+
+	// Trigger failover to secondary cluster by clearing primary endpoints.
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint(cluster1Name, "localhost", nil),
+		e2e.DefaultEndpoint(cluster2Name, "localhost", []uint32{uint32(testutils.ParsePort(t, servers[1].Address))}),
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make RPCs until traffic switches to secondary cluster and capture
+	// secondary labels.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		callCtx := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
+			gotLabels = l
+		})
+		if _, err := client.EmptyCall(callCtx, &testpb.Empty{}, grpc.Peer(peer)); err == nil && peer.Addr.String() == servers[1].Address {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout waiting for RPCs to switch to secondary cluster %q", servers[1].Address)
+	}
+
+	wantLabels = map[string]string{
+		localityKey:       localityValue,
+		backendServiceKey: cluster2Name,
+	}
+	if diff := cmp.Diff(gotLabels, wantLabels); diff != "" {
+		t.Fatalf("Telemetry labels after failover (-got +want): %v", diff)
+	}
+}
+
 type fakeStatsHandler struct {
-	labels *istats.Labels
+	labels map[string]string
 
 	t *testing.T
 }
@@ -115,11 +230,12 @@ func (fsh *fakeStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 func (fsh *fakeStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 func (fsh *fakeStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	labels := &istats.Labels{
-		TelemetryLabels: make(map[string]string),
-	}
-	fsh.labels = labels
-	ctx = istats.SetLabels(ctx, labels) // ctx passed is immutable, however cluster_impl writes to the map of Telemetry Labels on the heap.
+	fsh.labels = make(map[string]string)
+	ctx = telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
+		for k, v := range l {
+			fsh.labels[k] = v
+		}
+	})
 	return ctx
 }
 
@@ -137,11 +253,29 @@ func (fsh *fakeStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
 			localityKey:            localityValue,
 			backendServiceKey:      backendServiceValue,
 		}
-		if diff := cmp.Diff(fsh.labels.TelemetryLabels, want); diff != "" {
-			fsh.t.Fatalf("fsh.labels.TelemetryLabels (-got +want): %v", diff)
+		if diff := cmp.Diff(fsh.labels, want); diff != "" {
+			fsh.t.Fatalf("fsh.labels (-got +want): %v", diff)
 		}
 	default:
 		// Nothing to assert for the other stats.Handler callouts.
 
 	}
+}
+
+func makeClusterResourceWithMetadata(clusterName, serviceName, serviceNamespace string) *v3clusterpb.Cluster {
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		Type:        e2e.ClusterTypeEDS,
+	})
+	cluster.Metadata = &v3corepb.Metadata{
+		FilterMetadata: map[string]*structpb.Struct{
+			"com.google.csm.telemetry_labels": {
+				Fields: map[string]*structpb.Value{
+					serviceNameKey:      structpb.NewStringValue(serviceName),
+					serviceNamespaceKey: structpb.NewStringValue(serviceNamespace),
+				},
+			},
+		},
+	}
+	return cluster
 }

@@ -20,14 +20,13 @@ package xdsresource
 import (
 	"context"
 	rand "math/rand/v2"
+	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 )
 
 func (s) TestAndMatcherMatch(t *testing.T) {
@@ -41,7 +40,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "both match",
+			name: "both_match",
 			pm:   newPathExactMatcher("/a/b", false),
 			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
@@ -51,7 +50,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "both match with path case insensitive",
+			name: "both_match_with_path_case_insensitive",
 			pm:   newPathExactMatcher("/A/B", true),
 			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
@@ -61,7 +60,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "only one match",
+			name: "only_one_match",
 			pm:   newPathExactMatcher("/a/b", false),
 			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
@@ -71,7 +70,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "both not match",
+			name: "both_not match",
 			pm:   newPathExactMatcher("/z/y", false),
 			hm:   matcher.NewHeaderExactMatcher("th", "abc", false),
 			info: iresolver.RPCInfo{
@@ -81,7 +80,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "fake header",
+			name: "fake_header",
 			pm:   newPathPrefixMatcher("/", false),
 			hm:   matcher.NewHeaderExactMatcher("content-type", "fake", false),
 			info: iresolver.RPCInfo{
@@ -93,7 +92,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "binary header",
+			name: "binary_header",
 			pm:   newPathPrefixMatcher("/", false),
 			hm:   matcher.NewHeaderPresentMatcher("t-bin", true, false),
 			info: iresolver.RPCInfo{
@@ -110,7 +109,16 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newCompositeMatcher(tt.pm, []matcher.HeaderMatcher{tt.hm}, nil)
-			if got := a.Match(tt.info); got != tt.want {
+			md, _ := metadata.FromOutgoingContext(tt.info.Context)
+			if extraMD, ok := grpcutil.ExtraMetadata(tt.info.Context); ok {
+				md = metadata.Join(md, extraMD)
+				for k := range md {
+					if strings.HasSuffix(k, "-bin") {
+						delete(md, k)
+					}
+				}
+			}
+			if got := a.Match(tt.info.Method, md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -195,22 +203,30 @@ func (s) TestMatch(t *testing.T) {
 	}
 }
 
-func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
-	var (
-		oneExactMatch     = &VirtualHost{Domains: []string{"foo.bar.com"}}
-		oneSuffixMatch    = &VirtualHost{Domains: []string{"*.bar.com"}}
-		onePrefixMatch    = &VirtualHost{Domains: []string{"foo.bar.*"}}
-		oneUniversalMatch = &VirtualHost{Domains: []string{"*"}}
-		longExactMatch    = &VirtualHost{Domains: []string{"v2.foo.bar.com"}}
-		multipleMatch     = &VirtualHost{Domains: []string{"pi.foo.bar.com", "314.*", "*.159"}}
-		vhs               = []*VirtualHost{oneExactMatch, oneSuffixMatch, onePrefixMatch, oneUniversalMatch, longExactMatch, multipleMatch}
+func (s) TestFindBestMatchingVirtualHostIndex(t *testing.T) {
+	// Indices of the virtual hosts in vhs below.
+	const (
+		oneExactMatch = iota
+		oneSuffixMatch
+		onePrefixMatch
+		oneUniversalMatch
+		longExactMatch
+		multipleMatch
 	)
+	vhs := []*VirtualHost{
+		oneExactMatch:     {Domains: []string{"foo.bar.com"}},
+		oneSuffixMatch:    {Domains: []string{"*.bar.com"}},
+		onePrefixMatch:    {Domains: []string{"foo.bar.*"}},
+		oneUniversalMatch: {Domains: []string{"*"}},
+		longExactMatch:    {Domains: []string{"v2.foo.bar.com"}},
+		multipleMatch:     {Domains: []string{"pi.foo.bar.com", "314.*", "*.159"}},
+	}
 
 	tests := []struct {
 		name   string
 		host   string
 		vHosts []*VirtualHost
-		want   *VirtualHost
+		want   int
 	}{
 		{name: "exact-match", host: "foo.bar.com", vHosts: vhs, want: oneExactMatch},
 		{name: "suffix-match", host: "123.bar.com", vHosts: vhs, want: oneSuffixMatch},
@@ -223,11 +239,17 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 		{name: "multiple-match-suffix", host: "foo.bar.159", vHosts: vhs, want: multipleMatch},
 		// Matches suffix "*.bar.com" and prefix "314.*". Takes suffix.
 		{name: "multiple-match-prefix", host: "314.bar.com", vHosts: vhs, want: oneSuffixMatch},
+		// A mixed-case host must still select the exact-match virtual host
+		// rather than falling through to the "*" catch-all.
+		{name: "exact-match-mixed-case-host", host: "FOO.BAR.COM", vHosts: vhs, want: oneExactMatch},
+		{name: "suffix-match-mixed-case-host", host: "123.Bar.COM", vHosts: vhs, want: oneSuffixMatch},
+		{name: "no-match", host: "abc.123", vHosts: []*VirtualHost{vhs[oneExactMatch], vhs[oneSuffixMatch]}, want: -1},
+		{name: "invalid-domain", host: "foo.bar.com", vHosts: []*VirtualHost{{Domains: []string{"foo.*.com"}}}, want: -1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FindBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
-				t.Errorf("FindBestMatchingxdsclient.VirtualHost() = %v, want %v", got, tt.want)
+			if got := FindBestMatchingVirtualHostIndex(tt.host, tt.vHosts); got != tt.want {
+				t.Errorf("FindBestMatchingVirtualHostIndex(%q) = %v, want %v", tt.host, got, tt.want)
 			}
 		})
 	}

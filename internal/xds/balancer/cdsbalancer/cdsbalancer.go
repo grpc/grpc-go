@@ -18,26 +18,22 @@
 package cdsbalancer
 
 import (
-	"context"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"sync/atomic"
-	"unsafe"
+	"sync"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/internal/balancer/nop"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
@@ -48,22 +44,21 @@ import (
 const cdsName = "cds_experimental"
 
 var (
-	// newChildBalancer is a helper function to build a new priority balancer
-	// and will be overridden in unittests.
-	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
-		builder := balancer.Get(priority.Name)
+	// newChildBalancer is a helper function to build a new child balancer
+	// and its config parser, and will be overridden in unittests.
+	newChildBalancer = func(name string, cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, balancer.ConfigParser, error) {
+		builder := balancer.Get(name)
 		if builder == nil {
-			return nil, fmt.Errorf("xds: no balancer builder with name %v", priority.Name)
+			return nil, nil, fmt.Errorf("no balancer builder with name %q", name)
 		}
-		// We directly pass the parent clientConn to the underlying priority
+		parser, ok := builder.(balancer.ConfigParser)
+		if !ok {
+			return nil, nil, fmt.Errorf("balancer builder for %q does not implement ConfigParser", name)
+		}
+		// We directly pass the parent clientConn to the underlying child
 		// balancer because the cdsBalancer does not deal with subConns.
-		return builder.Build(cc, opts), nil
+		return builder.Build(cc, opts), parser, nil
 	}
-	buildProvider = buildProviderFunc
-
-	// x509SystemCertPoolFunc is used for mocking the system cert pool for
-	// tests.
-	x509SystemCertPoolFunc = x509.SystemCertPool
 )
 
 func init() {
@@ -77,48 +72,15 @@ type bb struct{}
 
 // Build creates a new CDS balancer with the ClientConn.
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	builder := balancer.Get(priority.Name)
-	if builder == nil {
-		// Shouldn't happen, registered through imported Priority builder. Still,
-		// defensive programming.
-		logger.Errorf("%q LB policy is needed but not registered", priority.Name)
-		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy is needed but not registered", priority.Name))
-	}
-	parser, ok := builder.(balancer.ConfigParser)
-	if !ok {
-		// Shouldn't happen, imported Priority builder has this method.
-		logger.Errorf("%q LB policy does not implement a config parser", priority.Name)
-		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy does not implement a config parser", priority.Name))
-	}
-
-	hi := xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
-	xdsHIPtr := unsafe.Pointer(hi)
 	b := &cdsBalancer{
-		bOpts:             opts,
-		childConfigParser: parser,
-		xdsHIPtr:          &xdsHIPtr,
-		clusterConfigs:    make(map[string]*xdsresource.ClusterResult),
-		priorityConfigs:   make(map[string]*priorityConfig),
+		bOpts:           opts,
+		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
+		leafConfigs:     make(map[string]*leafClusterConfig),
+		grpcServicesMap: make(map[string]*grpcServiceCfg),
+		cc:              cc,
 	}
 	b.logger = prefixLogger(b)
-	b.ccw = &ccWrapper{
-		ClientConn: cc,
-		xdsHIPtr:   b.xdsHIPtr,
-		logger:     b.logger,
-	}
 	b.logger.Infof("Created")
-
-	var creds credentials.TransportCredentials
-	switch {
-	case opts.DialCreds != nil:
-		creds = opts.DialCreds
-	case opts.CredsBundle != nil:
-		creds = opts.CredsBundle.TransportCredentials()
-	}
-	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
-		b.xdsCredsInUse = true
-	}
-	b.logger.Infof("xDS credentials in use: %v", b.xdsCredsInUse)
 	return b
 }
 
@@ -145,6 +107,13 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	return &cfg, nil
 }
 
+// grpcServiceCfg holds the parsed GrpcService configuration and a reference
+// counted gRPC ClientConn created from it.
+type grpcServiceCfg struct {
+	config *grpcservice.Config
+	cc     *grpcsync.RefCounted[*grpc.ClientConn]
+}
+
 // cdsBalancer implements a CDS based LB policy. It instantiates a
 // cluster_resolver balancer to further resolve the serviceName received from
 // CDS, into localities and endpoints. Implements the balancer.Balancer
@@ -154,13 +123,15 @@ type cdsBalancer struct {
 	// The following fields are initialized at build time and are either
 	// read-only after that or provide their own synchronization, and therefore
 	// do not need to be guarded by a mutex.
-	ccw               *ccWrapper            // ClientConn interface passed to child LB.
-	bOpts             balancer.BuildOptions // BuildOptions passed to child LB.
-	childConfigParser balancer.ConfigParser // Config parser for cluster_resolver LB policy.
-	logger            *grpclog.PrefixLogger // Prefix logger for all logging.
-	xdsCredsInUse     bool
+	cc     balancer.ClientConn   // ClientConn interface passed to child LB.
+	bOpts  balancer.BuildOptions // BuildOptions passed to child LB.
+	logger *grpclog.PrefixLogger // Prefix logger for all logging.
 
-	xdsHIPtr *unsafe.Pointer // Accessed atomically.
+	// grpcServicesMu guards access to grpcServicesMap, which is accessed both
+	// when handling xDS config updates and from the channel factory provided
+	// to child LB policies.
+	grpcServicesMu  sync.Mutex
+	grpcServicesMap map[string]*grpcServiceCfg
 
 	// All fields below are accessed only from methods implementing the
 	// balancer.Balancer interface. Since gRPC guarantees that these methods are
@@ -168,118 +139,28 @@ type cdsBalancer struct {
 	// protect access to these fields.
 	xdsClient         xdsclient.XDSClient
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
+	childLBName       string                                // Name of the child policy.
+	childConfigParser balancer.ConfigParser                 // Config parser for child policy.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
-	priorityConfigs   map[string]*priorityConfig            // Hostname to priority config for that leaf cluster.
+	leafConfigs       map[string]*leafClusterConfig         // Hostname to config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
-	priorities        []*priorityConfig                     // List of priorities in the order.
+	leafClusters      []*leafClusterConfig                  // List of leaf clusters in the order.
 	unsubscribe       func()                                // For dynamic cluster unsubscription.
 	isSubscribed      bool                                  // True if a dynamic cluster has been subscribed to.
 	clusterSubscriber xdsdepmgr.ClusterSubscriber           // To subscribe to dynamic cluster resource.
 	xdsLBPolicy       internalserviceconfig.BalancerConfig  // Stores the locality and endpoint picking policy.
 	attributes        *attributes.Attributes                // Attributes from resolver state.
-	serviceConfig     *serviceconfig.ParseResult
 	// Each new leaf cluster needs a child name generator to reuse child policy
 	// names. But to make sure the names across leaf clusters doesn't conflict,
 	// we need a seq ID. This ID is incremented for each new cluster.
 	childNameGeneratorSeqID uint64
-
-	// The certificate providers are cached here to that they can be closed when
-	// a new provider is to be created.
-	cachedRoot     certprovider.Provider
-	cachedIdentity certprovider.Provider
 }
 
-// handleSecurityConfig processes the security configuration received from the
-// management server, creates appropriate certificate provider plugins, and
-// updates the HandshakeInfo which is added as an address attribute in
-// NewSubConn() calls.
-func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) error {
-	// If xdsCredentials are not in use, i.e, the user did not want to get
-	// security configuration from an xDS server, we should not be acting on the
-	// received security config here. Doing so poses a security threat.
-	if !b.xdsCredsInUse {
-		return nil
-	}
-	var xdsHI *xdsinternal.HandshakeInfo
-
-	// Security config being nil is a valid case where the management server has
-	// not sent any security configuration. The xdsCredentials implementation
-	// handles this by delegating to its fallback credentials.
-	if config == nil {
-		// We need to explicitly set the fields to nil here since this might be
-		// a case of switching from a good security configuration to an empty
-		// one where fallback credentials are to be used.
-		xdsHI = xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
-		atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
-		return nil
-
-	}
-
-	// A root provider is required whether we are using TLS or mTLS.
-	cpc := b.xdsClient.BootstrapConfig().CertProviderConfigs()
-	var rootProvider certprovider.Provider
-	if config.UseSystemRootCerts {
-		rootProvider = systemRootCertsProvider{}
-	} else {
-		rp, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
-		if err != nil {
-			return err
-		}
-		rootProvider = rp
-	}
-
-	// The identity provider is only present when using mTLS.
-	var identityProvider certprovider.Provider
-	if name, cert := config.IdentityInstanceName, config.IdentityCertName; name != "" {
-		var err error
-		identityProvider, err = buildProvider(cpc, name, cert, true, false)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Close the old providers and cache the new ones.
-	if b.cachedRoot != nil {
-		b.cachedRoot.Close()
-	}
-	if b.cachedIdentity != nil {
-		b.cachedIdentity.Close()
-	}
-	b.cachedRoot = rootProvider
-	b.cachedIdentity = identityProvider
-	xdsHI = xdsinternal.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false)
-	atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
-	return nil
-}
-
-func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
-	cfg, ok := configs[instanceName]
-	if !ok {
-		// Defensive programming. If a resource received from the management
-		// server contains a certificate provider instance name that is not
-		// found in the bootstrap, the resource is NACKed by the xDS client.
-		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
-	}
-	provider, err := cfg.Build(certprovider.BuildOptions{
-		CertName:     certName,
-		WantIdentity: wantIdentity,
-		WantRoot:     wantRoot,
-	})
-	if err != nil {
-		// This error is not expected since the bootstrap process parses the
-		// config and makes sure that it is acceptable to the plugin. Still, it
-		// is possible that the plugin parses the config successfully, but its
-		// Build() method errors out.
-		return nil, fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", cfg, err)
-	}
-	return provider, nil
-}
-
-// UpdateClientConnState receives the serviceConfig, xdsConfig,
-// ClusterSubscriber and the xdsClient object from the xdsResolver. If an error
-// is encountered, the parent (clustermanager) sets the corresponding cluster’s
-// picker to transient_failure. Otherwise, the received configuration is
-// processed and forwarded to the appropriate child policy.
+// UpdateClientConnState receives the xdsConfig, ClusterSubscriber and the
+// xdsClient object from the xdsResolver. If an error is encountered, the
+// parent (clustermanager) sets the corresponding cluster’s picker to
+// transient_failure. Otherwise, the received configuration is processed and
+// forwarded to the appropriate child policy.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(state.ResolverState)
@@ -316,7 +197,6 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	}
 
 	b.lbCfg = lbCfg
-	b.serviceConfig = state.ResolverState.ServiceConfig
 	b.attributes = state.ResolverState.Attributes
 	return b.handleXDSConfigUpdate()
 }
@@ -349,14 +229,65 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 		return clusterUpdate.Err
 	}
 
-	if err := b.handleSecurityConfig(clusterUpdate.Config.Cluster.SecurityCfg); err != nil {
-		// If the security config is invalid, for example, if the provider
-		// instance is not found in the bootstrap config, we need to put the
-		// channel in transient failure.
-		return b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource that contains invalid security config: %v", err))
-
-	}
+	// TODO(gRFC A75): Skip updating gRPC services here, and setting the channel
+	// factory in updateChildConfig, for aggregate clusters once the remaining
+	// part of A75 is implemented.
+	b.updateGRPCServices(clusterUpdate.Config.Cluster.LBPolicyInfo.GRPCServices)
 	return b.handleClusterUpdate()
+}
+
+// updateGRPCServices updates the map of grpc services by adding new
+// configurations and removing any that are no longer present in the newly
+// received Cluster resource.
+func (b *cdsBalancer) updateGRPCServices(newServices map[string]*grpcservice.Config) {
+	b.grpcServicesMu.Lock()
+	defer b.grpcServicesMu.Unlock()
+
+	for k, cfg := range newServices {
+		if _, ok := b.grpcServicesMap[k]; !ok {
+			b.grpcServicesMap[k] = &grpcServiceCfg{config: cfg}
+		}
+	}
+	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
+	// removed grpcservice.Config instances once their ownership lifecycle is
+	// finalized.
+	for k := range b.grpcServicesMap {
+		if _, ok := newServices[k]; !ok {
+			delete(b.grpcServicesMap, k)
+		}
+	}
+}
+
+// channelFactory implements the "Channel Factory" as described in A119. It
+// dials the GrpcService corresponding to the given key and returns a
+// reference-counted ClientConn along with a cancel function to close it.
+func (b *cdsBalancer) channelFactory(key string) (grpc.ClientConnInterface, func(), error) {
+	b.grpcServicesMu.Lock()
+	defer b.grpcServicesMu.Unlock()
+
+	entry, ok := b.grpcServicesMap[key]
+	if !ok {
+		return nil, nil, fmt.Errorf("cds: no GrpcService found")
+	}
+	if entry.cc != nil {
+		entry.cc.Increment()
+	} else {
+		cc, err := entry.config.Dial()
+		if err != nil {
+			return nil, nil, fmt.Errorf("cds: failed to dial GrpcService: %v", err)
+		}
+		entry.cc = grpcsync.NewRefCounted(cc, func() {
+			cc.Close()
+			entry.cc = nil
+		})
+	}
+	rc := entry.cc
+	cancel := sync.OnceFunc(func() {
+		b.grpcServicesMu.Lock()
+		defer b.grpcServicesMu.Unlock()
+		rc.Decrement()
+	})
+	return rc.Value(), cancel, nil
 }
 
 // handleClusterUpdate handles a good XDSConfig update from the xDS resolver.
@@ -365,20 +296,20 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 	clusterName := b.lbCfg.ClusterName
 	clusterConfig := b.clusterConfigs[clusterName].Config
 
-	var newPriorities []*priorityConfig
+	var newLeafClusters []*leafClusterConfig
 	switch clusterConfig.Cluster.ClusterType {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
-		p := b.updatePriorityConfig(clusterName, &clusterConfig)
-		newPriorities = append(newPriorities, p)
+		leaf := b.updateLeafClusterConfig(clusterName, &clusterConfig)
+		newLeafClusters = append(newLeafClusters, leaf)
 	case xdsresource.ClusterTypeAggregate:
-		for _, leaf := range clusterConfig.AggregateConfig.LeafClusters {
-			leafCluster := b.clusterConfigs[leaf]
-			// Update priority config for leaf clusters.
-			p := b.updatePriorityConfig(leaf, &leafCluster.Config)
-			newPriorities = append(newPriorities, p)
+		for _, leafName := range clusterConfig.AggregateConfig.LeafClusters {
+			leafCluster := b.clusterConfigs[leafName]
+			// Update config for leaf clusters.
+			leaf := b.updateLeafClusterConfig(leafName, &leafCluster.Config)
+			newLeafClusters = append(newLeafClusters, leaf)
 		}
 	}
-	b.priorities = newPriorities
+	b.leafClusters = newLeafClusters
 
 	if err := b.updateOutlierDetection(); err != nil {
 		return b.annotateErrorWithNodeID(fmt.Errorf("failed to correctly update Outlier Detection config %v", err))
@@ -400,21 +331,47 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 // A child policy is created if one doesn't already exist. The newly built
 // configuration is then pushed to the child policy.
 func (b *cdsBalancer) updateChildConfig() error {
-	if b.childLB == nil {
-		childLB, err := newChildBalancer(b.ccw, b.bOpts)
-		if err != nil {
-			return fmt.Errorf("failed to create child policy of type %s: %v", priority.Name, err)
-		}
-		b.childLB = childLB
+	clusterName := b.lbCfg.ClusterName
+	clusterConfig := b.clusterConfigs[clusterName].Config
+	isAggregate := clusterConfig.Cluster.ClusterType == xdsresource.ClusterTypeAggregate
+
+	var childPolicyName string
+	if isAggregate {
+		childPolicyName = priority.Name
+	} else {
+		childPolicyName = outlierdetection.Name
 	}
 
-	childCfgBytes, endpoints, err := buildPriorityConfigJSON(b.priorities, &b.xdsLBPolicy)
-	if err != nil {
-		return fmt.Errorf("failed to build child policy config: %v", err)
+	if b.childLB != nil && b.childLBName != childPolicyName {
+		b.closeChildPolicy()
 	}
+
+	if b.childLB == nil {
+		childLB, parser, err := newChildBalancer(childPolicyName, b.cc, b.bOpts)
+		if err != nil {
+			return fmt.Errorf("xds: failed to create child policy of type %s: %v", childPolicyName, err)
+		}
+		b.childLB = childLB
+		b.childLBName = childPolicyName
+		b.childConfigParser = parser
+	}
+
+	var childCfgBytes []byte
+	var endpoints []resolver.Endpoint
+	var err error
+
+	if isAggregate {
+		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.leafClusters, &b.xdsLBPolicy)
+	} else {
+		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.leafClusters[0], &b.xdsLBPolicy)
+	}
+	if err != nil {
+		return fmt.Errorf("xds: failed to build child policy config: %v", err)
+	}
+
 	childCfg, err := b.childConfigParser.ParseConfig(childCfgBytes)
 	if err != nil {
-		return fmt.Errorf("failed to parse child policy config. This should never happen because the config was generated: %v", err)
+		return fmt.Errorf("xds: failed to parse child policy config. This should never happen because the config was generated: %v", err)
 	}
 	if b.logger.V(2) {
 		b.logger.Infof("Built child policy config: %s", pretty.ToJSON(childCfg))
@@ -431,39 +388,45 @@ func (b *cdsBalancer) updateChildConfig() error {
 			endpoints[i].Addresses[j] = addr
 		}
 	}
+	resolverState := resolver.State{
+		Endpoints:  endpoints,
+		Attributes: b.attributes,
+	}
+	// Make the channel factory available to the child policies only when the
+	// LB policy configuration refers to GrpcServices. Since the LB policy is
+	// configured by the root cluster, so are the GrpcServices.
+	if len(clusterConfig.Cluster.LBPolicyInfo.GRPCServices) > 0 {
+		resolverState = grpc.SetClientConnProvider(resolverState, b.channelFactory)
+	}
 	if err := b.childLB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Endpoints:     endpoints,
-			ServiceConfig: b.serviceConfig,
-			Attributes:    b.attributes,
-		},
+		ResolverState:  resolverState,
 		BalancerConfig: childCfg,
 	}); err != nil {
-		return fmt.Errorf("failed to push config to child policy: %v", err)
+		return fmt.Errorf("xds: failed to push config to child policy: %v", err)
 	}
 	return nil
 }
 
-// updatePriorityConfig updates the priority configuration for the specified EDS
-// or DNS cluster, creating it if it does not already exist.
-func (b *cdsBalancer) updatePriorityConfig(clusterName string, clusterConfig *xdsresource.ClusterConfig) *priorityConfig {
+// updateLeafClusterConfig updates the leaf cluster configuration for the
+// specified EDS or DNS cluster, creating it if it does not already exist.
+func (b *cdsBalancer) updateLeafClusterConfig(clusterName string, clusterConfig *xdsresource.ClusterConfig) *leafClusterConfig {
 	name := hostName(clusterName, *clusterConfig.Cluster)
-	pc, ok := b.priorityConfigs[name]
+	leaf, ok := b.leafConfigs[name]
 	if !ok {
-		pc = &priorityConfig{
+		leaf = &leafClusterConfig{
 			childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
 		}
-		b.priorityConfigs[name] = pc
+		b.leafConfigs[name] = leaf
 		// Increment the seq ID for the next new cluster. This is done to make
 		// sure that the child policy names generated for different clusters
 		// don't conflict with each other.
 		b.childNameGeneratorSeqID++
 	}
-	pc.clusterConfig = clusterConfig
-	return pc
+	leaf.clusterConfig = clusterConfig
+	return leaf
 }
 
-// updateOutlierDetection updates Outlier Detection config for all priorities.
+// updateOutlierDetection updates Outlier Detection config for all leaf clusters.
 func (b *cdsBalancer) updateOutlierDetection() error {
 	odBuilder := balancer.Get(outlierdetection.Name)
 	if odBuilder == nil {
@@ -478,9 +441,9 @@ func (b *cdsBalancer) updateOutlierDetection() error {
 		return fmt.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
 	}
 
-	for _, p := range b.priorities {
+	for _, leaf := range b.leafClusters {
 		// Update Outlier Detection Config.
-		odJSON := p.clusterConfig.Cluster.OutlierDetection
+		odJSON := leaf.clusterConfig.Cluster.OutlierDetection
 		if odJSON == nil {
 			odJSON = json.RawMessage(`{}`)
 		}
@@ -496,7 +459,7 @@ func (b *cdsBalancer) updateOutlierDetection() error {
 			// Detection builder pulled from gRPC LB Registry.
 			return fmt.Errorf("config parser for Outlier Detection returned config with unexpected type %T: %v", lbCfg, lbCfg)
 		}
-		p.outlierDetection = *odCfg
+		leaf.outlierDetection = *odCfg
 	}
 	return nil
 }
@@ -522,15 +485,22 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
+// Closes the child policy, if it exists, and resets child policy fields.
+func (b *cdsBalancer) closeChildPolicy() {
+	if b.childLB != nil {
+		b.childLB.Close()
+		b.childLB = nil
+		b.childLBName = ""
+		b.childConfigParser = nil
+	}
+}
+
 // closeChildPolicyAndReportTF closes the child policy, if it exists, and
 // updates the connectivity state of the channel to TransientFailure with an
 // error picker.
 func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
-	if b.childLB != nil {
-		b.childLB.Close()
-		b.childLB = nil
-	}
-	b.ccw.UpdateState(balancer.State{
+	b.closeChildPolicy()
+	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            base.NewErrPicker(err),
 	})
@@ -539,19 +509,16 @@ func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
 // Close closes the child policy, unsubscribes to the dynamic cluster, and
 // closes the cdsBalancer.
 func (b *cdsBalancer) Close() {
-	if b.childLB != nil {
-		b.childLB.Close()
-		b.childLB = nil
-	}
-	if b.cachedRoot != nil {
-		b.cachedRoot.Close()
-	}
-	if b.cachedIdentity != nil {
-		b.cachedIdentity.Close()
-	}
+	b.closeChildPolicy()
 	if b.unsubscribe != nil {
 		b.unsubscribe()
 	}
+	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
+	// grpcservice.Config instances in grpcServicesMap once their ownership
+	// lifecycle is finalized.
+	b.grpcServicesMu.Lock()
+	b.grpcServicesMap = nil
+	b.grpcServicesMu.Unlock()
 	b.logger.Infof("Shutdown")
 }
 
@@ -608,51 +575,4 @@ func (b *cdsBalancer) onClusterError(name string, err error) {
 	} else {
 		b.onClusterResourceError(name, err)
 	}
-}
-
-// ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at
-// creation and intercepts the NewSubConn() and UpdateAddresses() call from the
-// child policy to add security configuration required by xDS credentials.
-//
-// Other methods of the balancer.ClientConn interface are not overridden and
-// hence get the original implementation.
-type ccWrapper struct {
-	balancer.ClientConn
-
-	xdsHIPtr *unsafe.Pointer
-	logger   *grpclog.PrefixLogger
-}
-
-// NewSubConn intercepts NewSubConn() calls from the child policy and adds an
-// address attribute which provides all information required by the xdsCreds
-// handshaker to perform the TLS handshake.
-func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	newAddrs := make([]resolver.Address, len(addrs))
-	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHIPtr)
-	}
-
-	// No need to override opts.StateListener; just forward all calls to the
-	// child that created the SubConn.
-	return ccw.ClientConn.NewSubConn(newAddrs, opts)
-}
-
-func (ccw *ccWrapper) UpdateAddresses(sc balancer.SubConn, _ []resolver.Address) {
-	ccw.logger.Errorf("UpdateAddresses(%v) called unexpectedly", sc)
-}
-
-// systemRootCertsProvider implements a certprovider.Provider that returns the
-// system default root certificates for validation.
-type systemRootCertsProvider struct{}
-
-func (systemRootCertsProvider) Close() {}
-
-func (systemRootCertsProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
-	rootCAs, err := x509SystemCertPoolFunc()
-	if err != nil {
-		return nil, err
-	}
-	return &certprovider.KeyMaterial{
-		Roots: rootCAs,
-	}, nil
 }

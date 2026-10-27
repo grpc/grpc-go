@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package balancergroup
+package balancergroup_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -39,7 +41,7 @@ import (
 
 const (
 	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
+	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
 var (
@@ -77,7 +79,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:                      cc,
 		BuildOpts:               balancer.BuildOptions{},
 		StateAggregator:         gator,
@@ -142,7 +144,7 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:                      cc,
 		BuildOpts:               balancer.BuildOptions{},
 		StateAggregator:         gator,
@@ -164,11 +166,11 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 // Two rr balancers are added to bg, each with 2 ready subConns. A sub-balancer
 // is removed later, so the balancer group returned has one sub-balancer in its
 // own map, and one sub-balancer in cache.
-func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duration) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.BalancerClientConn, map[string]*testutils.TestSubConn) {
+func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duration) (*weightedaggregator.Aggregator, *balancergroup.BalancerGroup, *testutils.BalancerClientConn, map[string]*testutils.TestSubConn) {
 	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:                      cc,
 		BuildOpts:               balancer.BuildOptions{},
 		StateAggregator:         gator,
@@ -466,7 +468,7 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		},
 	})
 	cc := testutils.NewBalancerClientConn(t)
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              cc,
 		BuildOpts:       bOpts,
 		StateAggregator: nil,
@@ -495,7 +497,7 @@ func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
 		},
 	})
 
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              testutils.NewBalancerClientConn(t),
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
@@ -526,7 +528,7 @@ func (s) TestBalancerGroup_ResolverError_AfterClose(t *testing.T) {
 		},
 	})
 
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              testutils.NewBalancerClientConn(t),
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
@@ -554,7 +556,7 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 		},
 	})
 	cc := testutils.NewBalancerClientConn(t)
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              cc,
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
@@ -585,7 +587,7 @@ func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
 		},
 	})
 
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              testutils.NewBalancerClientConn(t),
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
@@ -613,7 +615,7 @@ func (s) TestBalancerGroup_ExitIdleOne_NonExistentID(t *testing.T) {
 		},
 	})
 
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              testutils.NewBalancerClientConn(t),
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
@@ -641,7 +643,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              cc,
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: gator,
@@ -690,7 +692,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 		},
 	})
 	cfgJSON := json.RawMessage(fmt.Sprintf(`[{%q: {}}]`, t.Name()))
-	lbCfg, err := ParseConfig(cfgJSON)
+	lbCfg, err := balancergroup.ParseConfig(cfgJSON)
 	if err != nil {
 		t.Fatalf("ParseConfig(%s) failed: %v", string(cfgJSON), err)
 	}
@@ -778,7 +780,7 @@ func (s) TestBalancerExitIdle_All(t *testing.T) {
 	})
 
 	cc := testutils.NewBalancerClientConn(t)
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              cc,
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
@@ -828,7 +830,7 @@ func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
 		},
 	})
 
-	bg := New(Options{
+	bg := balancergroup.New(balancergroup.Options{
 		CC:              testutils.NewBalancerClientConn(t),
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
@@ -843,5 +845,86 @@ func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
 	case <-exitIdleCh:
 		t.Fatalf("ExitIdle was called on sub-balancer even after BalancerGroup was closed")
 	case <-time.After(defaultTestShortTimeout):
+	}
+}
+
+// Tests verifies that the RemoveImmediately method of balancergroup closes the
+// child balancer immediately, while the Remove method does not close the child
+// balancer immediately, when the cache is enabled.
+func (s) TestBalancerGroup_RemoveImmediately(t *testing.T) {
+	// Channels to track child balancer creation and closure.
+	childLBCreated := make(chan string, 1)
+	childLBClosed := make(chan string, 1)
+
+	childLBName1 := strings.ToLower(t.Name()) + "-child-1"
+	t.Logf("Registering a child balancer with name %q", childLBName1)
+	stub.Register(childLBName1, stub.BalancerFuncs{
+		Init: func(*stub.BalancerData) {
+			childLBCreated <- childLBName1
+		},
+		Close: func(*stub.BalancerData) {
+			childLBClosed <- childLBName1
+		},
+	})
+
+	childLBName2 := strings.ToLower(t.Name()) + "-child-2"
+	t.Logf("Registering a child balancer with name %q", childLBName2)
+	stub.Register(childLBName2, stub.BalancerFuncs{
+		Init: func(*stub.BalancerData) {
+			childLBCreated <- childLBName2
+		},
+		Close: func(*stub.BalancerData) {
+			childLBClosed <- childLBName2
+		},
+	})
+
+	t.Logf("Creating a balancergroup with cache enabled")
+	tcc := testutils.NewBalancerClientConn(t)
+	bg := balancergroup.New(balancergroup.Options{
+		CC:                      tcc,
+		BuildOpts:               balancer.BuildOptions{},
+		SubBalancerCloseTimeout: defaultTestTimeout,
+	})
+
+	t.Logf("Adding a child balancer with name %q to the group", "child-1")
+	bg.AddWithClientConn("child-1", childLBName1, tcc)
+	select {
+	case <-childLBCreated:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout when waiting for child LB to be created")
+	}
+
+	t.Logf("Adding a child balancer with name %q to the group", "child-2")
+	bg.AddWithClientConn("child-2", childLBName2, tcc)
+	select {
+	case <-childLBCreated:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout when waiting for child LB to be created")
+	}
+
+	t.Logf("Removing the child balancer with name %q from the group with immediate effect", "child-1")
+	bg.RemoveImmediately("child-1")
+	select {
+	case <-childLBClosed:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout when waiting for child LB to be closed")
+	}
+
+	t.Logf("Removing the child balancer with name %q from the group with caching", "child-2")
+	bg.Remove("child-2")
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-childLBClosed:
+		t.Fatalf("Child LB closed when expected to be cached")
+	case <-sCtx.Done():
+	}
+
+	t.Logf("Closing the balancergroup, which should close the second child balancer")
+	bg.Close()
+	select {
+	case <-childLBClosed:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout when waiting for child LB to be closed")
 	}
 }

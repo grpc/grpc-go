@@ -112,37 +112,40 @@ func (c *errProtoCodec) Name() string {
 // Tests the case where encoding fails on the server. Verifies that there is
 // no panic and that the encoding error is propagated to the client.
 func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
-	grpctest.ExpectError("grpc: server failed to encode response")
-
 	// Create a codec that errors when encoding messages.
 	encodingErr := errors.New("encoding failed")
 	ec := &errProtoCodec{name: t.Name(), encodingErr: encodingErr}
 
 	// Start a server with the above codec.
-	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
-	defer backend.Stop()
-
-	// Create a channel to the above server.
-	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
+	backend1 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 	}
-	defer cc.Close()
+	if err := backend1.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
+	defer backend1.Stop()
 
 	// Make an RPC and expect it to fail. Since we do not specify any codec
 	// here, the proto codec will get automatically used.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
+	_, err := backend1.Client.EmptyCall(ctx, &testpb.Empty{})
 	if err == nil || !strings.Contains(err.Error(), encodingErr.Error()) {
 		t.Fatalf("RPC failed with error: %v, want: %v", err, encodingErr)
 	}
 
 	// Configure the codec on the server to not return errors anymore and expect
 	// the RPC to succeed.
-	ec.encodingErr = nil
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	ec = &errProtoCodec{name: t.Name()}
+	backend2 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	if err := backend2.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
+	defer backend2.Stop()
+
+	if _, err := backend2.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
 }
@@ -154,32 +157,36 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 	decodingErr := errors.New("decoding failed")
 	ec := &errProtoCodec{name: t.Name(), decodingErr: decodingErr}
 
-	// Start a server with the above codec.
-	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
-	defer backend.Stop()
-
-	// Create a channel to the above server. Since we do not specify any codec
-	// here, the proto codec will get automatically used.
-	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
+	// Start a server with the above codec and a channel to the server.
+	backend1 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 	}
-	defer cc.Close()
+	if err := backend1.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
+	defer backend1.Stop()
 
 	// Make an RPC and expect it to fail. Since we do not specify any codec
 	// here, the proto codec will get automatically used.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil || !strings.Contains(err.Error(), decodingErr.Error()) || !strings.Contains(err.Error(), "grpc: error unmarshalling request") {
+	_, err := backend1.Client.EmptyCall(ctx, &testpb.Empty{})
+	if err == nil || !strings.Contains(err.Error(), decodingErr.Error()) || !strings.Contains(err.Error(), "grpc: failed to unmarshal the received message") {
 		t.Fatalf("RPC failed with error: %v, want: %v", err, decodingErr)
 	}
 
 	// Configure the codec on the server to not return errors anymore and expect
 	// the RPC to succeed.
-	ec.decodingErr = nil
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	ec = &errProtoCodec{name: t.Name()}
+	backend2 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	if err := backend2.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
+	defer backend2.Stop()
+
+	if _, err := backend2.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
 }

@@ -1348,7 +1348,7 @@ func addressesToAddrs(as []resolver.Address) []string {
 	return ret
 }
 
-const initIdleBalancerName = "test-init-Idle-balancer"
+const initIdleBalancerName = "test-init-idle-balancer"
 
 var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 
@@ -1388,7 +1388,7 @@ func (s) TestInitialIdle(t *testing.T) {
   "targets": {
     "cluster_1": {
       "weight":1,
-      "childPolicy": [{"test-init-Idle-balancer": ""}]
+      "childPolicy": [{"test-init-idle-balancer": ""}]
     }
   }
 }`))

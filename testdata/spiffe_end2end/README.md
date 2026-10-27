@@ -1,6 +1,6 @@
 All of the following files in this directory except `server_spiffebundle.json`
 and `client_spiffebundle.json` are generated with the `generate.sh` and
-`generate_intermediate.sh` script in this directory.
+`intermediate_gen.sh` script in this directory.
 
 These comprise a root trust certificate authority (CA) that signs two
 certificates - `client_spiffe.pem` and `server_spiffe.pem`. These are valid
@@ -28,7 +28,7 @@ certificate by getting the RSA key from the cert and extracting the value. This
 can be done in golang with the following codeblock:
 
 ```
-func(GetBase64ModulusFromPublicKey(key *rsa.PublicKey) string {
+func GetBase64ModulusFromPublicKey(key *rsa.PublicKey) string {
     return base64.RawURLEncoding.EncodeToString(key.N.Bytes())
 }
 

@@ -29,9 +29,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -92,11 +94,11 @@ func parseConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return config{config: msg}, nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return parseConfig(cfg)
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return parseConfig(override)
 }
 
@@ -104,9 +106,17 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-var _ httpfilter.ClientInterceptorBuilder = builder{}
+func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	return clientFilter{}
+}
 
-func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+var _ httpfilter.ClientFilterBuilder = builder{}
+
+type clientFilter struct{}
+
+func (clientFilter) Close() {}
+
+func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("fault: nil config provided")
 	}
@@ -139,12 +149,12 @@ type interceptor struct {
 
 var activeFaults uint32 // global active faults; accessed atomically
 
-func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if maxAF := i.config.GetMaxActiveFaults(); maxAF != nil {
 		defer atomic.AddUint32(&activeFaults, ^uint32(0)) // decrement counter
 		if af := atomic.AddUint32(&activeFaults, 1); af > maxAF.GetValue() {
 			// Would exceed maximum active fault limit.
-			return newStream(ctx, done)
+			return newStream(ctx, opts...)
 		}
 	}
 
@@ -158,8 +168,10 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done f
 		}
 		return nil, err
 	}
-	return newStream(ctx, done)
+	return newStream(ctx, opts...)
 }
+
+func (i *interceptor) Close() {}
 
 // For overriding in tests
 var randIntn = rand.IntN
@@ -252,19 +264,16 @@ func parseIntFromMD(header []string) (int, bool) {
 }
 
 func splitPct(fp *tpb.FractionalPercent) (num int, den int) {
-	if fp == nil {
-		return 0, 100
+	// TODO: this validation should happen at config parsing time instead, and
+	// the filter configuration must be NACKed if an unrecognized denominator
+	// is seen. That requires the fault filter to convert the proto into an
+	// internal representation at parsing time and only use that at runtime.
+	f, err := xdsresource.NewFractionalPercent(fp)
+	if err != nil {
+		// An unrecognized denominator is treated as out of 100.
+		return int(fp.GetNumerator()), 100
 	}
-	num = int(fp.GetNumerator())
-	switch fp.GetDenominator() {
-	case tpb.FractionalPercent_HUNDRED:
-		return num, 100
-	case tpb.FractionalPercent_TEN_THOUSAND:
-		return num, 10 * 1000
-	case tpb.FractionalPercent_MILLION:
-		return num, 1000 * 1000
-	}
-	return num, 100
+	return int(f.Numerator), int(f.Denominator)
 }
 
 func grpcFromHTTP(httpStatus int) (codes.Code, bool) {

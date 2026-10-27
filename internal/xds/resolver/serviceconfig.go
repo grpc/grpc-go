@@ -25,11 +25,12 @@ import (
 	"math/bits"
 	rand "math/rand/v2"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
@@ -107,14 +108,15 @@ type virtualHost struct {
 
 // routeCluster holds information about a cluster as referenced by a route.
 type routeCluster struct {
-	name        string                      // Name of the cluster.
-	interceptor iresolver.ClientInterceptor // HTTP filters to run for RPCs matching this route.
+	name        string                       // Name of the cluster.
+	interceptor httpfilter.ClientInterceptor // HTTP filters to run for RPCs matching this route.
 }
 
 type route struct {
-	m                 *xdsresource.CompositeMatcher // converted from route matchers
-	actionType        xdsresource.RouteActionType   // holds route action type
-	clusters          wrr.WRR                       // holds *routeCluster entries
+	m                 *xdsresource.CompositeMatcher         // converted from route matchers
+	actionType        xdsresource.RouteActionType           // holds route action type
+	clusters          wrr.WRR                               // holds *routeCluster entries
+	routeClusters     []*grpcsync.RefCounted[*routeCluster] // Route clusters belonging to this route
 	maxStreamDuration time.Duration
 	retryConfig       *xdsresource.RetryConfig
 	hashPolicies      []*xdsresource.HashPolicy
@@ -161,6 +163,7 @@ type configSelector struct {
 	clusters         map[string]*clusterInfo
 	plugins          map[string]*clusterInfo
 	httpFilterConfig []xdsresource.HTTPFilter
+	xdsConfig        *xdsresource.XDSConfig
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
@@ -175,9 +178,20 @@ func annotateErrorWithNodeID(err error, nodeID string) error {
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	var rt *route
+	md, _ := metadata.FromOutgoingContext(rpcInfo.Context)
+	if extraMD, ok := grpcutil.ExtraMetadata(rpcInfo.Context); ok {
+		md = metadata.Join(md, extraMD)
+		// Remove all binary headers. They are hard to match with. May need
+		// to add back if asked by users.
+		for k := range md {
+			if strings.HasSuffix(k, "-bin") {
+				delete(md, k)
+			}
+		}
+	}
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
-		if r.m.Match(rpcInfo) {
+		if r.m.Match(rpcInfo.Method, md) {
 			rt = &r
 			break
 		}
@@ -191,56 +205,61 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, annotateErrorWithNodeID(errUnsupportedClientRouteAction, cs.xdsNodeID)
 	}
 
-	cluster, ok := rt.clusters.Next().(*routeCluster)
+	rc, ok := rt.clusters.Next().(*grpcsync.RefCounted[*routeCluster])
 	if !ok {
-		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster), cs.xdsNodeID)
+		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", rc, rc), cs.xdsNodeID)
 	}
-
-	// Add a ref to the selected cluster, as this RPC needs this cluster until
-	// it is committed.
-	var ref *int32
-	if info, ok := cs.clusters[cluster.name]; ok {
-		ref = &info.refCount
-	}
-	if info, ok := cs.plugins[cluster.name]; ok {
-		ref = &info.refCount
-	}
-	atomic.AddInt32(ref, 1)
-
+	cluster := rc.Value()
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
+	lbCtx = xdsresource.NewContextWithXDSConfig(lbCtx, cs.xdsConfig)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 	if rt.autoHostRewrite {
 		lbCtx = clusterimpl.EnableAutoHostRewrite(lbCtx)
 	}
 
 	config := &iresolver.RPCConfig{
-		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
-		Context: lbCtx,
-		OnCommitted: func() {
-			// When the RPC is committed, the cluster is no longer required.
-			// Decrease its ref.
-			if info, ok := cs.clusters[cluster.name]; ok {
-				ref := &info.refCount
-				if v := atomic.AddInt32(ref, -1); v == 0 {
-					// We call unsubscribe rather than sendNewServiceConfig to
-					// prevent redundant updates. If the reference count in the
-					// dependency manager drops to zero, it will automatically
-					// trigger a service config update with this cluster
-					// removed. Calling unsubscribe allows the dependency
-					// manager to handle the update flow once and for all.
-					info.unsubscribe()
-				}
-			}
-			if info, ok := cs.plugins[cluster.name]; ok {
-				ref := &info.refCount
-				if v := atomic.AddInt32(ref, -1); v == 0 {
-					// This entry will be removed from activePlugins when
-					// producing a new service config update.
-					cs.sendNewServiceConfig()
-				}
-			}
-		},
+		Context:     lbCtx,
 		Interceptor: cluster.interceptor,
+	}
+	// Add a ref to the selected cluster to keep the interceptors alive until RPC
+	// is committed.
+	rc.Increment()
+	if info, ok := cs.clusters[cluster.name]; ok {
+		// Add a ref to the selected cluster, as this RPC needs this
+		// cluster until it is committed.
+		info.refCount.Add(1)
+		config.Context = newContextWithOnCommittedFunc(config.Context, sync.OnceFunc(func() {
+			if v := info.refCount.Add(-1); v == 0 {
+				// We call unsubscribe rather than sendNewServiceConfig to
+				// prevent redundant updates. If the reference count in the
+				// dependency manager drops to zero, it will automatically
+				// trigger a service config update with this cluster
+				// removed. Calling unsubscribe allows the dependency
+				// manager to handle the update flow once and for all.
+				info.unsubscribe()
+			}
+			// Decrement the refcount of the route cluster and close the interceptor
+			// if refcount goes to zero.
+			rc.Decrement()
+		}))
+	} else if info, ok := cs.plugins[cluster.name]; ok {
+		// Add a ref to the selected plugin, as this RPC needs this
+		// plugin until it is committed.
+		info.refCount.Add(1)
+		config.Context = newContextWithOnCommittedFunc(config.Context, sync.OnceFunc(func() {
+			if v := info.refCount.Add(-1); v == 0 {
+				// This entry will be removed from activePlugins when
+				// producing a new service config update.
+				cs.sendNewServiceConfig()
+			}
+			// Decrement the refcount of the route cluster and close the interceptor
+			// if refcount goes to zero.
+			rc.Decrement()
+		}))
+	} else {
+		// This should be unreachable because all route clusters are normalized
+		// into cs.clusters or cs.plugins during config selector creation.
+		panic(fmt.Sprintf("matched cluster %q not found in ConfigSelector", cluster.name))
 	}
 
 	if rt.maxStreamDuration != 0 {
@@ -253,6 +272,19 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	return config, nil
+}
+
+type onCommittedFuncCtxKey struct{}
+
+func newContextWithOnCommittedFunc(ctx context.Context, onCommitted func()) context.Context {
+	return context.WithValue(ctx, onCommittedFuncCtxKey{}, onCommitted)
+}
+
+func onCommittedFuncFromContext(ctx context.Context) func() {
+	if onCommitted, ok := ctx.Value(onCommittedFuncCtxKey{}).(func()); ok {
+		return onCommitted
+	}
+	return nil
 }
 
 func retryConfigToPolicy(config *xdsresource.RetryConfig) *serviceconfig.RetryPolicy {
@@ -336,65 +368,28 @@ func (cs *configSelector) stop() {
 	if cs == nil {
 		return
 	}
+
+	// Decrement the refcount of all the route clusters associated with this
+	// config selector and close the interceptors of the route cluster if it's
+	// refcount goes to zero.
+	for _, r := range cs.routes {
+		for _, rc := range r.routeClusters {
+			rc.Decrement()
+		}
+	}
+
 	// If any reference counts drop to zero, a service config update is required
 	// to remove the clusters. Since the old config selector is stopped
 	// after a new one is active, we must trigger a subsequent update to delete
 	// the now-unused clusters.
 	for _, ci := range cs.clusters {
-		if v := atomic.AddInt32(&ci.refCount, -1); v == 0 {
+		if v := ci.refCount.Add(-1); v == 0 {
 			ci.unsubscribe()
 		}
 	}
 	for _, ci := range cs.plugins {
-		if v := atomic.AddInt32(&ci.refCount, -1); v == 0 {
+		if v := ci.refCount.Add(-1); v == 0 {
 			cs.sendNewServiceConfig()
 		}
 	}
-}
-
-// newInterceptor builds a chain of client interceptors for the given filters
-// and override configuration. The cluster override has the highest priority,
-// followed by the route override, and finally the virtual host override.
-func newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
-	if len(filters) == 0 {
-		return nil, nil
-	}
-	interceptors := make([]iresolver.ClientInterceptor, 0, len(filters))
-	for _, filter := range filters {
-		override := clusterOverride[filter.Name]
-		if override == nil {
-			override = routeOverride[filter.Name]
-		}
-		if override == nil {
-			override = virtualHostOverride[filter.Name]
-		}
-		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder)
-		if !ok {
-			// Should not happen if it passed xdsClient validation.
-			return nil, fmt.Errorf("filter %q does not support use in client", filter.Name)
-		}
-		i, err := ib.BuildClientInterceptor(filter.Config, override)
-		if err != nil {
-			return nil, fmt.Errorf("error constructing filter: %v", err)
-		}
-		if i != nil {
-			interceptors = append(interceptors, i)
-		}
-	}
-	return &interceptorList{interceptors: interceptors}, nil
-}
-
-type interceptorList struct {
-	interceptors []iresolver.ClientInterceptor
-}
-
-func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, _ func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
-	for i := len(il.interceptors) - 1; i >= 0; i-- {
-		ns := newStream
-		interceptor := il.interceptors[i]
-		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-			return interceptor.NewStream(ctx, ri, done, ns)
-		}
-	}
-	return newStream(ctx, func() {})
 }

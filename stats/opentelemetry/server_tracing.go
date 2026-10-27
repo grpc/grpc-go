@@ -39,10 +39,10 @@ func (h *serverTracingHandler) initializeTraces() {
 }
 
 // TagRPC implements per RPC attempt context management for traces.
-func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
-	ctx, ai = h.traceTagRPC(ctx, ai)
-	return setRPCInfo(ctx, &rpcInfo{ai: ai})
+func (h *serverTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	ctx, ri := getOrCreateServerRPCInfo(ctx, info, h.options.MetricsOptions)
+	ctx, _ = h.traceTagRPC(ctx, ri.ai)
+	return ctx
 }
 
 // traceTagRPC populates context with new span data using the TextMapPropagator
@@ -53,7 +53,7 @@ func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) 
 // If TextMapPropagator is not provided in the trace options, it returns context
 // as is.
 func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
-	mn := "Recv." + strings.Replace(ai.method, "/", ".", -1)
+	mn := "Recv." + strings.ReplaceAll(ai.method, "/", ".")
 	var span trace.Span
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx = h.options.TraceOptions.TextMapPropagator.Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
@@ -67,7 +67,7 @@ func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 
 // HandleRPC handles per RPC tracing implementation.
 func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
+	ri := serverRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side tracing handler trace event handling has no server call data present")
 		return

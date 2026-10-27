@@ -83,6 +83,14 @@ git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | gre
 # can't parse link local IPv6 addresses.
 not git grep 'net.ParseIP' -- '*.go'
 
+# - Ensure that direct calls to regexp.Compile are not allowed in xDS production code.
+#   Use CompileSafeRegex instead to ensure full-string matching.
+(git grep -n 'regexp.Compile(' -- '*xds*' ':(exclude)*_test.go' ':(exclude)internal/xds/matcher/string_matcher.go' ':(exclude)internal/xds/xdsclient/xdsresource/unmarshal_rds.go' || true) | fail_on_output || {
+  echo "Error: direct calls to regexp.Compile are not allowed in xDS production code."
+  echo "Please use CompileSafeRegex instead to ensure full-string matching."
+  exit 1
+}
+
 misspell -error .
 
 # Get the absolute path to revive.toml relative to the script location
@@ -97,7 +105,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   gofmt -s -d -l . 2>&1 | fail_on_output
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
 
-  go mod tidy -compat=1.24
+  go mod tidy -compat=1.26
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 
@@ -128,6 +136,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
 
   # Error for duplicate imports not including grpc protos.
   noret_grep "(ST1019)\|\(other import of\)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
+balancer/autosharding/internal/proto"
 channelz/grpc_channelz_v1"
 go-control-plane/envoy
 grpclb/grpc_lb_v1"
@@ -188,6 +197,7 @@ balancer.ErrTransientFailure is deprecated:
 grpc/reflection/v1alpha/reflection.proto
 SwitchTo is deprecated:
 XXXXX xDS deprecated fields we support
+.ContainsMatch
 .ExactMatch
 .PrefixMatch
 .SafeRegexMatch
@@ -196,8 +206,10 @@ GetContainsMatch
 GetExactMatch
 GetMatchSubjectAltNames
 GetPrefixMatch
+GetRequestDrain
 GetSafeRegexMatch
 GetSuffixMatch
+GetSourceIp
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'

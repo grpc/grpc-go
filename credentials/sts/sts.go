@@ -195,6 +195,13 @@ type httpDoer interface {
 
 func makeHTTPClient(roots *x509.CertPool) httpDoer {
 	return &http.Client{
+		// The token exchange request carries the subject token (and an optional
+		// actor token) in its body. Following a redirect replays that body to
+		// the redirect target, so refuse to follow redirects and let sendRequest
+		// surface the 3xx as a non-2xx status instead.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 		Timeout: stsRequestTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{

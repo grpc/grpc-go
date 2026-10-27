@@ -19,8 +19,9 @@ package xdsresource
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -40,7 +41,7 @@ type NetworkFilterChainMap struct {
 // source type matchers.
 type DestinationPrefixEntry struct {
 	// Prefix is the destination IP prefix.
-	Prefix *net.IPNet
+	Prefix netip.Prefix
 	// SourceTypeArr contains the source type matchers. The supported source
 	// types and their associated indices in the array are:
 	//   - 0: Any: matches connection attempts from any source.
@@ -59,7 +60,7 @@ type SourcePrefixes struct {
 // port matchers.
 type SourcePrefixEntry struct {
 	// Prefix is the source IP prefix.
-	Prefix *net.IPNet
+	Prefix netip.Prefix
 	// PortMap contains the matchers for source ports.
 	PortMap map[int]NetworkFilterChainConfig
 }
@@ -80,7 +81,7 @@ func (n NetworkFilterChainConfig) IsEmpty() bool {
 	return n.SecurityCfg == nil && n.HTTPConnMgr == nil
 }
 
-func processNetworkFilters(filters []*v3listenerpb.Filter) (*HTTPConnectionManagerConfig, error) {
+func processNetworkFilters(filters []*v3listenerpb.Filter, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (*HTTPConnectionManagerConfig, error) {
 	hcmConfig := &HTTPConnectionManagerConfig{}
 	seenNames := make(map[string]bool, len(filters))
 	seenHCM := false
@@ -120,7 +121,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*HTTPConnectionManag
 			// "Any filters after HttpConnectionManager should be ignored during
 			// connection processing but still be considered for validity.
 			// HTTPConnectionManager must have valid http_filters." - A36
-			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
+			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true, bc, sc)
 			if err != nil {
 				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}: %v", filters, hcm.GetHttpFilters(), err)
 			}
@@ -157,7 +158,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*HTTPConnectionManag
 					// server-side." - A36
 					// Can specify v3 here, as will never get to this function
 					// if v2.
-					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil)
+					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), bc, sc)
 					if err != nil {
 						return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 					}

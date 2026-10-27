@@ -25,9 +25,8 @@ import (
 
 // OverloadDropConfig contains the config to drop overloads.
 type OverloadDropConfig struct {
-	Category    string
-	Numerator   uint32
-	Denominator uint32
+	Category       string
+	DropPercentage FractionalPercent
 }
 
 // EndpointHealthStatus represents the health status of an endpoint.
@@ -49,7 +48,6 @@ const (
 )
 
 // Endpoint contains information of an endpoint.
-// TODO(i/8757) : Replace Endpoint with resolver.Endpoint struct.
 type Endpoint struct {
 	ResolverEndpoint resolver.Endpoint
 	HealthStatus     EndpointHealthStatus

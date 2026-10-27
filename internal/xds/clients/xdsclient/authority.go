@@ -347,7 +347,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			onDone()
 		}
 	}
-	funcsToSchedule := []func(context.Context){}
+	var funcsToSchedule []func(context.Context)
 	defer func() {
 		if len(funcsToSchedule) == 0 {
 			// When there are no watchers for the resources received as part of
@@ -368,26 +368,35 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			continue
 		}
 
-		// On error, keep previous version of the resource. But update status
-		// and error.
-		if uErr.Err != nil {
+		if err := uErr.Err; err != nil {
 			if a.metricsReporter != nil {
 				a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
 					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 				})
 			}
-			state.md.ErrState = md.ErrState
-			state.md.Status = md.Status
-			for watcher := range state.watchers {
-				watcher := watcher
-				err := uErr.Err
-				watcherCnt.Add(1)
-				if state.cache == nil {
-					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceError(err, done) })
-				} else {
-					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+
+			// Notify watchers only if this is not a duplicated error from the previous update.
+			if errState := state.md.ErrState; errState == nil || errState.Err == nil || state.md.ErrState.Err.Error() != err.Error() {
+				for watcher := range state.watchers {
+					watcherCnt.Add(1)
+					if state.cache == nil {
+						funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceError(err, done) })
+					} else {
+						funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+					}
 				}
 			}
+
+			// On error, keep previous version of the resource. But update
+			// status to NACKed and capture the specific per-resource error (and
+			// not the overall error for the update) in the ErrState field.
+			state.md.Status = xdsresource.ServiceStatusNACKed
+			state.md.ErrState = &xdsresource.UpdateErrorMetadata{
+				Version:   md.ErrState.Version,
+				Err:       err,
+				Timestamp: md.ErrState.Timestamp,
+			}
+
 			continue
 		}
 
@@ -414,7 +423,6 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			state.cache = uErr.Resource
 
 			for watcher := range state.watchers {
-				watcher := watcher
 				resource := uErr.Resource
 				watcherCnt.Add(1)
 				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceChanged(resource, done) })
@@ -492,7 +500,6 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		state.cache = nil
 		state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 		for watcher := range state.watchers {
-			watcher := watcher
 			watcherCnt.Add(1)
 			funcsToSchedule = append(funcsToSchedule, func(context.Context) {
 				watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q has been removed", name, rType.TypeName), done)
@@ -933,4 +940,57 @@ func (a *authority) resourceWatchStateForTesting(rType ResourceType, resourceNam
 	<-done
 
 	return state, err
+}
+
+// resourceStats returns a snapshot of the current state of all resources watched
+// by this authority. The return value is a nested map where:
+//   - The outer map's key is the resource type name (e.g., "ListenerResource").
+//   - The inner map's key is the cache state of the resource (e.g., "requested",
+//     "acked", "nacked", "does_not_exist").
+//   - The inner map's value is the total count of resources in that specific state.
+func (a *authority) resourceStats() map[string]map[string]int {
+	ret := make(chan map[string]map[string]int, 1)
+	op := func(context.Context) {
+		summary := make(map[string]map[string]int)
+		for rType, resourceMap := range a.resources {
+			typeName := rType.TypeName
+			if _, ok := summary[typeName]; !ok {
+				summary[typeName] = make(map[string]int)
+			}
+			for _, state := range resourceMap {
+				s := cacheState(state)
+				summary[typeName][s]++
+			}
+		}
+
+		ret <- summary
+	}
+	a.xdsClientSerializer.ScheduleOr(op, func() {
+		ret <- nil
+	})
+
+	return <-ret
+}
+
+// cacheState determines the metrics label string for a given resource state.
+func cacheState(r *resourceState) string {
+	switch r.md.Status {
+	case xdsresource.ServiceStatusRequested:
+		return "requested"
+	case xdsresource.ServiceStatusNotExist:
+		return "does_not_exist"
+	case xdsresource.ServiceStatusACKed:
+		return "acked"
+	case xdsresource.ServiceStatusNACKed:
+		// If the status is NACKed, it means the *latest* update failed.
+		// However, if 'r.cache' is not nil, it means we are still holding onto
+		// a previously ACKed version of the resource.
+		if r.cache != nil {
+			return "nacked_but_cached"
+		}
+		return "nacked"
+	default:
+		// Fallback for initialization states
+		return "requested"
+	}
 }

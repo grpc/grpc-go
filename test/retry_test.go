@@ -27,15 +27,20 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -45,9 +50,12 @@ import (
 )
 
 func (s) TestRetryUnary(t *testing.T) {
+	serverMu := sync.Mutex{}
 	i := -1
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			defer func() { t.Logf("server call %v returning err %v", i, err) }()
 			i++
 			switch i {
@@ -77,8 +85,8 @@ func (s) TestRetryUnary(t *testing.T) {
 	defer ss.Stop()
 
 	testCases := []struct {
-		code  codes.Code
-		count int
+		wantCode  codes.Code
+		wantCount int
 	}{
 		{codes.OK, 0},
 		{codes.OK, 2},
@@ -93,19 +101,26 @@ func (s) TestRetryUnary(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
-		if status.Code(err) != tc.code {
-			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
+		if status.Code(err) != tc.wantCode {
+			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.wantCode)
 		}
-		if i != tc.count {
-			t.Fatalf("i = %v; want %v", i, tc.count)
+		serverMu.Lock()
+		if i != tc.wantCount {
+			serverMu.Unlock()
+			t.Fatalf("i = %v; want %v", i, tc.wantCount)
 		}
+		serverMu.Unlock()
 	}
 }
 
 func (s) TestRetryThrottling(t *testing.T) {
+	serverMu := sync.Mutex{}
 	i := -1
+
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			i++
 			switch i {
 			case 0, 3, 6, 10, 11, 12, 13, 14, 16, 18:
@@ -137,8 +152,8 @@ func (s) TestRetryThrottling(t *testing.T) {
 	defer ss.Stop()
 
 	testCases := []struct {
-		code  codes.Code
-		count int
+		wantCode  codes.Code
+		wantCount int
 	}{
 		{codes.OK, 0},           // tokens = 10
 		{codes.OK, 3},           // tokens = 8.5 (10 - 2 failures + 0.5 success)
@@ -157,12 +172,14 @@ func (s) TestRetryThrottling(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
-		if status.Code(err) != tc.code {
-			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
+		if status.Code(err) != tc.wantCode {
+			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.wantCode)
 		}
-		if i != tc.count {
-			t.Errorf("i = %v; want %v", i, tc.count)
+		serverMu.Lock()
+		if i != tc.wantCount {
+			t.Errorf("i = %v; want %v", i, tc.wantCount)
 		}
+		serverMu.Unlock()
 	}
 }
 
@@ -188,7 +205,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 				return status.Errorf(codes.Internal, "server: no header metadata received")
 			}
 			if got := md[key]; len(got) != 1 || got[0] != strconv.Itoa(n) {
-				return status.Errorf(codes.Internal, "server: metadata = %v; want <contains %q: %q>", md, key, n)
+				return status.Errorf(codes.Internal, "server: metadata = %v; want <contains %q: %q>", md, key, strconv.Itoa(n))
 			}
 			return nil
 		}
@@ -275,15 +292,15 @@ func (s) TestRetryStreaming(t *testing.T) {
 	}
 	cErr := func(c codes.Code) clientOp {
 		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
-			want := status.New(c, "this is a test error").Err()
-			if c == codes.OK {
-				want = io.EOF
-			}
 			res, err := stream.Recv()
-			if res != nil ||
-				((err == nil) != (want == nil)) ||
-				(want != nil && err.Error() != want.Error()) {
-				return fmt.Errorf("client: Recv() = %v, %v; want <nil>, %v", res, err, want)
+			var gotCode codes.Code
+			if err == io.EOF {
+				gotCode = codes.OK
+			} else {
+				gotCode = status.Code(err)
+			}
+			if res != nil || gotCode != c {
+				return fmt.Errorf("client: Recv() = %v, %v; want <nil>, %v", res, err, c)
 			}
 			return nil
 		}
@@ -413,10 +430,14 @@ func (s) TestRetryStreaming(t *testing.T) {
 		clientOps: []clientOp{cReqPayload(largePayload), cErr(codes.Unavailable)},
 	}}
 
+	serverMu := sync.Mutex{}
 	var serverOpIter int
 	var serverOps []serverOp
+
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			for serverOpIter < len(serverOps) {
 				op := serverOps[serverOpIter]
 				serverOpIter++
@@ -457,8 +478,10 @@ func (s) TestRetryStreaming(t *testing.T) {
 
 	for i, tc := range testCases {
 		func() {
+			serverMu.Lock()
 			serverOpIter = 0
 			serverOps = tc.serverOps
+			serverMu.Unlock()
 
 			stream, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
@@ -470,6 +493,8 @@ func (s) TestRetryStreaming(t *testing.T) {
 					break
 				}
 			}
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			if serverOpIter != len(serverOps) {
 				t.Errorf("%v: serverOpIter = %v; want %v", tc.desc, serverOpIter, len(serverOps))
 			}
@@ -508,15 +533,20 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 			),
 		}
 
+		serverMu := sync.Mutex{}
 		streamCallCount := 0
 		unaryCallCount := 0
 
 		ss := &stubserver.StubServer{
 			FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+				serverMu.Lock()
+				defer serverMu.Unlock()
 				streamCallCount++
 				return status.New(codes.Unavailable, "this is a test error").Err()
 			},
 			EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+				serverMu.Lock()
+				defer serverMu.Unlock()
 				unaryCallCount++
 				return nil, status.New(codes.Unavailable, "this is a test error").Err()
 			},
@@ -550,10 +580,16 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 				t.Fatalf("client: Recv() = %s, %v; want <nil>, error", got, err)
 			} else if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			} else if !strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("want: retries exhausted, got: %v", err)
 			}
+
+			serverMu.Lock()
 			if streamCallCount != tc.expectedAttempts {
+				serverMu.Unlock()
 				t.Fatalf("stream expectedAttempts = %v; want %v", streamCallCount, tc.expectedAttempts)
 			}
+			serverMu.Unlock()
 
 			// Test unary RPC
 			if ugot, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
@@ -561,6 +597,8 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 			} else if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
 			}
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			if unaryCallCount != tc.expectedAttempts {
 				t.Fatalf("unary expectedAttempts = %v; want %v", unaryCallCount, tc.expectedAttempts)
 			}
@@ -611,7 +649,7 @@ func (s) TestRetryStats(t *testing.T) {
 				":status", "200",
 				"content-type", "application/grpc",
 			}},
-			payload: []byte{0, 0, 0, 0, 0}, // header for 0-byte response message.
+			payloads: [][]byte{{0, 0, 0, 0, 0}}, // header for 0-byte response message.
 			trailers: [][]string{{
 				"grpc-status", "0", // OK
 			}},
@@ -691,6 +729,18 @@ func (s) TestRetryStats(t *testing.T) {
 	_, okP := handler.s[pIdx].(*stats.InPayload)
 	if okT && okP {
 		handler.s[pIdx], handler.s[tIdx] = handler.s[tIdx], handler.s[pIdx]
+	}
+
+	// The transparent retry attempt has a similar race, but between sending
+	// the payload and receiving the trailer.  OutPayload is reported once the
+	// data frame is queued on the transport, not once it is written, so the
+	// server can respond and the trailer can be reported first.  Adjust the
+	// received stats accordingly if necessary.
+	const tIdx2, pIdx2 = 6, 7
+	_, okT2 := handler.s[tIdx2].(*stats.InTrailer)
+	_, okP2 := handler.s[pIdx2].(*stats.OutPayload)
+	if okT2 && okP2 {
+		handler.s[pIdx2], handler.s[tIdx2] = handler.s[tIdx2], handler.s[pIdx2]
 	}
 
 	for i := range handler.s {
@@ -815,4 +865,205 @@ func (s) TestRetryTransparentWhenCommitted(t *testing.T) {
 	stream1.CloseSend()
 	stream1.Recv()
 	stream1.Send(&testpb.StreamingOutputCallRequest{})
+}
+
+func (s) TestNoRetry(t *testing.T) {
+	scJSON := `{
+	"methodConfig": [{
+	  "name": [{"service": "grpc.testing.TestService"}],
+	  "retryPolicy": {
+		"MaxAttempts": 4,
+		"InitialBackoff": ".01s",
+		"MaxBackoff": ".01s",
+		"BackoffMultiplier": 1.0,
+		"RetryableStatusCodes": [ "UNAVAILABLE" ]
+	  }
+	}]}`
+	tests := []struct {
+		name     string
+		dialOpts []grpc.DialOption
+	}{
+		{
+			name: "disabled",
+			dialOpts: []grpc.DialOption{
+				grpc.WithDefaultServiceConfig(scJSON),
+				grpc.WithDisableRetry(),
+			},
+		},
+		{
+			name:     "not_configured",
+			dialOpts: []grpc.DialOption{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ss := &stubserver.StubServer{
+				FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+					return status.New(codes.Unavailable, "retryable error").Err()
+				},
+				EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+					return nil, status.New(codes.Unavailable, "retryable error").Err()
+				},
+			}
+			if err := ss.Start([]grpc.ServerOption{}, tc.dialOpts...); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Test streaming RPC
+			stream, err := ss.Client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Fatalf("Error while creating stream: %v", err)
+			}
+			_, err = stream.Recv()
+			if err == nil {
+				t.Fatal("stream.Recv() succeeded when expected to fail")
+			}
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			}
+			if strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("client: EmptyCall() failed with an unexpected 'retries exhausted' error: %v", err)
+			}
+
+			// Test unary RPC
+			_, err = ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if err == nil {
+				t.Fatal("EmptyCall() succeeded when expected to fail")
+			}
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
+			}
+
+			if strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("client: EmptyCall() failed with an unexpected 'retries exhausted' error: %v", err)
+			}
+		})
+	}
+}
+
+// authorityOverridePicker returns an authority override in the pick result
+// metadata for every pick made before the server has seen the first attempt
+// of the RPC, and no metadata for later picks. This mirrors an xDS cluster
+// (gRFC A81) where only some of the endpoints carry a hostname, so only some
+// picks rewrite the authority. The decision is keyed off the server-side
+// attempt count, rather than a per-picker pick count, so that it stays stable
+// if the channel re-picks for the first attempt or installs a new picker
+// instance on a connectivity state change.
+type authorityOverridePicker struct {
+	sc             balancer.SubConn
+	authority      string
+	serverAttempts *atomic.Int32
+}
+
+func (p *authorityOverridePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	res := balancer.PickResult{SubConn: p.sc}
+	if p.serverAttempts.Load() == 0 {
+		res.Metadata = metadata.Pairs(":authority", p.authority)
+	}
+	return res, nil
+}
+
+// TestAuthorityOverrideNotReusedAcrossAttempts verifies that an authority
+// override supplied by the LB picker applies only to the attempt it was picked
+// for. A retry attempt whose pick carries no override must fall back to the
+// channel's authority instead of reusing the previous attempt's override.
+func (s) TestAuthorityOverrideNotReusedAcrossAttempts(t *testing.T) {
+	const (
+		balancerName      = "authority-override-retry-balancer"
+		overrideAuthority = "picked-endpoint.example.com"
+		wantAuthority     = "test.server"
+	)
+
+	// Incremented by the server handler as attempts arrive, and read by the
+	// picker to decide whether to return the authority override.
+	serverAttempts := &atomic.Int32{}
+
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			addrs := ccs.ResolverState.Addresses
+			if len(addrs) == 0 {
+				return nil
+			}
+			var sc balancer.SubConn
+			sc, err := bd.ClientConn.NewSubConn(addrs[:1], balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &authorityOverridePicker{sc: sc, authority: overrideAuthority, serverAttempts: serverAttempts},
+					})
+				},
+			})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
+			return nil
+		},
+	}
+	stub.Register(balancerName, bf)
+
+	// Attempts run sequentially (the retry is only scheduled after the first
+	// attempt's handler has returned), so authorities needs no extra
+	// synchronization.
+	var authorities []string
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			md, _ := metadata.FromIncomingContext(ctx)
+			authorities = append(authorities, md.Get(":authority")...)
+			// Fail the first attempt with a retryable code so that the RPC is
+			// retried, and let the second attempt succeed.
+			if serverAttempts.Add(1) == 1 {
+				return nil, status.Error(codes.Unavailable, "forcing a retry")
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer ss.Stop()
+
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+
+	sc := fmt.Sprintf(`{
+		"loadBalancingConfig": [{%q: {}}],
+		"methodConfig": [{
+			"name": [{"service": "grpc.testing.TestService"}],
+			"retryPolicy": {
+				"maxAttempts": 2,
+				"initialBackoff": "0.01s",
+				"maxBackoff": "0.01s",
+				"backoffMultiplier": 1.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`, balancerName)
+
+	cc, err := grpc.NewClient(r.Scheme()+":///"+wantAuthority, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r), grpc.WithDefaultServiceConfig(sc))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	if len(authorities) != 2 {
+		t.Fatalf("Server saw %d attempts (%q), want 2", len(authorities), authorities)
+	}
+	if authorities[0] != overrideAuthority {
+		t.Errorf("First attempt used authority %q, want %q", authorities[0], overrideAuthority)
+	}
+	if authorities[1] != wantAuthority {
+		t.Errorf("Retry attempt used authority %q, want %q", authorities[1], wantAuthority)
+	}
 }

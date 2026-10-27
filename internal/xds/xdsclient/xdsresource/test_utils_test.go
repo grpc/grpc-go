@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"net/netip"
 	"testing"
 	"time"
 
@@ -50,6 +51,7 @@ const defaultTestTimeout = 10 * time.Second
 var (
 	cmpOpts = cmp.Options{
 		cmpopts.EquateEmpty(),
+		cmpopts.EquateComparable(netip.Addr{}, netip.Prefix{}),
 		cmp.FilterValues(func(_, _ error) bool { return true }, cmpopts.EquateErrors()),
 		cmp.Comparer(func(_, _ time.Time) bool { return true }),
 		protocmp.Transform(),
@@ -94,7 +96,7 @@ var (
 func makeRouterFilter(t *testing.T) HTTPFilter {
 	t.Helper()
 	routerBuilder := httpfilter.Get(router.TypeURL)
-	routerConfig, err := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
+	routerConfig, err := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}), httpfilter.ParseOptions{})
 	if err != nil {
 		t.Fatalf("Failed to parse Router filter configuration: %v", err)
 	}

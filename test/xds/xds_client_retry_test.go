@@ -21,6 +21,7 @@ package xds_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -39,6 +40,8 @@ import (
 )
 
 func (s) TestClientSideRetry(t *testing.T) {
+	// serverMu guards access to ctr and errs.
+	serverMu := sync.Mutex{}
 	ctr := 0
 	errs := []codes.Code{codes.ResourceExhausted}
 
@@ -46,7 +49,11 @@ func (s) TestClientSideRetry(t *testing.T) {
 
 	server := stubserver.StartTestService(t, &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			defer func() { ctr++ }()
+			serverMu.Lock()
+			defer func() {
+				ctr++
+				serverMu.Unlock()
+			}()
 			if ctr < len(errs) {
 				return nil, status.Errorf(errs[ctr], "this should be retried")
 			}
@@ -151,10 +158,12 @@ func (s) TestClientSideRetry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			serverMu.Lock()
 			errs = tc.errs
 
 			// Confirm tryAgainErr is correct before updating resources.
 			ctr = 0
+			serverMu.Unlock()
 			_, err := client.EmptyCall(ctx, &testpb.Empty{})
 			if code := status.Code(err); code != tc.tryAgainErr {
 				t.Fatalf("with old retry policy: EmptyCall() = _, %v; want _, %v", err, tc.tryAgainErr)
@@ -167,7 +176,9 @@ func (s) TestClientSideRetry(t *testing.T) {
 			}
 
 			for {
+				serverMu.Lock()
 				ctr = 0
+				serverMu.Unlock()
 				_, err := client.EmptyCall(ctx, &testpb.Empty{})
 				if code := status.Code(err); code == tc.tryAgainErr {
 					continue

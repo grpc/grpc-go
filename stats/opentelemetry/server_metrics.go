@@ -26,7 +26,6 @@ import (
 
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -180,32 +179,13 @@ func (h *serverMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management for metrics.
 func (h *serverMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	method := info.FullMethodName
-	if h.options.MetricsOptions.MethodAttributeFilter != nil {
-		if !h.options.MetricsOptions.MethodAttributeFilter(method) {
-			method = "other"
-		}
-	}
-	server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
-	if server == nil { // Shouldn't happen, defensive programming.
-		logger.Error("ctx passed into server side stats handler has no grpc server ref")
-		method = "other"
-	} else {
-		isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
-		if !isRegisteredMethod(server, method) {
-			method = "other"
-		}
-	}
-	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
-	ai.startTime = time.Now()
-	ai.method = removeLeadingSlash(method)
-
-	return setRPCInfo(ctx, &rpcInfo{ai: ai})
+	ctx, _ = getOrCreateServerRPCInfo(ctx, info, h.options.MetricsOptions)
+	return ctx
 }
 
 // HandleRPC handles per RPC stats implementation.
 func (h *serverMetricsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
+	ri := serverRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return

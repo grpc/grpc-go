@@ -1,0 +1,27 @@
+name: govulncheck
+on:
+  push:
+  pull_request:
+  schedule: # daily at 10:22 UTC
+    - cron: '22 10 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        work-dir: ['.',
+                   './gcp/observability',
+                   './cmd/protoc-gen-go-grpc',
+                   './security/advancedtls',
+                   './stats/opencensus']
+    steps:
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          check-latest: true
+          work-dir: ${{ matrix.work-dir }}

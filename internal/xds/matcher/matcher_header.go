@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -57,7 +56,7 @@ type HeaderExactMatcher struct {
 
 // NewHeaderExactMatcher returns a new HeaderExactMatcher.
 func NewHeaderExactMatcher(key, exact string, invert bool) *HeaderExactMatcher {
-	return &HeaderExactMatcher{key: key, exact: exact, invert: invert}
+	return &HeaderExactMatcher{key: strings.ToLower(key), exact: exact, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -84,7 +83,7 @@ type HeaderRegexMatcher struct {
 
 // NewHeaderRegexMatcher returns a new HeaderRegexMatcher.
 func NewHeaderRegexMatcher(key string, re *regexp.Regexp, invert bool) *HeaderRegexMatcher {
-	return &HeaderRegexMatcher{key: key, re: re, invert: invert}
+	return &HeaderRegexMatcher{key: strings.ToLower(key), re: re, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -94,7 +93,7 @@ func (hrm *HeaderRegexMatcher) Match(md metadata.MD) bool {
 	if !ok {
 		return false
 	}
-	return grpcutil.FullMatchWithRegex(hrm.re, v) != hrm.invert
+	return hrm.re.MatchString(v) != hrm.invert
 }
 
 func (hrm *HeaderRegexMatcher) String() string {
@@ -111,7 +110,7 @@ type HeaderRangeMatcher struct {
 
 // NewHeaderRangeMatcher returns a new HeaderRangeMatcher.
 func NewHeaderRangeMatcher(key string, start, end int64, invert bool) *HeaderRangeMatcher {
-	return &HeaderRangeMatcher{key: key, start: start, end: end, invert: invert}
+	return &HeaderRangeMatcher{key: strings.ToLower(key), start: start, end: end, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -143,7 +142,7 @@ func NewHeaderPresentMatcher(key string, present bool, invert bool) *HeaderPrese
 	if invert {
 		present = !present
 	}
-	return &HeaderPresentMatcher{key: key, present: present}
+	return &HeaderPresentMatcher{key: strings.ToLower(key), present: present}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -168,7 +167,7 @@ type HeaderPrefixMatcher struct {
 
 // NewHeaderPrefixMatcher returns a new HeaderPrefixMatcher.
 func NewHeaderPrefixMatcher(key string, prefix string, invert bool) *HeaderPrefixMatcher {
-	return &HeaderPrefixMatcher{key: key, prefix: prefix, invert: invert}
+	return &HeaderPrefixMatcher{key: strings.ToLower(key), prefix: prefix, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -195,7 +194,7 @@ type HeaderSuffixMatcher struct {
 
 // NewHeaderSuffixMatcher returns a new HeaderSuffixMatcher.
 func NewHeaderSuffixMatcher(key string, suffix string, invert bool) *HeaderSuffixMatcher {
-	return &HeaderSuffixMatcher{key: key, suffix: suffix, invert: invert}
+	return &HeaderSuffixMatcher{key: strings.ToLower(key), suffix: suffix, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -225,7 +224,7 @@ type HeaderContainsMatcher struct {
 // contain for a successful match. An empty contains string does not
 // work, use HeaderPresentMatcher in that case.
 func NewHeaderContainsMatcher(key string, contains string, invert bool) *HeaderContainsMatcher {
-	return &HeaderContainsMatcher{key: key, contains: contains, invert: invert}
+	return &HeaderContainsMatcher{key: strings.ToLower(key), contains: contains, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -253,7 +252,7 @@ type HeaderStringMatcher struct {
 // NewHeaderStringMatcher returns a new HeaderStringMatcher.
 func NewHeaderStringMatcher(key string, sm StringMatcher, invert bool) *HeaderStringMatcher {
 	return &HeaderStringMatcher{
-		key:           key,
+		key:           strings.ToLower(key),
 		stringMatcher: sm,
 		invert:        invert,
 	}

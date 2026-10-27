@@ -155,69 +155,6 @@ func (rcw *rawConnWrapper) encodeRawHeader(headers ...string) []byte {
 	return rcw.headerBuf.Bytes()
 }
 
-// encodeHeader is for usage on client side to write request header.
-//
-// encodeHeader encodes headers and returns their HPACK bytes. headers
-// must contain an even number of key/value pairs.  There may be
-// multiple pairs for keys (e.g. "cookie").  The :method, :path, and
-// :scheme headers default to GET, / and https.
-func (rcw *rawConnWrapper) encodeHeader(headers ...string) []byte {
-	if len(headers)%2 == 1 {
-		panic("odd number of kv args")
-	}
-
-	rcw.headerBuf.Reset()
-
-	if len(headers) == 0 {
-		// Fast path, mostly for benchmarks, so test code doesn't pollute
-		// profiles when we're looking to improve server allocations.
-		rcw.encodeHeaderField(":method", "GET")
-		rcw.encodeHeaderField(":path", "/")
-		rcw.encodeHeaderField(":scheme", "https")
-		return rcw.headerBuf.Bytes()
-	}
-
-	if len(headers) == 2 && headers[0] == ":method" {
-		// Another fast path for benchmarks.
-		rcw.encodeHeaderField(":method", headers[1])
-		rcw.encodeHeaderField(":path", "/")
-		rcw.encodeHeaderField(":scheme", "https")
-		return rcw.headerBuf.Bytes()
-	}
-
-	pseudoCount := map[string]int{}
-	keys := []string{":method", ":path", ":scheme"}
-	vals := map[string][]string{
-		":method": {"GET"},
-		":path":   {"/"},
-		":scheme": {"https"},
-	}
-	for len(headers) > 0 {
-		k, v := headers[0], headers[1]
-		headers = headers[2:]
-		if _, ok := vals[k]; !ok {
-			keys = append(keys, k)
-		}
-		if strings.HasPrefix(k, ":") {
-			pseudoCount[k]++
-			if pseudoCount[k] == 1 {
-				vals[k] = []string{v}
-			} else {
-				// Allows testing of invalid headers w/ dup pseudo fields.
-				vals[k] = append(vals[k], v)
-			}
-		} else {
-			vals[k] = append(vals[k], v)
-		}
-	}
-	for _, k := range keys {
-		for _, v := range vals[k] {
-			rcw.encodeHeaderField(k, v)
-		}
-	}
-	return rcw.headerBuf.Bytes()
-}
-
 func (rcw *rawConnWrapper) writeHeaders(p http2.HeadersFrameParam) error {
 	if err := rcw.fr.WriteHeaders(p); err != nil {
 		return fmt.Errorf("error writing HEADERS: %v", err)

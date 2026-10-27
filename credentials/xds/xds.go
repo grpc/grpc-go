@@ -25,12 +25,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/credentials"
 	credinternal "google.golang.org/grpc/internal/credentials"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal/grpcsync"
 )
 
 // ClientOptions contains parameters to configure a new client-side xDS
@@ -96,14 +96,14 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return nil, nil, errors.New("ClientHandshake() is not supported for server credentials")
 	}
 
-	// The CDS balancer constructs a new HandshakeInfo using a call to
+	// The clusterimpl balancer constructs a new HandshakeInfo using a call to
 	// NewHandshakeInfo(), and then adds it to the attributes field of the
 	// resolver.Address when handling calls to NewSubConn(). The transport layer
 	// takes care of shipping these attributes in the context to this handshake
 	// function. We first read the credentials.ClientHandshakeInfo type from the
-	// context, which contains the attributes added by the CDS balancer. We then
-	// read the HandshakeInfo from the attributes to get to the actual data that
-	// we need here for the handshake.
+	// context, which contains the attributes added by the clusterimpl balancer.
+	// We then read the HandshakeInfo from the attributes to get to the actual
+	// data that we need here for the handshake.
 	chi := credentials.ClientHandshakeInfoFromContext(ctx)
 	// If there are no attributes in the received context or the attributes does
 	// not contain a HandshakeInfo, it could either mean that the user did not
@@ -114,28 +114,16 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
 
-	uPtr := xdsinternal.GetHandshakeInfo(chi.Attributes)
-	hi := (*xdsinternal.HandshakeInfo)(atomic.LoadPointer(uPtr))
-	if hi.UseFallbackCreds() {
-		return c.fallback.ClientHandshake(ctx, authority, rawConn)
-	}
-
-	// We build the tls.Config with the following values
-	// 1. Root certificate as returned by the root provider.
-	// 2. Identity certificate as returned by the identity provider. This may be
-	//    empty on the client side, if the client is not doing mTLS.
-	// 3. InsecureSkipVerify to true. Certificates used in Mesh environments
-	//    usually contains the identity of the workload presenting the
-	//    certificate as a SAN (instead of a hostname in the CommonName field).
-	//    This means that normal certificate verification as done by the
-	//    standard library will fail.
-	// 4. Key usage to match whether client/server usage.
-	// 5. A `VerifyPeerCertificate` function which performs normal peer
-	// 	  cert verification using configured roots, and the custom SAN checks.
-	cfg, err := hi.ClientSideTLSConfig(ctx)
+	hiPtr := xdsinternal.HandshakeInfoFromAttributes(chi.Attributes)
+	hostname := xdsinternal.Hostname(chi.Attributes)
+	cfg, useFallback, done, err := xdsinternal.ClientSideTLSConfig(ctx, hiPtr, hostname)
 	if err != nil {
 		return nil, nil, err
 	}
+	if useFallback {
+		return c.fallback.ClientHandshake(ctx, authority, rawConn)
+	}
+	defer done()
 
 	// Perform the TLS handshake with the tls.Config that we have. We run the
 	// actual Handshake() function in a goroutine because we need to respect the
@@ -180,7 +168,7 @@ func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Aut
 	// `HandshakeInfo` does not contain the information we are looking for, we
 	// delegate the handshake to the fallback credentials.
 	hiConn, ok := rawConn.(interface {
-		XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error)
+		XDSHandshakeInfo() (*grpcsync.RefCounted[*xdsinternal.HandshakeInfo], error)
 	})
 	if !ok {
 		return c.fallback.ServerHandshake(rawConn)
@@ -188,9 +176,6 @@ func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Aut
 	hi, err := hiConn.XDSHandshakeInfo()
 	if err != nil {
 		return nil, nil, err
-	}
-	if hi.UseFallbackCreds() {
-		return c.fallback.ServerHandshake(rawConn)
 	}
 
 	// An xds-enabled gRPC server is expected to wrap the underlying raw
@@ -204,10 +189,15 @@ func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Aut
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
-	cfg, err := hi.ServerSideTLSConfig(ctx)
+
+	cfg, useFallback, done, err := xdsinternal.ServerSideTLSConfig(ctx, hi)
 	if err != nil {
 		return nil, nil, err
 	}
+	if useFallback {
+		return c.fallback.ServerHandshake(rawConn)
+	}
+	defer done()
 
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {

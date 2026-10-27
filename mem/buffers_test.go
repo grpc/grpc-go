@@ -20,6 +20,8 @@ package mem_test
 
 import (
 	"bytes"
+	"fmt"
+	"slices"
 	"testing"
 
 	"google.golang.org/grpc/internal"
@@ -256,41 +258,227 @@ func (p poolFunc) Put(i *[]byte) {
 }
 
 func (s) TestBuffer_Split(t *testing.T) {
-	ready := false
-	freed := false
+	freed := make(chan struct{})
 	data := []byte{1, 2, 3, 4}
 	buf := mem.NewBuffer(&data, poolFunc(func(*[]byte) {
-		if !ready {
-			t.Fatalf("Freed too early")
-		}
-		freed = true
+		close(freed)
 	}))
-	checkBufData := func(b mem.Buffer, expected []byte) {
-		t.Helper()
-		if !bytes.Equal(b.ReadOnlyData(), expected) {
-			t.Fatalf("Buffer did not contain expected data %v, got %v", expected, b.ReadOnlyData())
-		}
-	}
 
 	buf, split1 := mem.SplitUnsafe(buf, 2)
-	checkBufData(buf, data[:2])
-	checkBufData(split1, data[2:])
+	if !bytes.Equal(buf.ReadOnlyData(), data[:2]) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", buf.ReadOnlyData(), data[:2])
+	}
+	if !bytes.Equal(split1.ReadOnlyData(), data[2:]) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", split1.ReadOnlyData(), data[2:])
+	}
 
 	// Check that splitting the buffer more than once works as intended.
 	split1, split2 := mem.SplitUnsafe(split1, 1)
-	checkBufData(split1, data[2:3])
-	checkBufData(split2, data[3:])
+	if !bytes.Equal(split1.ReadOnlyData(), data[2:3]) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", split1.ReadOnlyData(), data[2:3])
+	}
+	if !bytes.Equal(split2.ReadOnlyData(), data[3:]) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", split2.ReadOnlyData(), data[3:])
+	}
 
 	// If any of the following frees actually free the buffer, the test will fail.
 	buf.Free()
 	split2.Free()
+	select {
+	case <-freed:
+		t.Fatalf("Freed too early")
+	default:
+	}
 
-	ready = true
 	split1.Free()
 
-	if !freed {
-		t.Fatalf("Buffer never freed")
+	select {
+	case <-freed:
+	default:
+		t.Fatalf("Still not freed")
 	}
+}
+
+func (s) TestBuffer_Slice(t *testing.T) {
+	freed := make(chan struct{})
+	data := []byte{1, 2, 3, 4}
+	buf := mem.NewBuffer(&data, poolFunc(func(*[]byte) {
+		close(freed)
+	}))
+
+	// Slice the buffer and verify the data.
+	slice1 := buf.Slice(1, 3)
+	if !bytes.Equal(slice1.ReadOnlyData(), data[1:3]) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", slice1.ReadOnlyData(), data[1:3])
+	}
+
+	// Verify the original buffer is not modified.
+	if !bytes.Equal(buf.ReadOnlyData(), data) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", buf.ReadOnlyData(), data)
+	}
+
+	// Slice the slice.
+	slice2 := slice1.Slice(0, 1)
+	if !bytes.Equal(slice2.ReadOnlyData(), data[1:2]) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", slice2.ReadOnlyData(), data[1:2])
+	}
+
+	// Free original and first slice — root should not be freed yet.
+	buf.Free()
+	slice1.Free()
+	select {
+	case <-freed:
+		t.Fatalf("Freed too early")
+	default:
+	}
+
+	// The last slice keeps the root alive.
+	if !bytes.Equal(slice2.ReadOnlyData(), data[1:2]) {
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", slice2.ReadOnlyData(), data[1:2])
+	}
+
+	slice2.Free()
+
+	select {
+	case <-freed:
+	default:
+		t.Fatalf("Still not freed")
+	}
+}
+
+func (s) TestBuffer_SliceAfterFree(t *testing.T) {
+	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
+	buf.Free()
+	defer checkForPanic(t, "Cannot slice freed buffer")
+	buf.Slice(0, 2)
+}
+
+type namedCtor struct {
+	name   string
+	newBuf func([]byte) mem.Buffer
+}
+
+var ctors = []namedCtor{
+	{name: "pooled", newBuf: newPooledBuffer},
+	{name: "slice", newBuf: newSliceBuf},
+}
+
+func (s) TestBuffer_SliceBasic(t *testing.T) {
+	type sliceCase struct {
+		start, end int
+		want       []byte
+	}
+	cases := []sliceCase{
+		{1, 3, []byte{2, 3}},
+		{0, 4, []byte{1, 2, 3, 4}},
+		{4, 4, []byte{}},
+	}
+	for _, c := range ctors {
+		for _, tc := range cases {
+			t.Run(fmt.Sprintf("%s[%d:%d]", c.name, tc.start, tc.end), func(t *testing.T) {
+				buf := c.newBuf([]byte{1, 2, 3, 4})
+				got := buf.Slice(tc.start, tc.end)
+				if !bytes.Equal(got.ReadOnlyData(), tc.want) {
+					t.Fatalf("Buffer did not contain expected data. got %v, want %v", got.ReadOnlyData(), tc.want)
+				}
+			})
+		}
+	}
+}
+
+func (s) TestBuffer_SliceSubslice(t *testing.T) {
+	for _, c := range ctors {
+		t.Run(c.name+" subslice", func(t *testing.T) {
+			buf := c.newBuf([]byte{1, 2, 3, 4})
+			slice := buf.Slice(1, 3)
+			slice2 := slice.Slice(0, 1)
+			if !bytes.Equal(slice2.ReadOnlyData(), []byte{2}) {
+				t.Fatalf("Buffer did not contain expected data. got %v, want %v", buf.ReadOnlyData(), []byte{2})
+			}
+		})
+	}
+}
+
+func (s) TestBuffer_SliceEmpty(t *testing.T) {
+	allCtors := append(slices.Clip(ctors), namedCtor{name: "empty", newBuf: newEmptyBuf})
+	for _, c := range allCtors {
+		t.Run(c.name, func(t *testing.T) {
+			buf := c.newBuf([]byte{1, 2, 3, 4})
+			got := buf.Slice(0, 0)
+			if !bytes.Equal(got.ReadOnlyData(), nil) {
+				t.Fatalf("Buffer did not contain expected data. got %v, want %v", got.ReadOnlyData(), nil)
+			}
+		})
+	}
+}
+
+func (s) TestBuffer_SliceBoundsCheck(t *testing.T) {
+	type panicCase struct {
+		name       string
+		start, end int
+	}
+	nonEmptyCases := []panicCase{
+		{"end_out_of_bounds", 0, 5},
+		{"start_negative", -1, 3},
+		{"start_greater_than_end", 3, 0},
+	}
+	tests := []struct {
+		namedCtor
+		panicCases []panicCase
+	}{
+		{
+			namedCtor: namedCtor{
+				name:   "buffer",
+				newBuf: newPooledBuffer,
+			},
+			panicCases: nonEmptyCases,
+		},
+		{
+			namedCtor: namedCtor{
+				name:   "SliceBuffer",
+				newBuf: newSliceBuf,
+			},
+			panicCases: nonEmptyCases,
+		},
+		{
+			namedCtor: namedCtor{
+				name:   "emptyBuffer",
+				newBuf: newEmptyBuf,
+			},
+			panicCases: []panicCase{
+				{"end_out_of_bounds", 0, 1},
+				{"start_negative", -1, 0},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, pc := range tt.panicCases {
+				t.Run(pc.name, func(t *testing.T) {
+					buf := tt.newBuf([]byte{1, 2, 3, 4})
+					defer func() {
+						if recover() == nil {
+							t.Fatalf("Slice(%d, %d) did not panic", pc.start, pc.end)
+						}
+					}()
+					buf.Slice(pc.start, pc.end)
+				})
+			}
+		})
+	}
+}
+
+func newPooledBuffer(data []byte) mem.Buffer {
+	return newBuffer(data, mem.NopBufferPool{})
+}
+
+func newSliceBuf(data []byte) mem.Buffer {
+	return mem.SliceBuffer(data)
+}
+
+func newEmptyBuf([]byte) mem.Buffer {
+	var bs mem.BufferSlice
+	return bs.MaterializeToBuffer(mem.NopBufferPool{})
 }
 
 func checkForPanic(t *testing.T, wantErr string) {

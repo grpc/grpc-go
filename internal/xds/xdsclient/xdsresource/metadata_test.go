@@ -19,25 +19,24 @@ package xdsresource
 import (
 	"testing"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/anypb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 )
 
-const proxyAddressTypeURL = "type.googleapis.com/envoy.config.core.v3.Address"
-
-func setupProxyAddressConverter(t *testing.T) {
-	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
-	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
-	})
-}
-
 func (s) TestProxyAddressConverterSuccess(t *testing.T) {
-	setupProxyAddressConverter(t)
-	converter := metadataConverterForType(proxyAddressTypeURL)
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
+	converter := metadataConverterForType(version.V3AddressURL)
 	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
+		t.Fatalf("Converter for %q not found in registry", version.V3AddressURL)
 	}
 	tests := []struct {
 		name string
@@ -45,7 +44,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 		want ProxyAddressMetadataValue
 	}{
 		{
-			name: "valid IPv4 address and port",
+			name: "valid_IPv4_address_and_port",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -61,7 +60,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid full IPv6 address and port",
+			name: "valid_full_IPv6_address_and_port",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -77,7 +76,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid shortened IPv6 address",
+			name: "valid_shortened_IPv6_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -93,7 +92,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid link-local IPv6 address",
+			name: "valid_link-local_IPv6_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -109,7 +108,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid IPv4-mapped IPv6 address",
+			name: "valid_IPv4-mapped_IPv6_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -141,10 +140,14 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 }
 
 func (s) TestProxyAddressConverterFailure(t *testing.T) {
-	setupProxyAddressConverter(t)
-	converter := metadataConverterForType(proxyAddressTypeURL)
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
+	converter := metadataConverterForType(version.V3AddressURL)
 	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
+		t.Fatalf("Converter for %q not found in registry", version.V3AddressURL)
 	}
 	tests := []struct {
 		name    string
@@ -152,7 +155,7 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "invalid address",
+			name: "invalid_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -163,14 +166,14 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 			wantErr: "address field is not a valid IPv4 or IPv6 address: \"invalid-ip\"",
 		},
 		{
-			name: "missing socket_address",
+			name: "missing_socket_address",
 			addr: &v3corepb.Address{
 				// No SocketAddress field set.
 			},
 			wantErr: "no socket_address field in metadata",
 		},
 		{
-			name: "address is not a socket address",
+			name: "address_is_not_a_socket_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_EnvoyInternalAddress{
 					EnvoyInternalAddress: &v3corepb.EnvoyInternalAddress{
@@ -183,7 +186,7 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 			wantErr: "no socket_address field in metadata",
 		},
 		{
-			name: "port value not set",
+			name: "port_value_not_set",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -202,6 +205,54 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 			_, err := converter.convert(anyProto)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func (s) TestAudienceConverterSuccess(t *testing.T) {
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AudienceURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AudienceURL, err)
+	}
+	t.Cleanup(cleanup)
+	converter := metadataConverterForType(version.V3AudienceURL)
+	if converter == nil {
+		t.Fatalf("Converter for %q not found in registry", version.V3AudienceURL)
+	}
+	tests := []struct {
+		name     string
+		audience *anypb.Any
+		want     AudienceMetadataValue
+		wantErr  string
+	}{
+		{
+			name:     "valid_audience",
+			audience: testutils.MarshalAny(t, &v3gcpauthnpb.Audience{Url: "https://example.com"}),
+			want:     AudienceMetadataValue{Audience: "https://example.com"},
+		},
+		{
+			name:     "empty_audience",
+			audience: testutils.MarshalAny(t, &v3gcpauthnpb.Audience{Url: ""}),
+			want:     AudienceMetadataValue{Audience: ""},
+			wantErr:  "empty url field in audience metadata",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := converter.convert(tt.audience)
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr {
+					t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("convert() failed with error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("convert(%s) returned unexpected diff (-want +got):\n%s", tt.audience.GetTypeUrl(), diff)
 			}
 		})
 	}

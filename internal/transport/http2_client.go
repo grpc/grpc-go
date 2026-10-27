@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
@@ -63,6 +64,13 @@ import (
 var clientConnectionCounter uint64
 
 var goAwayLoopyWriterTimeout = 5 * time.Second
+
+// clientThrottleTimeout is the maximum amount of time for which the client
+// stops reading from the connection because too many frames queued in
+// response to the server (see maxQueuedTransportResponseFrames) are waiting
+// to be written. After that, the client closes the connection instead of
+// waiting forever, since the server is most likely not reading.
+var clientThrottleTimeout = 10 * time.Second
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
@@ -106,6 +114,12 @@ type http2Client struct {
 	kp               keepalive.ClientParameters
 	keepaliveEnabled bool
 
+	// throttleTimeout is the maximum amount of time for which reads can
+	// stay throttled before the connection is closed. It is copied from
+	// clientThrottleTimeout on creation, so that tests can override the
+	// latter without racing with the readers of other transports.
+	throttleTimeout time.Duration
+
 	statsHandler stats.Handler
 
 	initialWindowSize int32
@@ -134,6 +148,8 @@ type http2Client struct {
 	// goAwayDebugMessage contains a detailed human readable string about a
 	// GoAway frame, useful for error messages.
 	goAwayDebugMessage string
+	// goAwayCode records the http2.ErrCode received with the GoAway frame.
+	goAwayCode http2.ErrCode
 	// A condition variable used to signal when the keepalive goroutine should
 	// go dormant. The condition for dormancy is based on the number of active
 	// streams and the `PermitWithoutStream` keepalive client parameter. And
@@ -147,7 +163,7 @@ type http2Client struct {
 
 	channelz *channelz.Socket
 
-	onClose func(GoAwayReason)
+	onClose OnCloseFunc
 
 	bufferPool mem.BufferPool
 
@@ -204,7 +220,7 @@ func isTemporary(err error) bool {
 // NewHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason)) (_ ClientTransport, err error) {
+func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose OnCloseFunc) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -316,7 +332,13 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	}
 	writeBufSize := opts.WriteBufferSize
 	readBufSize := opts.ReadBufferSize
+	// The default header list size is moving from 16MB to 8KB. The 8KB limit
+	// is only used if Enable8KBDefaultHeaderListSize is true; otherwise, the
+	// old 16MB default is used. User-specified options always take precedence.
 	maxHeaderListSize := defaultClientMaxHeaderListSize
+	if envconfig.Enable8KBDefaultHeaderListSize {
+		maxHeaderListSize = upcomingDefaultHeaderListSize
+	}
 	if opts.MaxHeaderListSize != nil {
 		maxHeaderListSize = *opts.MaxHeaderListSize
 	}
@@ -350,9 +372,11 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 		keepaliveEnabled:      keepaliveEnabled,
+		throttleTimeout:       clientThrottleTimeout,
 		bufferPool:            opts.BufferPool,
 		onClose:               onClose,
 	}
+	t.controlBuf = newControlBuffer(t.ctxDone, clientSide)
 	var czSecurity credentials.ChannelzSecurityValue
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
 		czSecurity = au.GetSecurityValue()
@@ -377,7 +401,6 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	} else if md := imetadata.Get(addr); md != nil {
 		t.md = md
 	}
-	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
 	}
@@ -489,10 +512,9 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr, handler s
 		ct:           t,
 		done:         make(chan struct{}),
 		headerChan:   make(chan struct{}),
-		doneFunc:     callHdr.DoneFunc,
 		statsHandler: handler,
 	}
-	s.Stream.buf.init()
+	s.Stream.buf.init(t.bufferPool)
 	s.Stream.wq.init(defaultWriteQuota, s.done)
 	s.readRequester = s
 	// The client side stream context should have exactly the same life cycle with the user provided context.
@@ -546,8 +568,6 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	if err != nil {
 		return nil, err
 	}
-	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
-	// first and create a slice of that exact size.
 	// Make the slice of certain predictable size to reduce allocations made by append.
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
 	hfLen += len(authData) + len(callAuthData)
@@ -566,6 +586,21 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	}
 	if _, ok := ctx.Deadline(); ok {
 		hfLen++
+	}
+	// Count the metadata header fields as well so the slice is not reallocated
+	// while they are appended below. Reserved headers are dropped when writing,
+	// so this may slightly over-count, which is preferable to growing the slice.
+	md, added, mdOK := metadataFromOutgoingContextRaw(ctx)
+	if mdOK {
+		for _, vv := range md {
+			hfLen += len(vv)
+		}
+		for _, vv := range added {
+			hfLen += len(vv) / 2
+		}
+	}
+	for _, vv := range t.md {
+		hfLen += len(vv)
 	}
 	headerFields := make([]hpack.HeaderField, 0, hfLen)
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: "POST"})
@@ -611,7 +646,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 	}
 
-	if md, added, ok := metadataFromOutgoingContextRaw(ctx); ok {
+	if mdOK {
 		var k string
 		for k, vv := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
@@ -639,6 +674,9 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	for k, vv := range t.md {
 		if isReservedHeader(k) {
 			continue
+		}
+		if err := imetadata.ValidatePair(k, vv...); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
 		}
 		for _, v := range vv {
 			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
@@ -683,6 +721,9 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2.
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			authData[k] = v
 		}
 	}
@@ -716,6 +757,9 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			callAuthData[k] = v
 		}
 	}
@@ -797,9 +841,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			close(s.headerChan)
 		}
 	}
-	hdr := &headerFrame{
-		hf:        headerFields,
-		endStream: false,
+	hdr := &clientHeaders{
+		hf: headerFields,
 		initStream: func(uint32) error {
 			t.mu.Lock()
 			// TODO: handle transport closure in loopy instead and remove this
@@ -877,8 +920,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 				return false
 			}
 		}
-		if sz > int64(upcomingDefaultHeaderListSize) {
-			t.logger.Warningf("Header list size to send (%d bytes) is larger than the upcoming default limit (%d bytes). In a future release, this will be restricted to %d bytes.", sz, upcomingDefaultHeaderListSize, upcomingDefaultHeaderListSize)
+		if !envconfig.Enable8KBDefaultHeaderListSize && sz > int64(upcomingDefaultHeaderListSize) {
+			t.logger.Warningf("Header list size to send (%d bytes) is larger than the upcoming default limit (%d bytes). In release v1.82.0, GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE will be enabled by default, enforcing this limit.", sz, upcomingDefaultHeaderListSize)
 		}
 		return true
 	}
@@ -923,6 +966,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 			Header:      header,
+			Authority:   callHdr.Host,
 		})
 	}
 	if transportDrainRequired {
@@ -990,9 +1034,6 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 	t.controlBuf.executeAndPut(addBackStreamQuota, cleanup)
 	// This will unblock write.
 	close(s.done)
-	if s.doneFunc != nil {
-		s.doneFunc()
-	}
 }
 
 // Close kicks off the shutdown process of the transport. This should be called
@@ -1015,7 +1056,7 @@ func (t *http2Client) Close(err error) {
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
 	if t.state != draining {
-		t.onClose(GoAwayInvalid)
+		t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo, Err: err})
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1086,7 +1127,7 @@ func (t *http2Client) GracefulClose() {
 	if t.logger.V(logLevel) {
 		t.logger.Infof("GracefulClose called")
 	}
-	t.onClose(GoAwayInvalid)
+	t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo})
 	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
@@ -1222,10 +1263,33 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
+	}
+
+	if s.nonGRPCStatus != nil {
+		// The frame should be handled as a non-gRPC response body. A non-nil
+		// status also covers END_STREAM, so no separate handling is needed below.
+		st := s.handleNonGRPCData(f)
+		if st != nil {
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+			return
+		}
+		if w := s.fc.onRead(size); w > 0 {
+			t.controlBuf.put(&outgoingWindowUpdate{
+				streamID:  s.id,
+				increment: w,
+			})
+		}
+		return
+	}
+
+	if size > 0 {
 		dataLen := f.data.Len()
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
-				t.controlBuf.put(&outgoingWindowUpdate{s.id, w})
+				t.controlBuf.put(&outgoingWindowUpdate{
+					streamID:  s.id,
+					increment: w,
+				})
 			}
 		}
 		if dataLen > 0 {
@@ -1236,7 +1300,10 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
 	if f.StreamEnded() {
-		t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
+		// If client received END_STREAM from server while stream was still
+		// active, send RST_STREAM.
+		rstStream := s.getState() == streamActive
+		t.closeStream(s, io.EOF, rstStream, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
 	}
 }
 
@@ -1372,7 +1439,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 		// draining, to allow the client to stop attempting to create streams
 		// before disallowing new streams on this connection.
 		if t.state != draining {
-			t.onClose(t.goAwayReason)
+			t.onClose(GoAwayInfo{Reason: t.goAwayReason, GoAwayCode: t.goAwayCode})
 			t.state = draining
 		}
 	}
@@ -1422,6 +1489,7 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 	} else {
 		t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %q", f.ErrCode, string(f.DebugData()))
 	}
+	t.goAwayCode = f.ErrCode
 }
 
 func (t *http2Client) GetGoAwayReason() (GoAwayReason, string) {
@@ -1459,6 +1527,17 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if frame.Truncated {
 		se := status.New(codes.Internal, "peer header list size exceeded limit")
 		t.closeStream(s, se.Err(), true, http2.ErrCodeFrameSize, se, nil, endStream)
+		return
+	}
+
+	// If we are collecting non-gRPC response data and receive a trailing
+	// HEADERS frame with END_STREAM, finalize the buffered data and close
+	// the stream.
+	if s.nonGRPCStatus != nil {
+		if endStream {
+			st := s.finalizeNonGRPCStatus()
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+		}
 		return
 	}
 
@@ -1562,7 +1641,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 
 		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
-		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+		if endStream {
+			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, true)
+			return
+		}
+
+		s.startNonGRPCDataCollection(se)
 		return
 	}
 
@@ -1657,9 +1741,19 @@ func (t *http2Client) reader(errCh chan<- error) {
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 	}
 
-	// loop to keep reading incoming messages on this transport.
+	// Loop to keep reading incoming messages on this transport.
 	for {
-		t.controlBuf.throttle()
+		// Stop reading while too many items that the server can make
+		// the client queue (see cbItem.isTransportResponseFrame) are
+		// waiting to be written, to bound the memory that a server
+		// can make the client use by flooding it without reading. If
+		// reads stay throttled for t.throttleTimeout, close the
+		// connection instead of waiting forever.
+		if err := t.controlBuf.throttleWithTimeout(t.throttleTimeout); err != nil {
+			t.logger.Warningf("Closing connection since the server is not reading: %v", err)
+			errClose = connectionErrorf(true, err, "closing connection since the server is not reading: %v", err)
+			return
+		}
 		frame, err := t.framer.readFrame()
 		if t.keepaliveEnabled {
 			atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
@@ -1833,7 +1927,7 @@ func (t *http2Client) getOutFlowWindow() int64 {
 	resp := make(chan uint32, 1)
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
-	t.controlBuf.put(&outFlowControlSizeRequest{resp})
+	t.controlBuf.put(&outFlowControlSizeRequest{resp: resp})
 	select {
 	case sz := <-resp:
 		return int64(sz)
