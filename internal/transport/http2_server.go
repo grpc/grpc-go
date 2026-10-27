@@ -279,7 +279,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	t.setResetPingStrikes = func() {
 		atomic.StoreUint32(&t.resetPingStrikes, 1)
 	}
-	t.controlBuf = newControlBuffer(t.done, true)
+	t.controlBuf = newControlBuffer(t.done, serverSide)
 	var czSecurity credentials.ChannelzSecurityValue
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
 		czSecurity = au.GetSecurityValue()
