@@ -25,6 +25,64 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// TestOutStream_DataQueue verifies that the intrusive queue of data frames in
+// an outStream is FIFO, that frames are unlinked when dequeued, and that
+// dequeuing from an empty queue returns nil.
+func (s) TestOutStream_DataQueue(t *testing.T) {
+	str := &outStream{}
+	if got := str.dequeueData(); got != nil {
+		t.Fatalf("dequeueData() on empty queue = %p, want nil", got)
+	}
+	dfs := []*dataFrame{{streamID: 1}, {streamID: 2}, {streamID: 3}}
+
+	// Interleave enqueues and dequeues so the queue goes from empty to
+	// non-empty more than once.
+	str.enqueueData(dfs[0])
+	if str.dataHead != dfs[0] || str.dataTail != dfs[0] {
+		t.Fatalf("After first enqueue: head=%p, tail=%p, want both %p", str.dataHead, str.dataTail, dfs[0])
+	}
+	if got := str.dequeueData(); got != dfs[0] {
+		t.Fatalf("dequeueData() = %p, want %p", got, dfs[0])
+	}
+	if str.dataHead != nil || str.dataTail != nil {
+		t.Fatalf("After draining: head=%p, tail=%p, want both nil", str.dataHead, str.dataTail)
+	}
+
+	// Dequeue while the queue is non-empty, then enqueue again, to cover
+	// enqueues after a partial drain (2 -> 1 -> 2).
+	str.enqueueData(dfs[0])
+	str.enqueueData(dfs[1])
+	if got := str.dequeueData(); got != dfs[0] {
+		t.Fatalf("dequeueData() = %p, want %p", got, dfs[0])
+	}
+	if dfs[0].next != nil {
+		t.Fatalf("Dequeued frame still linked to %p", dfs[0].next)
+	}
+	if str.dataHead != dfs[1] || str.dataTail != dfs[1] {
+		t.Fatalf("After partial drain: head=%p, tail=%p, want both %p", str.dataHead, str.dataTail, dfs[1])
+	}
+	str.enqueueData(dfs[2])
+	if str.dataHead != dfs[1] || str.dataTail != dfs[2] {
+		t.Fatalf("After enqueue following partial drain: head=%p, tail=%p, want head=%p, tail=%p", str.dataHead, str.dataTail, dfs[1], dfs[2])
+	}
+
+	for i, want := range dfs[1:] {
+		got := str.dequeueData()
+		if got != want {
+			t.Fatalf("dequeueData() at position %d = %p, want %p", i, got, want)
+		}
+		if got.next != nil {
+			t.Fatalf("Dequeued frame %d still linked to %p", i, got.next)
+		}
+	}
+	if got := str.dequeueData(); got != nil {
+		t.Fatalf("dequeueData() on drained queue = %p, want nil", got)
+	}
+	if str.dataHead != nil || str.dataTail != nil {
+		t.Fatalf("After draining: head=%p, tail=%p, want both nil", str.dataHead, str.dataTail)
+	}
+}
+
 // TestItemList_FIFO verifies FIFO ordering across buffer growth, wrap-around
 // and shrinking by interleaving enqueues and dequeues.
 func (s) TestItemList_FIFO(t *testing.T) {
