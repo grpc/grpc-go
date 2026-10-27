@@ -587,16 +587,13 @@ func (s) TestClusterManagerForwardsResolverState(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	for i := 0; i < numChildren; i++ {
+	for i := range numChildren {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Timeout waiting for child %d to receive an update", i)
 		case ccs := <-ccsCh:
-			if diff := cmp.Diff(wantState.Endpoints, ccs.ResolverState.Endpoints); diff != "" {
-				t.Errorf("Child received unexpected endpoints (-want +got):\n%s", diff)
-			}
-			if !ccs.ResolverState.Attributes.Equal(wantState.Attributes) {
-				t.Errorf("Child received attributes %v, want %v", ccs.ResolverState.Attributes, wantState.Attributes)
+			if diff := cmp.Diff(wantState, ccs.ResolverState); diff != "" {
+				t.Errorf("Child received unexpected ResolverState (-want +got):\n%s", diff)
 			}
 		}
 	}
