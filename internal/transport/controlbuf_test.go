@@ -47,10 +47,26 @@ func (s) TestOutStream_DataQueue(t *testing.T) {
 	if str.dataHead != nil || str.dataTail != nil {
 		t.Fatalf("After draining: head=%p, tail=%p, want both nil", str.dataHead, str.dataTail)
 	}
-	for _, df := range dfs {
-		str.enqueueData(df)
+
+	// Dequeue while the queue is non-empty, then enqueue again, to cover
+	// enqueues after a partial drain (2 -> 1 -> 2).
+	str.enqueueData(dfs[0])
+	str.enqueueData(dfs[1])
+	if got := str.dequeueData(); got != dfs[0] {
+		t.Fatalf("dequeueData() = %p, want %p", got, dfs[0])
 	}
-	for i, want := range dfs {
+	if dfs[0].next != nil {
+		t.Fatalf("Dequeued frame still linked to %p", dfs[0].next)
+	}
+	if str.dataHead != dfs[1] || str.dataTail != dfs[1] {
+		t.Fatalf("After partial drain: head=%p, tail=%p, want both %p", str.dataHead, str.dataTail, dfs[1])
+	}
+	str.enqueueData(dfs[2])
+	if str.dataHead != dfs[1] || str.dataTail != dfs[2] {
+		t.Fatalf("After enqueue following partial drain: head=%p, tail=%p, want head=%p, tail=%p", str.dataHead, str.dataTail, dfs[1], dfs[2])
+	}
+
+	for i, want := range dfs[1:] {
 		got := str.dequeueData()
 		if got != want {
 			t.Fatalf("dequeueData() at position %d = %p, want %p", i, got, want)
