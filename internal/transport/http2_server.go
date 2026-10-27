@@ -297,7 +297,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	)
 	t.logger = prefixLoggerForServerTransport(t)
 
-	t.controlBuf = newControlBuffer(t.done, true)
+	t.controlBuf = newControlBuffer(t.done, serverSide)
 	if !config.StaticWindowSize {
 		t.bdpEst = &bdpEstimator{
 			bdp:               initialWindowSize,
