@@ -145,6 +145,25 @@ func (s) TestBuildSliceMap(t *testing.T) {
 				generation:   43,
 			},
 		},
+		{
+			name: "assignment-with-fallback-disabled-slice",
+			assignment: &sharding.Assignment{
+				EndpointNames: []string{"hostA", "hostB", "hostC"},
+				Slices: []sharding.Slice{
+					{StartKey: []byte(""), FallbackDisabled: true},
+					{StartKey: []byte("m"), Endpoints: []int{0, 1}},
+				},
+				Generation: 44,
+			},
+			want: &sliceMap{
+				slices: []sliceMapEntry{
+					{startKey: []byte(""), fallbackDisabled: true},
+					{startKey: []byte("m"), endpoints: []int{0, 1}},
+				},
+				fallbackPool: []int{0, 1, 2},
+				generation:   44,
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -158,7 +177,7 @@ func (s) TestBuildSliceMap(t *testing.T) {
 }
 
 func (e sliceMapEntry) Equal(b sliceMapEntry) bool {
-	return bytes.Equal(e.startKey, b.startKey) && slices.Equal(e.endpoints, b.endpoints)
+	return bytes.Equal(e.startKey, b.startKey) && slices.Equal(e.endpoints, b.endpoints) && e.fallbackDisabled == b.fallbackDisabled
 }
 
 func (sm *sliceMap) Equal(b *sliceMap) bool {

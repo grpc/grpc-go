@@ -19,3 +19,44 @@
 // Package internal contains functionality internal to the autosharding load
 // balancing policy.
 package internal
+
+import (
+	"errors"
+
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/status"
+)
+
+var (
+
+	// NewAutoshardingClient is a function to create a new autosharding client. The
+	// return value is a cancel function that the caller must invoke when they no
+	// longer need the autosharding client. This will be overridden in tests to stub
+	// out the real autosharding client.
+	NewAutoshardingClient func(sharding.ClientOptions) func()
+
+	// ErrNoEndpointsFromNR is the error returned by the balancer when the
+	// resolver returns an empty list of endpoints.
+	ErrNoEndpointsFromNR = errors.New("autosharding: no endpoints from resolver")
+
+	// ErrNoChannelFactory is the error returned by the balancer when no channel
+	// factory is found in the resolver state.
+	ErrNoChannelFactory = errors.New("autosharding: no channel factory found in resolver state")
+
+	// ErrNoAssignment is the error returned by the balancer when no assignment
+	// from the sharding service is available and fallback is disabled.
+	ErrNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
+
+	// ErrNoAvailableEndpointsForSlice is the error returned by the balancer
+	// when fallback is disabled in the LB config and the matching slice has no
+	// endpoints present in the resolver update (either because the slice is a
+	// synthesized gap or because none of its assigned endpoints were returned
+	// by the resolver).
+	ErrNoAvailableEndpointsForSlice = errors.New("autosharding: matching slice has no known resolver endpoints and fallback is disabled")
+
+	// ErrFallbackDisabledForSlice is the error returned by the balancer when
+	// the sharding server explicitly assigns zero endpoints to the matching
+	// slice, disabling fallback for that slice regardless of the LB config.
+	ErrFallbackDisabledForSlice = status.Err(codes.Unavailable, "autosharding: matching slice has fallback disabled by sharding server (no endpoints assigned)")
+)
