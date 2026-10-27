@@ -105,33 +105,30 @@ func (w *countingWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// distinctValueCount is the number of pre-generated values each
-// high-cardinality header cycles through in BenchmarkHPACKNeverIndex. It only
-// has to exceed the number of entries the dynamic table can hold, so that a
-// value is always evicted long before it is reused and every RPC misses.
+// distinctValueCount exceeds what the HPACK dynamic table can hold, so a
+// high-cardinality value is never matched again.
 const distinctValueCount = 1024
 
-// BenchmarkHPACKNeverIndex measures both sides of the trade-off made by
-// GRPC_GO_EXPERIMENTAL_HPACK_NEVER_INDEX_HEADERS: sec/op covers the whole
-// outgoing header path, and bytes/rpc covers what that costs on the wire.
-//
-// The header fields go through a single long-lived hpack.Encoder, as they do on
-// a real connection, so the dynamic table fills up and starts evicting. The
-// high-cardinality headers take a fresh value on every iteration, which is what
-// makes indexing them pure churn: the entry they add can never be matched
-// again. Values are generated up front so that the measured loop does no work
-// beyond building and encoding the header set.
-func BenchmarkHPACKNeverIndex(b *testing.B) {
-	// Header names whose value differs on (almost) every RPC. These are the
-	// kind of names the environment variable is meant to be pointed at.
-	highCardinality := []string{"grpc-trace-bin", "traceparent", "x-request-id"}
+// stableHeaderCount is the number of fixed-value headers sent on every RPC.
+const stableHeaderCount = 5
 
-	for _, n := range []int{1, 3} {
+// BenchmarkHPACKNeverIndex encodes headers with high-cardinality values through
+// a single long-lived hpack.Encoder, with and without never-indexing them.
+// reusable-bytes/rpc is the wire cost of the headers whose value repeats, which
+// grows when the high-cardinality entries evict them from the dynamic table.
+func BenchmarkHPACKNeverIndex(b *testing.B) {
+	for _, n := range []int{1, 3, 10, 50} {
+		names := make([]string, n)
+		highCardinality := make(map[string]bool, n)
+		for i := range names {
+			names[i] = fmt.Sprintf("x-unique-%02d", i)
+			highCardinality[names[i]] = true
+		}
+		highCardinality["grpc-timeout"] = true
+
 		for _, neverIndex := range []bool{false, true} {
 			name := fmt.Sprintf("highCardinalityHeaders=%d/neverIndex=%v", n, neverIndex)
 			b.Run(name, func(b *testing.B) {
-				names := highCardinality[:n]
-
 				orig := envconfig.HPACKNeverIndexHeaders
 				b.Cleanup(func() { envconfig.HPACKNeverIndexHeaders = orig })
 				envconfig.HPACKNeverIndexHeaders = nil
@@ -143,22 +140,22 @@ func BenchmarkHPACKNeverIndex(b *testing.B) {
 					envconfig.HPACKNeverIndexHeaders = set
 				}
 
-				values := make(map[string][]string, len(names))
-				for _, h := range names {
+				values := make([][]string, len(names))
+				for j := range names {
 					vs := make([]string, distinctValueCount)
 					for i := range vs {
-						vs[i] = fmt.Sprintf("%s-%016d", h, i)
+						vs[i] = fmt.Sprintf("v%02d-%024d", j, i)
 					}
-					values[h] = vs
+					values[j] = vs
 				}
 
-				// The metadata is built once and its values are refreshed in
-				// place per iteration; allocating a fresh context and metadata
-				// map per RPC would dominate the measurement.
-				md := make(metadata.MD, len(names)+1)
-				md["x-stable-header"] = []string{"stable-value"}
-				for _, h := range names {
-					md[h] = []string{values[h][0]}
+				// Values are updated in place to keep allocations out of the loop.
+				md := make(metadata.MD, len(names)+stableHeaderCount)
+				for i := 0; i < stableHeaderCount; i++ {
+					md[fmt.Sprintf("x-stable-%d", i)] = []string{fmt.Sprintf("stable-value-%d", i)}
+				}
+				for j, h := range names {
+					md[h] = []string{values[j][0]}
 				}
 				ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 				defer cancel()
@@ -176,25 +173,31 @@ func BenchmarkHPACKNeverIndex(b *testing.B) {
 				cw := &countingWriter{}
 				enc := hpack.NewEncoder(cw)
 				rpcs := int64(0)
+				reusableBytes := int64(0)
 
 				b.ReportAllocs()
 				for b.Loop() {
 					i := int(rpcs) % distinctValueCount
-					for _, h := range names {
-						md[h][0] = values[h][i]
+					for j := range names {
+						md[names[j]][0] = values[j][i]
 					}
 					hf, err := t.createHeaderFields(ctx, callHdr)
 					if err != nil {
 						b.Fatal(err)
 					}
 					for _, f := range hf {
+						before := cw.n
 						if err := enc.WriteField(f); err != nil {
 							b.Fatal(err)
+						}
+						if !highCardinality[f.Name] {
+							reusableBytes += cw.n - before
 						}
 					}
 					rpcs++
 				}
 				b.ReportMetric(float64(cw.n)/float64(rpcs), "bytes/rpc")
+				b.ReportMetric(float64(reusableBytes)/float64(rpcs), "reusable-bytes/rpc")
 			})
 		}
 	}
