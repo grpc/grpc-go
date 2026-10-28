@@ -7703,3 +7703,91 @@ func (s) TestBidirectionalDraining_TerminationWithoutDrainFails(t *testing.T) {
 		})
 	}
 }
+
+// TestBidirectionalDraining_EarlyRequestDrainWaitsForDrainComplete tests the
+// scenario where the external processor requests a request drain in its
+// request headers response, before the client has sent any message. Verifies
+// that a subsequent client message is not sent on the dataplane stream until
+// the external processor echoes drain_complete.
+func (s) TestBidirectionalDraining_EarlyRequestDrainWaitsForDrainComplete(t *testing.T) {
+	gotDrainComplete := make(chan struct{})
+	sendDrainComplete := make(chan struct{})
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Request a drain in the request headers response.
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+		resp := requestHeadersResponse(nil, nil)
+		resp.RequestDrainRequests = true
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+		// Receive the filter's drain_complete, and echo it only when signaled.
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+		close(gotDrainComplete)
+		<-sendDrainComplete
+		return stream.Send(requestBodyDrainCompleteResponse())
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					if err == io.EOF {
+						return nil
+					}
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := testgrpc.NewTestServiceClient(cc).FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+	// Wait for proc server to receive drain complete to ensure no messages are
+	// sent before that.
+	select {
+	case <-gotDrainComplete:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the filter to send drain_complete")
+	}
+
+	// Send should be blocked until the external processor echoes drain_complete.
+	sendDone := make(chan error, 1)
+	go func() {
+		sendDone <- stream.Send(&testpb.StreamingOutputCallRequest{})
+	}()
+	select {
+	case <-sendDone:
+		t.Fatal("stream.Send() completed before the external processor echoed drain_complete")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	close(sendDrainComplete)
+	select {
+	case err := <-sendDone:
+		if err != nil {
+			t.Fatalf("stream.Send() failed: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for stream.Send() to complete")
+	}
+}
