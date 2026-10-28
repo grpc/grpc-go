@@ -124,6 +124,26 @@ const (
 	credsComputeEngineCreds
 )
 
+// tlsBundle is a credentials.Bundle that combines TLS transport credentials
+// with per-RPC credentials. It always uses the same TLS transport credentials,
+// regardless of mode.
+type tlsBundle struct {
+	transportCreds credentials.TransportCredentials
+	perRPCCreds    credentials.PerRPCCredentials
+}
+
+func (b *tlsBundle) TransportCredentials() credentials.TransportCredentials {
+	return b.transportCreds
+}
+
+func (b *tlsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+	return b.perRPCCreds
+}
+
+func (b *tlsBundle) NewWithMode(string) (credentials.Bundle, error) {
+	return &tlsBundle{transportCreds: b.transportCreds.Clone(), perRPCCreds: b.perRPCCreds}, nil
+}
+
 // Parses the --additional_metadata flag and returns metadata to send on each RPC,
 // formatted as per https://pkg.go.dev/google.golang.org/grpc/metadata#Pairs.
 // Allow any character but semicolons in values. If the flag is empty, return a nil map.
@@ -212,6 +232,9 @@ func main() {
 		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	}
 	var opts []grpc.DialOption
+	// tlsCreds is set when TLS is chosen. The dial option for it is added
+	// below, once the per-RPC credentials for the test case are known.
+	var tlsCreds credentials.TransportCredentials
 	switch credsChosen {
 	case credsTLS:
 		var roots *x509.CertPool
@@ -228,13 +251,11 @@ func main() {
 				logger.Fatalf("Failed to append certificates: %s", string(b))
 			}
 		}
-		var creds credentials.TransportCredentials
 		if *tlsServerName != "" {
-			creds = credentials.NewClientTLSFromCert(roots, *tlsServerName)
+			tlsCreds = credentials.NewClientTLSFromCert(roots, *tlsServerName)
 		} else {
-			creds = credentials.NewTLS(&tls.Config{RootCAs: roots})
+			tlsCreds = credentials.NewTLS(&tls.Config{RootCAs: roots})
 		}
-		opts = append(opts, grpc.WithTransportCredentials(creds))
 	case credsALTS:
 		altsOpts := alts.DefaultClientOptions()
 		if *altsHSAddr != "" {
@@ -252,22 +273,32 @@ func main() {
 		logger.Fatal("Invalid creds")
 	}
 	if credsChosen == credsTLS {
+		var perRPCCreds credentials.PerRPCCredentials
 		if *testCase == "compute_engine_creds" {
-			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
+			perRPCCreds = oauth.NewComputeEngine()
 		} else if *testCase == "service_account_creds" {
 			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
 				logger.Fatalf("Failed to create JWT credentials: %v", err)
 			}
-			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+			perRPCCreds = jwtCreds
 		} else if *testCase == "jwt_token_creds" {
 			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile)
 			if err != nil {
 				logger.Fatalf("Failed to create JWT credentials: %v", err)
 			}
-			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+			perRPCCreds = jwtCreds
 		} else if *testCase == "oauth2_auth_token" {
-			opts = append(opts, grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(interop.GetToken(ctx, *serviceAccountKeyFile, *oauthScope))}))
+			perRPCCreds = oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(interop.GetToken(ctx, *serviceAccountKeyFile, *oauthScope))}
+		}
+		if perRPCCreds != nil {
+			// Attach the per-RPC credentials to the channel credentials rather
+			// than using grpc.WithPerRPCCredentials, so that channels created
+			// on behalf of this channel (such as the RLS control channel)
+			// inherit them as well.
+			opts = append(opts, grpc.WithCredentialsBundle(&tlsBundle{transportCreds: tlsCreds, perRPCCreds: perRPCCreds}))
+		} else {
+			opts = append(opts, grpc.WithTransportCredentials(tlsCreds))
 		}
 	}
 	if len(*serviceConfigJSON) > 0 {
