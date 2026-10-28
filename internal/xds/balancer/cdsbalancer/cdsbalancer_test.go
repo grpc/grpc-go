@@ -51,8 +51,11 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
+	"google.golang.org/grpc/internal/xds/testutils/fakeclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
+	"google.golang.org/grpc/internal/xds/xdsdepmgr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -1810,5 +1813,106 @@ func (s) TestChannelFactory_KeyReaddedWhileInUse(t *testing.T) {
 	cc, _ := acquireChannel(t, provider, servers[0].key)
 	if cc != newCC {
 		t.Fatalf("ClientConnProvider returned channel %p, want %p", cc, newCC)
+	}
+}
+
+type fakeClusterSubscriber struct{}
+
+func (f *fakeClusterSubscriber) SubscribeToCluster(string) func() {
+	return func() {}
+}
+
+// Tests that when an update with a cluster that reported an error or a missing
+// static cluster is pushed to the CDS balancer, UpdateClientConnState returns
+// the error, closes any existing child policy, and puts the channel in
+// TRANSIENT_FAILURE with an error picker of status Unavailable.
+func (s) TestUpdateClientConnState_ClusterErrorAndNotFound(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tcc := testutils.NewBalancerClientConn(t)
+	builder := balancer.Get(cdsName)
+	bal := builder.Build(tcc, balancer.BuildOptions{})
+	defer bal.Close()
+
+	xdsC := fakeclient.NewClient()
+
+	// 1. Static cluster not found in XDSConfig.
+	stateNotFound := resolver.State{}
+	stateNotFound = xdsclient.SetClient(stateNotFound, xdsC)
+	stateNotFound = xdsresource.SetXDSConfig(stateNotFound, &xdsresource.XDSConfig{
+		Clusters: map[string]*xdsresource.ClusterResult{},
+	})
+	stateNotFound = xdsdepmgr.SetXDSClusterSubscriber(stateNotFound, &fakeClusterSubscriber{})
+
+	ccsNotFound := balancer.ClientConnState{
+		ResolverState: stateNotFound,
+		BalancerConfig: &lbConfig{
+			ClusterName: "cluster-not-found",
+			IsDynamic:   false,
+		},
+	}
+	if err := bal.UpdateClientConnState(ccsNotFound); err == nil {
+		t.Fatalf("UpdateClientConnState() succeeded, want error for missing static cluster")
+	}
+
+	select {
+	case cs := <-tcc.NewStateCh:
+		if cs != connectivity.TransientFailure {
+			t.Fatalf("Connectivity state = %v, want TransientFailure", cs)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for state update to TransientFailure")
+	}
+
+	select {
+	case picker := <-tcc.NewPickerCh:
+		_, err := picker.Pick(balancer.PickInfo{})
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Picker.Pick() error code = %v, want Unavailable; err = %v", status.Code(err), err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error picker")
+	}
+
+	// 2. Cluster resource reported an error in XDSConfig.
+	clusterErr := fmt.Errorf("simulated cluster resource error")
+	stateClusterErr := resolver.State{}
+	stateClusterErr = xdsclient.SetClient(stateClusterErr, xdsC)
+	stateClusterErr = xdsresource.SetXDSConfig(stateClusterErr, &xdsresource.XDSConfig{
+		Clusters: map[string]*xdsresource.ClusterResult{
+			"cluster-with-error": {Err: clusterErr},
+		},
+	})
+	stateClusterErr = xdsdepmgr.SetXDSClusterSubscriber(stateClusterErr, &fakeClusterSubscriber{})
+
+	ccsClusterErr := balancer.ClientConnState{
+		ResolverState: stateClusterErr,
+		BalancerConfig: &lbConfig{
+			ClusterName: "cluster-with-error",
+			IsDynamic:   false,
+		},
+	}
+	if err := bal.UpdateClientConnState(ccsClusterErr); err == nil {
+		t.Fatalf("UpdateClientConnState() succeeded, want error for cluster with error")
+	}
+
+	select {
+	case cs := <-tcc.NewStateCh:
+		if cs != connectivity.TransientFailure {
+			t.Fatalf("Connectivity state = %v, want TransientFailure", cs)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for state update to TransientFailure")
+	}
+
+	select {
+	case picker := <-tcc.NewPickerCh:
+		_, err := picker.Pick(balancer.PickInfo{})
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Picker.Pick() error code = %v, want Unavailable; err = %v", status.Code(err), err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error picker")
 	}
 }

@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -39,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 )
 
 const cdsName = "cds_experimental"
@@ -222,10 +224,13 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 		if b.lbCfg.IsDynamic {
 			return nil
 		}
-		return b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster %q in XDSConfig", clusterName))
+		err := b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster %q in XDSConfig", clusterName))
+		b.closeChildPolicyAndReportTF(err)
+		return err
 	}
 	// If the cluster resource has an error, return the error.
 	if clusterUpdate.Err != nil {
+		b.closeChildPolicyAndReportTF(clusterUpdate.Err)
 		return clusterUpdate.Err
 	}
 
@@ -500,6 +505,9 @@ func (b *cdsBalancer) closeChildPolicy() {
 // error picker.
 func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
 	b.closeChildPolicy()
+	if status.Code(err) != codes.Unavailable {
+		err = status.Error(codes.Unavailable, err.Error())
+	}
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            base.NewErrPicker(err),
