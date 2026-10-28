@@ -16,7 +16,7 @@
  *
  */
 
-package backoff
+package backoff_test
 
 import (
 	"context"
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	grpcbackoff "google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -39,8 +40,10 @@ func Test(t *testing.T) {
 
 const defaultTestTimeout = 10 * time.Second
 
+// Tests that without jitter, Backoff starts at BaseDelay, multiplies it by
+// Multiplier for each retry and caps the result at MaxDelay.
 func (s) TestExponential_WithoutJitter(t *testing.T) {
-	bc := Exponential{Config: grpcbackoff.Config{
+	bc := backoff.Exponential{Config: grpcbackoff.Config{
 		BaseDelay:  time.Second,
 		Multiplier: 2,
 		MaxDelay:   10 * time.Second,
@@ -51,6 +54,7 @@ func (s) TestExponential_WithoutJitter(t *testing.T) {
 	}{
 		{retries: 0, want: time.Second},
 		{retries: 1, want: 2 * time.Second},
+		{retries: 2, want: 4 * time.Second},
 		{retries: 3, want: 8 * time.Second},
 		{retries: 4, want: 10 * time.Second}, // 16s is capped at MaxDelay.
 		{retries: 100, want: 10 * time.Second},
@@ -62,8 +66,10 @@ func (s) TestExponential_WithoutJitter(t *testing.T) {
 	}
 }
 
+// Tests that with a jitter of 0.2, Backoff stays within 20% of the delay it
+// returns without jitter.
 func (s) TestExponential_JitterStaysInRange(t *testing.T) {
-	bc := Exponential{Config: grpcbackoff.Config{
+	bc := backoff.Exponential{Config: grpcbackoff.Config{
 		BaseDelay:  time.Second,
 		Multiplier: 2,
 		Jitter:     0.2,
@@ -77,9 +83,10 @@ func (s) TestExponential_JitterStaysInRange(t *testing.T) {
 	}
 }
 
+// Tests that Backoff never returns a negative duration, even when a jitter
+// above 1 makes the randomized factor go below zero.
 func (s) TestExponential_NeverNegative(t *testing.T) {
-	// With a jitter above 1 the randomized factor can go below zero.
-	bc := Exponential{Config: grpcbackoff.Config{
+	bc := backoff.Exponential{Config: grpcbackoff.Config{
 		BaseDelay:  time.Second,
 		Multiplier: 2,
 		Jitter:     3,
@@ -92,12 +99,17 @@ func (s) TestExponential_NeverNegative(t *testing.T) {
 	}
 }
 
+// Tests that DefaultExponential starts with the base delay of the default
+// backoff config.
 func (s) TestExponential_Default(t *testing.T) {
-	if got, want := DefaultExponential.Backoff(0), grpcbackoff.DefaultConfig.BaseDelay; got != want {
+	if got, want := backoff.DefaultExponential.Backoff(0), grpcbackoff.DefaultConfig.BaseDelay; got != want {
 		t.Fatalf("DefaultExponential.Backoff(0) = %v, want %v", got, want)
 	}
 }
 
+// Tests that RunF stops calling f once f returns an error other than
+// ErrResetBackoff, and that it asks for a backoff after each call of f that
+// returned nil.
 func (s) TestRunF_StopsWhenFReturnsError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -112,11 +124,11 @@ func (s) TestRunF_StopsWhenFReturnsError(t *testing.T) {
 		}
 		return nil
 	}
-	backoff := func(attempt int) time.Duration {
+	backoffFunc := func(attempt int) time.Duration {
 		attempts = append(attempts, attempt)
 		return 0
 	}
-	RunF(ctx, f, backoff)
+	backoff.RunF(ctx, f, backoffFunc)
 	if calls != 3 {
 		t.Fatalf("f called %d times, want 3", calls)
 	}
@@ -125,12 +137,14 @@ func (s) TestRunF_StopsWhenFReturnsError(t *testing.T) {
 	}
 }
 
+// Tests that when f returns ErrResetBackoff, RunF calls f again right away
+// and starts counting the attempts from zero again.
 func (s) TestRunF_ResetBackoff(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	errDone := errors.New("done")
-	results := []error{nil, nil, ErrResetBackoff, nil, errDone}
+	results := []error{nil, nil, backoff.ErrResetBackoff, nil, errDone}
 	calls := 0
 	var attempts []int
 	f := func() error {
@@ -138,78 +152,92 @@ func (s) TestRunF_ResetBackoff(t *testing.T) {
 		calls++
 		return err
 	}
-	backoff := func(attempt int) time.Duration {
+	backoffFunc := func(attempt int) time.Duration {
 		attempts = append(attempts, attempt)
 		return 0
 	}
-	RunF(ctx, f, backoff)
+	backoff.RunF(ctx, f, backoffFunc)
 	if calls != len(results) {
 		t.Fatalf("f called %d times, want %d", calls, len(results))
 	}
-	// ErrResetBackoff starts the attempt count over and skips the backoff.
+	// The first two calls return nil, so backoff is asked for attempts 0
+	// and 1. ErrResetBackoff from the third call makes RunF call f again
+	// right away, without a backoff, and resets the attempt count. The
+	// fourth call returns nil, so backoff is asked for attempt 0 again,
+	// and errDone from the fifth call ends RunF.
 	if want := []int{0, 1, 0}; !slices.Equal(attempts, want) {
 		t.Fatalf("backoff called with attempts %v, want %v", attempts, want)
 	}
 }
 
+// Tests that RunF returns without calling f when the context is already
+// canceled.
 func (s) TestRunF_ContextCanceledBeforeStart(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	RunF(ctx, func() error {
+	backoff.RunF(ctx, func() error {
 		t.Error("f called after the context was canceled")
 		return nil
 	}, func(int) time.Duration { return 0 })
 }
 
+// Tests that RunF stops waiting for the next attempt and returns as soon as
+// the context is canceled.
 func (s) TestRunF_ContextCanceledWhileWaiting(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	tctx, tcancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer tcancel()
+	// RunF gets a context of its own so that the test can cancel it, while
+	// ctx still limits how long the test waits.
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
 
-	called := make(chan struct{}, 1)
+	called := make(chan struct{})
 	f := func() error {
 		select {
 		case called <- struct{}{}:
-		default:
+		case <-runCtx.Done():
 		}
 		return nil
 	}
+	// The backoff is longer than the test timeout, so after the first call
+	// RunF is still waiting on its timer when the context is canceled. It
+	// can only return before the timeout by noticing the cancellation.
+	backoffFunc := func(int) time.Duration { return 2 * defaultTestTimeout }
 	done := make(chan struct{})
 	go func() {
-		RunF(ctx, f, func(int) time.Duration { return time.Hour })
+		backoff.RunF(runCtx, f, backoffFunc)
 		close(done)
 	}()
 
 	select {
 	case <-called:
-	case <-tctx.Done():
+	case <-ctx.Done():
 		t.Fatal("Timeout waiting for f to be called")
 	}
-	cancel()
+	runCancel()
 	select {
 	case <-done:
-	case <-tctx.Done():
-		t.Fatal("RunF did not return after the context was canceled")
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for RunF to return after the context was canceled")
 	}
 }
 
-// Tests that when the context is canceled while f runs and f returns nil, RunF
-// returns without arming the timer again (https://github.com/grpc/grpc-go/issues/9485).
+// Tests that when the context is canceled while f is running and f returns
+// nil, RunF returns without asking for another backoff, so the timer is not
+// armed again (https://github.com/grpc/grpc-go/issues/9485).
 func (s) TestRunF_ContextCanceledWhileFRuns(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	backoffCalls := 0
 	f := func() error {
 		cancel()
 		return nil
 	}
-	RunF(ctx, f, func(int) time.Duration {
-		backoffCalls++
-		return time.Hour
-	})
-	if backoffCalls != 0 {
-		t.Fatalf("backoff called %d times after the context was canceled, want 0", backoffCalls)
+	// The returned duration does not matter: once the context is canceled,
+	// RunF must not ask for a backoff at all.
+	backoffFunc := func(int) time.Duration {
+		t.Error("backoff called after the context was canceled")
+		return 0
 	}
+	backoff.RunF(ctx, f, backoffFunc)
 }
