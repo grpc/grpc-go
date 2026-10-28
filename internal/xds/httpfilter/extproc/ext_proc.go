@@ -1220,7 +1220,6 @@ func (cs *clientStream) SendMsg(m any) error {
 		return nil
 	}
 
-
 	s, err := cs.bypassProcStreamForClientMsg()
 	if err != nil {
 		return err
