@@ -22,6 +22,7 @@
 package metadata
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -141,4 +142,15 @@ func ValidatePair(key string, vals ...string) error {
 		}
 	}
 	return nil
+}
+
+// DecodeBinHeader decodes the base64-encoded value of a header whose key has
+// the "-bin" suffix. Both padded and unpadded standard encoding are accepted,
+// as when such a header is read off the wire.
+func DecodeBinHeader(v string) ([]byte, error) {
+	if len(v)%4 == 0 {
+		// Input was padded, or padding was not necessary.
+		return base64.StdEncoding.DecodeString(v)
+	}
+	return base64.RawStdEncoding.DecodeString(v)
 }
