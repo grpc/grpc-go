@@ -1645,6 +1645,8 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 // handler code that use, for example, grpc.SetHeader (which requires some
 // stream to be in context).
 //
+// Implementations must embed another ServerTransportStream.
+//
 // See also NewContextWithServerTransportStream.
 //
 // # Experimental
@@ -1652,10 +1654,18 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type ServerTransportStream interface {
+	internal.EnforceServerTransportStreamEmbedding
 	Method() string
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error
 	SetTrailer(md metadata.MD) error
+
+	// SetSendCompress sets the outbound compressor before headers are sent.
+	// It returns an error if headers have already been sent or the stream is done.
+	SetSendCompress(name string) error
+
+	// ClientAdvertisedCompressors returns the compressor names advertised by the client.
+	ClientAdvertisedCompressors() []string
 }
 
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in
@@ -1892,8 +1902,8 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetSendCompressor(ctx context.Context, name string) error {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
-	if !ok || stream == nil {
+	stream := ServerTransportStreamFromContext(ctx)
+	if stream == nil {
 		return fmt.Errorf("failed to fetch the stream from the given context")
 	}
 
@@ -1914,8 +1924,8 @@ func SetSendCompressor(ctx context.Context, name string) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func ClientSupportedCompressors(ctx context.Context) ([]string, error) {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
-	if !ok || stream == nil {
+	stream := ServerTransportStreamFromContext(ctx)
+	if stream == nil {
 		return nil, fmt.Errorf("failed to fetch the stream from the given context %v", ctx)
 	}
 

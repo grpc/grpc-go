@@ -302,3 +302,9 @@ type Timer interface {
 type EnforceMetricsRecorderEmbedding interface {
 	enforceMetricsRecorderEmbedding()
 }
+
+// EnforceServerTransportStreamEmbedding is used to enforce proper
+// ServerTransportStream implementation embedding.
+type EnforceServerTransportStreamEmbedding interface {
+	enforceServerTransportStreamEmbedding()
+}

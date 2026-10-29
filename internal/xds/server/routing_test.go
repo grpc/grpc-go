@@ -33,6 +33,7 @@ import (
 )
 
 type testServerTransportStream struct {
+	grpc.ServerTransportStream
 	method string
 }
 
