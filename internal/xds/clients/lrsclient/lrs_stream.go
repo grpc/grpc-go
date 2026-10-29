@@ -218,10 +218,15 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 	}
 
 	internal := resp.GetLoadReportingInterval()
-	if internal.CheckValid() != nil {
+	if err := internal.CheckValid(); err != nil {
 		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
 	}
 	loadReportingInterval := internal.AsDuration()
+	if loadReportingInterval <= 0 {
+		// A valid Duration can be zero or negative, which can't be used as
+		// the period of a ticker.
+		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval %v, must be positive", loadReportingInterval)
+	}
 
 	clusters := resp.Clusters
 	if resp.SendAllClusters {

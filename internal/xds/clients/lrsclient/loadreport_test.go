@@ -728,3 +728,77 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 	defer ssCancel()
 	loadStore1.Stop(ssCtx)
 }
+
+// Tests that the LRS client rejects a response from the LRS server with a load
+// reporting interval that is not positive, by closing the stream and creating
+// a new one after backoff, instead of panicking.
+func (s) TestReportLoad_NonPositiveLoadReportingInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval *durationpb.Duration
+	}{
+		{name: "zero", interval: &durationpb.Duration{}},
+		{name: "negative", interval: &durationpb.Duration{Seconds: -1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Create a management server that serves LRS.
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+			// Create an LRS client with configuration pointing to the above
+			// server.
+			configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+			client, err := lrsclient.New(lrsclient.Config{
+				Node:             clients.Node{ID: uuid.New().String()},
+				TransportBuilder: grpctransport.NewBuilder(configs),
+			})
+			if err != nil {
+				t.Fatalf("lrsclient.New() failed: %v", err)
+			}
+
+			// Call the load reporting API, and ensure that an LRS stream is
+			// created, and that the initial request is received.
+			serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
+			loadStore, err := client.ReportLoad(serverIdentifier)
+			if err != nil {
+				t.Fatalf("client.ReportLoad() failed: %v", err)
+			}
+			defer func() {
+				ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
+				defer ssCancel()
+				loadStore.Stop(ssCtx)
+			}()
+			lrsServer := mgmtServer.LRSServer
+			if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+				t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
+			}
+			if _, err := lrsServer.LRSRequestChan.Receive(ctx); err != nil {
+				t.Fatalf("Timeout when waiting for initial LRS request: %v", err)
+			}
+
+			// Send a response with the invalid interval, and ensure that the
+			// client cancels the stream.
+			lrsServer.LRSResponseChan <- &fakeserver.Response{
+				Resp: &v3lrspb.LoadStatsResponse{
+					SendAllClusters:       true,
+					LoadReportingInterval: test.interval,
+				},
+			}
+			req, err := lrsServer.LRSRequestChan.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout when waiting for the LRS stream to be canceled: %v", err)
+			}
+			if err := req.(*fakeserver.Request).Err; status.Code(err) != codes.Canceled {
+				t.Fatalf("LRS stream ended with error %v, want code %v", err, codes.Canceled)
+			}
+
+			// Ensure that the client creates a new stream after backoff.
+			if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+				t.Fatalf("Timeout when waiting for a new LRS stream to be created: %v", err)
+			}
+		})
+	}
+}
