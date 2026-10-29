@@ -2776,7 +2776,7 @@ func checkMetricWithMethod(ctx context.Context, reader *metric.ManualReader, met
 // a slice to also exercise a non-comparable value implementation.
 type embeddedTransportStream struct {
 	grpc.ServerTransportStream
-	unused []byte
+	_ []byte
 }
 
 // TestCompressionAPIs verifies that compression APIs work through the metrics
