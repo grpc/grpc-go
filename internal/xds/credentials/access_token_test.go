@@ -41,9 +41,9 @@ func accessTokenConfig(t *testing.T, token string) *anypb.Any {
 	return a
 }
 
-// Tests that building access token call credentials fails on malformed
+// Tests that parsing access token call credentials fails on malformed
 // configs and on an empty token.
-func (s) TestAccessTokenCredsBuild_Errors(t *testing.T) {
+func (s) TestAccessTokenCredsParse_Errors(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  *anypb.Any
@@ -62,7 +62,7 @@ func (s) TestAccessTokenCredsBuild_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			callCreds, _, err := xdscreds.GetCallCredsBuilder(accessTokenCredsTypeURL)(tt.config)
+			callCreds, err := xdscreds.GetCallCredsParser(accessTokenCredsTypeURL)(tt.config)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("Build returned error %v, want error containing %q", err, tt.wantErr)
 			}
@@ -77,7 +77,11 @@ func (s) TestAccessTokenCredsBuild_Errors(t *testing.T) {
 // connections providing privacy and integrity, and that an error is returned
 // on weaker connections.
 func (s) TestAccessTokenCredsGetRequestMetadata(t *testing.T) {
-	callCreds, cleanup, err := xdscreds.GetCallCredsBuilder(accessTokenCredsTypeURL)(accessTokenConfig(t, "test-token"))
+	parsed, err := xdscreds.GetCallCredsParser(accessTokenCredsTypeURL)(accessTokenConfig(t, "test-token"))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	callCreds, cleanup, err := parsed.Build()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}

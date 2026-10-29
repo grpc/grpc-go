@@ -111,7 +111,7 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 // counted gRPC ClientConn created from it.
 type grpcServiceCfg struct {
 	config *grpcservice.Config
-	cc     *grpcsync.RefCounted[*grpc.ClientConn]
+	cc     *grpcsync.RefCounted[grpc.ClientConnInterface]
 }
 
 // cdsBalancer implements a CDS based LB policy. It instantiates a
@@ -248,9 +248,6 @@ func (b *cdsBalancer) updateGRPCServices(newServices map[string]*grpcservice.Con
 			b.grpcServicesMap[k] = &grpcServiceCfg{config: cfg}
 		}
 	}
-	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
-	// removed grpcservice.Config instances once their ownership lifecycle is
-	// finalized.
 	for k := range b.grpcServicesMap {
 		if _, ok := newServices[k]; !ok {
 			delete(b.grpcServicesMap, k)
@@ -272,12 +269,12 @@ func (b *cdsBalancer) channelFactory(key string) (grpc.ClientConnInterface, func
 	if entry.cc != nil {
 		entry.cc.Increment()
 	} else {
-		cc, err := entry.config.Dial()
+		cc, release, err := entry.config.Dial()
 		if err != nil {
 			return nil, nil, fmt.Errorf("cds: failed to dial GrpcService: %v", err)
 		}
 		entry.cc = grpcsync.NewRefCounted(cc, func() {
-			cc.Close()
+			release()
 			entry.cc = nil
 		})
 	}
@@ -513,9 +510,6 @@ func (b *cdsBalancer) Close() {
 	if b.unsubscribe != nil {
 		b.unsubscribe()
 	}
-	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
-	// grpcservice.Config instances in grpcServicesMap once their ownership
-	// lifecycle is finalized.
 	b.grpcServicesMu.Lock()
 	b.grpcServicesMap = nil
 	b.grpcServicesMu.Unlock()
