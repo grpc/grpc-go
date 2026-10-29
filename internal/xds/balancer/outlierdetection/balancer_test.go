@@ -68,6 +68,61 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// TestIntervalTimerAfterClose covers an expired timer whose callback resumes
+// after Close has stopped the timer. It must not schedule another interval.
+func (s) TestIntervalTimerAfterClose(t *testing.T) {
+	originalAfterFunc := afterFunc
+	t.Cleanup(func() { afterFunc = originalAfterFunc })
+	rescheduled := make(chan struct{}, 1)
+	afterFunc = func(time.Duration, func()) *time.Timer {
+		rescheduled <- struct{}{}
+		timer := time.NewTimer(time.Hour)
+		t.Cleanup(func() { timer.Stop() })
+		return timer
+	}
+
+	od, _, cleanup := setup(t)
+	closeBalancer := sync.OnceFunc(cleanup)
+	defer closeBalancer()
+	od.cfg = &LBConfig{Interval: iserviceconfig.Duration(time.Hour)}
+
+	started := make(chan struct{})
+	resume := make(chan struct{})
+	finished := make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(resume) })
+	od.intervalTimer = time.AfterFunc(0, func() {
+		close(started)
+		<-resume
+		od.intervalTimerAlgorithm()
+		close(finished)
+	})
+	t.Cleanup(func() {
+		unblock()
+		<-finished
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("interval timer callback did not start")
+	}
+	// The callback has already started, so Close cannot cancel it with Stop.
+	closeBalancer()
+	unblock()
+	select {
+	case <-finished:
+	case <-ctx.Done():
+		t.Fatal("interval timer callback did not finish after Close")
+	}
+	select {
+	case <-rescheduled:
+		t.Fatal("interval timer was rescheduled after Close")
+	default:
+	}
+}
+
 func (lbc *LBConfig) Equal(lbc2 *LBConfig) bool {
 	if !lbc.EqualIgnoringChildPolicy(lbc2) {
 		return false
