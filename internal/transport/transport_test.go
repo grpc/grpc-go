@@ -1079,6 +1079,49 @@ func (s) TestGracefulClose(t *testing.T) {
 	wg.Wait()
 }
 
+// TestNewStreamOnDrainingTransport ensures that a NewStream call made while
+// the client transport is draining does not block behind a long-lived stream.
+// Previously the call waited on a nil quota channel until the last stream
+// ended, so a deadline-less RPC hung forever. See #9559.
+func (s) TestNewStreamOnDrainingTransport(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, pingpong)
+	defer cancel()
+	defer server.stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	s, err := ct.NewStream(ctx, &CallHdr{}, nil)
+	if err != nil {
+		t.Fatalf("NewStream(_, _) = _, %v, want _, <nil>", err)
+	}
+	// Leave the stream open, then drain the transport.
+	ct.GracefulClose()
+
+	// No deadline: on unpatched code this never returns.
+	ctxNoDeadline, cancelNoDeadline := context.WithCancel(context.Background())
+	defer cancelNoDeadline()
+	done := make(chan error, 1)
+	go func() {
+		_, err := ct.NewStream(ctxNoDeadline, &CallHdr{}, nil)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		var nse *NewStreamError
+		if !errors.As(err, &nse) || nse.Err != ErrConnClosing || !nse.AllowTransparentRetry {
+			t.Fatalf("NewStream(_, _) = _, %v, want _, NewStreamError{ErrConnClosing, AllowTransparentRetry: true}", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("NewStream(_, _) hung on a draining transport with an open stream")
+	}
+	// Finish the open stream cleanly so the server side ends with EOF,
+	// not a canceled read. The draining transport then closes itself.
+	s.Write(nil, nil, &WriteOptions{Last: true})
+	if _, err := s.readTo(make([]byte, 5)); err != io.EOF {
+		t.Fatalf("Client expected EOF from the server. Got: %v", err)
+	}
+}
+
 func (s) TestLargeMessageSuspension(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
