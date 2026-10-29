@@ -319,7 +319,7 @@ func (bg *BalancerGroup) AddWithClientConn(id, balancerName string, cc balancer.
 		}
 		sbc.startBalancer()
 	} else {
-		// When brining back a sub-balancer from cache, re-send the cached
+		// When bringing back a sub-balancer from cache, re-send the cached
 		// picker and state.
 		sbc.updateBalancerStateWithCachedPicker()
 	}
