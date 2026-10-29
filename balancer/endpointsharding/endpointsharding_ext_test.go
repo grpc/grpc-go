@@ -432,3 +432,38 @@ func (s) TestEndpointShardingExitIdle(t *testing.T) {
 	cc.Connect()
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 }
+
+// Tests that a child balancer can't create new SubConns after it has been
+// closed. The test removes the child's endpoint through a resolver update and
+// verifies that a later NewSubConn call from the child fails.
+func (s) TestEndpointShardingNewSubConnAfterClose(t *testing.T) {
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
+	stub.Register(name, stub.BalancerFuncs{})
+
+	childCCs := make(chan balancer.ClientConn, 2)
+	childBuilder := func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+		childCCs <- cc
+		return balancer.Get(name).Build(cc, opts)
+	}
+	tcc := testutils.NewBalancerClientConn(t)
+	es := endpointsharding.NewBalancer(tcc, balancer.BuildOptions{}, childBuilder, endpointsharding.Options{DisableAutoReconnect: true})
+	defer es.Close()
+
+	ep1 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1"}}}
+	ep2 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2"}}}
+	if err := es.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Endpoints: []resolver.Endpoint{ep1}}}); err != nil {
+		t.Fatalf("UpdateClientConnState() failed: %v", err)
+	}
+	childCC := <-childCCs
+	if _, err := childCC.NewSubConn(ep1.Addresses, balancer.NewSubConnOptions{}); err != nil {
+		t.Fatalf("NewSubConn() failed before the child was closed: %v", err)
+	}
+
+	// Removing ep1 from the resolver update closes its child balancer.
+	if err := es.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Endpoints: []resolver.Endpoint{ep2}}}); err != nil {
+		t.Fatalf("UpdateClientConnState() failed: %v", err)
+	}
+	if _, err := childCC.NewSubConn(ep1.Addresses, balancer.NewSubConnOptions{}); err == nil {
+		t.Fatal("NewSubConn() succeeded after the child was closed, want error")
+	}
+}

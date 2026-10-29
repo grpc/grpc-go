@@ -332,7 +332,7 @@ func ChildStatesFromPicker(picker balancer.Picker) []ChildState {
 
 // endpointState is the internal state maintained for each endpoint.
 type endpointState struct {
-	balancer.ClientConn // Embedded to intercept UpdateState
+	balancer.ClientConn // Embedded to intercept UpdateState and NewSubConn
 
 	parent               *endpointSharding // Parent endpointsharding balancer.
 	endpoint             resolver.Endpoint // Endpoint of the child balancer.
@@ -341,7 +341,14 @@ type endpointState struct {
 
 	childMu sync.Mutex        // Guarantees mutual exclusion for Balancer API calls to the child balancer.
 	childLB balancer.Balancer // Child balancer.
-	closed  bool              // Tracks closure of the child balancer to ensure ExitIdle is not called after Close().
+	closed  atomic.Bool       // Tracks closure of the child balancer to reject ExitIdle and NewSubConn after Close().
+}
+
+func (es *endpointState) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	if es.closed.Load() {
+		return nil, errors.New("endpointsharding: NewSubConn called after child balancer was closed")
+	}
+	return es.ClientConn.NewSubConn(addrs, opts)
 }
 
 func (es *endpointState) UpdateState(state balancer.State) {
@@ -372,8 +379,8 @@ func (es *endpointState) resolverError(err error) {
 
 func (es *endpointState) close() {
 	es.childMu.Lock()
-	if !es.closed {
-		es.closed = true
+	if !es.closed.Load() {
+		es.closed.Store(true)
 		es.childLB.Close()
 	}
 	es.childMu.Unlock()
@@ -381,7 +388,7 @@ func (es *endpointState) close() {
 
 func (es *endpointState) exitIdle() {
 	es.childMu.Lock()
-	if !es.closed {
+	if !es.closed.Load() {
 		es.childLB.ExitIdle()
 	}
 	es.childMu.Unlock()
