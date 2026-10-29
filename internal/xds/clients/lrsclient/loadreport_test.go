@@ -21,6 +21,7 @@ package lrsclient_test
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -727,4 +728,81 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer ssCancel()
 	loadStore1.Stop(ssCtx)
+}
+
+func (s) TestLRSClient_New(t *testing.T) {
+	tb := grpctransport.NewBuilder(map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}})
+
+	tests := []struct {
+		name    string
+		config  lrsclient.Config
+		wantErr string
+	}{
+		{
+			name: "nil transport builder",
+			config: lrsclient.Config{
+				Node: clients.Node{ID: "node-id"},
+			},
+			wantErr: "transport builder is nil",
+		},
+		{
+			name: "invalid node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"invalid": make(chan int)},
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "failed to convert node metadata",
+		},
+		{
+			name: "valid node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"cluster": "test-cluster", "retries": 3.0},
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "",
+		},
+		{
+			name: "empty node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{},
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "",
+		},
+		{
+			name: "nil node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: nil,
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := lrsclient.New(tt.config)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("New(%+v) failed: %v", tt.config, err)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("New(%+v) returned error %v, want error %q", tt.config, err, tt.wantErr)
+				}
+			}
+		})
+	}
 }

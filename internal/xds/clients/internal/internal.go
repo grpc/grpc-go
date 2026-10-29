@@ -20,8 +20,9 @@
 package internal
 
 import (
+	"fmt"
+
 	"google.golang.org/grpc/internal/xds/clients"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -31,7 +32,15 @@ import (
 //
 // This function is intended to be used by the client implementation to convert
 // the user-provided Node configuration to its protobuf representation.
-func NodeProto(n clients.Node) *v3corepb.Node {
+func NodeProto(n clients.Node) (*v3corepb.Node, error) {
+	var metadata *structpb.Struct
+	if len(n.Metadata) > 0 {
+		var err error
+		metadata, err = structpb.NewStruct(n.Metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert node metadata: %w", err)
+		}
+	}
 	return &v3corepb.Node{
 		Id:      n.ID,
 		Cluster: n.Cluster,
@@ -45,18 +54,10 @@ func NodeProto(n clients.Node) *v3corepb.Node {
 				SubZone: n.Locality.SubZone,
 			}
 		}(),
-		Metadata: func() *structpb.Struct {
-			if n.Metadata == nil {
-				return nil
-			}
-			if md, ok := n.Metadata.(*structpb.Struct); ok {
-				return proto.Clone(md).(*structpb.Struct)
-			}
-			return nil
-		}(),
+		Metadata:             metadata,
 		UserAgentName:        n.UserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
-	}
+	}, nil
 }
 
 // isLocalityEqual reports whether clients.Locality l is considered empty.

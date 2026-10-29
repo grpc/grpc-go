@@ -63,6 +63,9 @@ func New(config Config) (*LRSClient, error) {
 	if config.TransportBuilder == nil {
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
+	if _, err := clientsinternal.NodeProto(config.Node); err != nil {
+		return nil, fmt.Errorf("lrsclient: %w", err)
+	}
 
 	c := &LRSClient{
 		transportBuilder: config.TransportBuilder,
@@ -120,7 +123,10 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		return nil, fmt.Errorf("lrsclient: failed to create transport for server identifier %s: %v", serverIdentifier, err)
 	}
 
-	nodeProto := clientsinternal.NodeProto(c.node)
+	nodeProto, err := clientsinternal.NodeProto(c.node)
+	if err != nil {
+		return nil, fmt.Errorf("lrsclient: failed to convert node: %w", err)
+	}
 	nodeProto.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	lrs := newStreamImpl(streamOpts{
 		transport: tr,
