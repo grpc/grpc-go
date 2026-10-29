@@ -819,3 +819,54 @@ func (s) TestDecodeResponse_PanicRecoveryDisabled(t *testing.T) {
 	}()
 	xc.decodeResponse(rType, resp)
 }
+
+type captureDecoder struct {
+	captured *AnyProto
+}
+
+func (c *captureDecoder) Decode(resource *AnyProto, _ DecodeOptions) (*DecodeResult, error) {
+	c.captured = resource
+	return &DecodeResult{Name: "test-resource", Resource: &listenerResourceData{}}, nil
+}
+
+// TestDecodeResponse_PassesAnyProto tests that decodeResponse forwards
+// TypeURL and Value in AnyProto to the Decoder.
+func (s) TestDecodeResponse_PassesAnyProto(t *testing.T) {
+	decoder := &captureDecoder{}
+	rType := &ResourceType{
+		TypeName: "resourceType",
+		Decoder:  decoder,
+	}
+	const (
+		testTypeURL = "type.googleapis.com/test.Resource"
+		testVal     = "test-resource-content"
+	)
+	resp := response{
+		resources: []*anypb.Any{
+			{
+				TypeUrl: testTypeURL,
+				Value:   []byte(testVal),
+			},
+		},
+	}
+	xc := &xdsChannel{}
+	results, md, err := xc.decodeResponse(rType, resp)
+	if err != nil {
+		t.Fatalf("decodeResponse() failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("decodeResponse() returned %d results, want 1", len(results))
+	}
+	if md.Status != xdsresource.ServiceStatusACKed {
+		t.Errorf("decodeResponse() metadata status = %v, want %v", md.Status, xdsresource.ServiceStatusACKed)
+	}
+	if decoder.captured == nil {
+		t.Fatal("Decoder did not receive AnyProto")
+	}
+	if got, want := decoder.captured.TypeURL, testTypeURL; got != want {
+		t.Errorf("captured.TypeURL = %q, want %q", got, want)
+	}
+	if got, want := string(decoder.captured.Value), testVal; got != want {
+		t.Errorf("captured.Value = %q, want %q", got, want)
+	}
+}
