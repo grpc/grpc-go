@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -138,21 +139,42 @@ func (lrs *streamImpl) runner(ctx context.Context) {
 
 		// We reset backoff state when we successfully receive at least one
 		// message from the server.
-		lrs.sendLoads(streamCtx, stream, clusters, interval)
+		updateCh := make(chan *lrsConfig, 1)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lrs.recvLoads(streamCtx, stream, cancel, updateCh)
+		}()
+		lrs.sendLoads(streamCtx, stream, clusters, interval, updateCh)
+		cancel()
+		wg.Wait()
 		return backoff.ErrResetBackoff
 	}
 	backoff.RunF(ctx, runLoadReportStream, lrs.backoff)
 }
 
+type lrsConfig struct {
+	clusters []string
+	interval time.Duration
+}
+
 // sendLoads is responsible for periodically sending load reports to the LRS
 // server at the specified interval for the specified clusters, until the passed
 // in context is canceled.
-func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration) {
+func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration, updateCh <-chan *lrsConfig) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
 		select {
 		case <-tick.C:
+		case update := <-updateCh:
+			clusterNames = update.clusters
+			if update.interval != interval {
+				interval = update.interval
+				tick.Reset(interval)
+			}
+			continue
 		case <-ctx.Done():
 			return
 		case <-lrs.finalSendRequest:
@@ -195,6 +217,66 @@ func (lrs *streamImpl) sendFirstLoadStatsRequest(stream clients.Stream, node *v3
 	return err
 }
 
+// recvLoads continuously receives LoadStatsResponse messages from the LRS
+// server and passes updated cluster and interval configurations to sendLoads.
+// If receiving fails or if an invalid response is received, it cancels the
+// stream context so runner can reconnect after backoff.
+func (lrs *streamImpl) recvLoads(ctx context.Context, stream clients.Stream, cancel context.CancelFunc, updateCh chan<- *lrsConfig) {
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() == nil {
+				lrs.logger.Warningf("Reading from LRS streaming RPC failed: %v", err)
+				cancel()
+			}
+			return
+		}
+		clusters, interval, err := lrs.parseLoadStatsResponse(r)
+		if err != nil {
+			if ctx.Err() == nil {
+				lrs.logger.Warningf("Failed to parse subsequent LoadStatsResponse: %v", err)
+				cancel()
+			}
+			return
+		}
+		select {
+		case updateCh <- &lrsConfig{clusters: clusters, interval: interval}:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (lrs *streamImpl) parseLoadStatsResponse(r []byte) ([]string, time.Duration, error) {
+	var resp v3lrspb.LoadStatsResponse
+	if err := proto.Unmarshal(r, &resp); err != nil {
+		if lrs.logger.V(2) {
+			lrs.logger.Infof("Failed to unmarshal response to LoadStatsResponse: %v", err)
+		}
+		return nil, 0, fmt.Errorf("lrs: unexpected message type %T", r)
+	}
+	if lrs.logger.V(perRPCVerbosityLevel) {
+		lrs.logger.Infof("Received LoadStatsResponse: %s", pretty.ToJSON(&resp))
+	}
+
+	internal := resp.GetLoadReportingInterval()
+	if err := internal.CheckValid(); err != nil {
+		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
+	}
+	loadReportingInterval := internal.AsDuration()
+	if loadReportingInterval <= 0 {
+		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval %v, must be positive", loadReportingInterval)
+	}
+
+	clusters := resp.Clusters
+	if resp.SendAllClusters {
+		// Return an empty slice to send stats for all clusters.
+		clusters = []string{}
+	}
+
+	return clusters, loadReportingInterval, nil
+}
+
 // recvFirstLoadStatsResponse receives the first LoadStatsResponse from the LRS
 // server.  Returns the following:
 //   - a list of cluster names requested by the server or an empty slice if the
@@ -206,30 +288,7 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 	if err != nil {
 		return nil, 0, fmt.Errorf("lrs: failed to receive first LoadStatsResponse: %v", err)
 	}
-	var resp v3lrspb.LoadStatsResponse
-	if err := proto.Unmarshal(r, &resp); err != nil {
-		if lrs.logger.V(2) {
-			lrs.logger.Infof("Failed to unmarshal response to LoadStatsResponse: %v", err)
-		}
-		return nil, time.Duration(0), fmt.Errorf("lrs: unexpected message type %T", r)
-	}
-	if lrs.logger.V(perRPCVerbosityLevel) {
-		lrs.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(&resp))
-	}
-
-	internal := resp.GetLoadReportingInterval()
-	if internal.CheckValid() != nil {
-		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
-	}
-	loadReportingInterval := internal.AsDuration()
-
-	clusters := resp.Clusters
-	if resp.SendAllClusters {
-		// Return an empty slice to send stats for all clusters.
-		clusters = []string{}
-	}
-
-	return clusters, loadReportingInterval, nil
+	return lrs.parseLoadStatsResponse(r)
 }
 
 func (lrs *streamImpl) sendLoadStatsRequest(stream clients.Stream, loads []*loadData) error {
