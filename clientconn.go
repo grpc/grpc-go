@@ -791,16 +791,21 @@ func init() {
 	}
 }
 
-func (cc *ClientConn) maybeApplyDefaultServiceConfig() {
+// maybeApplyDefaultServiceConfigLocked applies the default service config (or
+// an empty service config if no default was configured) and a matching default
+// config selector, if no service config has been applied yet.
+//
+// Caller must hold cc.mu.
+func (cc *ClientConn) maybeApplyDefaultServiceConfigLocked() {
 	if cc.sc != nil {
-		cc.applyServiceConfigAndBalancer(cc.sc, nil)
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
-		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig})
+		cc.applyServiceConfigLocked(cc.dopts.defaultServiceConfig)
 	} else {
-		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{emptyServiceConfig})
+		cc.applyServiceConfigLocked(emptyServiceConfig)
 	}
+	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{cc.sc})
 }
 
 func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) error {
@@ -817,7 +822,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 		// May need to apply the initial service config in case the resolver
 		// doesn't support service configs, or doesn't provide a service config
 		// with the new addresses.
-		cc.maybeApplyDefaultServiceConfig()
+		cc.maybeApplyDefaultServiceConfigLocked()
 
 		cc.balancerWrapper.resolverError(err)
 
@@ -832,9 +837,9 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 	var configSelector iresolver.ConfigSelector
 	if cc.dopts.disableServiceConfig {
 		channelz.Infof(logger, cc.channelz, "ignoring service config from resolver (%v) and applying the default because service config is disabled", s.ServiceConfig)
-		cc.maybeApplyDefaultServiceConfig()
+		cc.maybeApplyDefaultServiceConfigLocked()
 	} else if s.ServiceConfig == nil {
-		cc.maybeApplyDefaultServiceConfig()
+		cc.maybeApplyDefaultServiceConfigLocked()
 		// TODO: do we need to apply a failing LB policy if there is no
 		// default, per the error handling design?
 	} else {
@@ -847,7 +852,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 			} else {
 				configSelector = &defaultConfigSelector{sc}
 			}
-			cc.applyServiceConfigAndBalancer(sc, nil)
+			cc.applyServiceConfigLocked(sc)
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.sc == nil {
@@ -1156,16 +1161,16 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	return cc.sc.healthCheckConfig
 }
 
-func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector) {
+// applyServiceConfigLocked updates the ClientConn's service config and
+// initializes the retry throttler based on sc.
+//
+// Caller must hold cc.mu.
+func (cc *ClientConn) applyServiceConfigLocked(sc *ServiceConfig) {
 	if sc == nil {
 		// should never reach here.
 		return
 	}
 	cc.sc = sc
-	if configSelector != nil {
-		cc.safeConfigSelector.UpdateConfigSelector(configSelector)
-	}
-
 	if cc.sc.retryThrottling != nil {
 		newThrottler := &retryThrottler{
 			tokens: cc.sc.retryThrottling.MaxTokens,
