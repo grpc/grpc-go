@@ -4,6 +4,10 @@ gRPC-Go comes with a set of benchmarking utilities to measure performance.
 These utilities can be found in the `benchmark` directory within the project's
 root directory.
 
+For an overview of the `benchmark` directory, a workflow for comparing
+performance before and after a change, and the most common flags, see
+[benchmark/README.md](../benchmark/README.md).
+
 The main utility, aptly named `benchmain`, supports a host of configurable
 parameters to simulate various environments and workloads. For example, if your
 server's workload is primarily streaming RPCs with large messages with
