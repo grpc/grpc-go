@@ -61,7 +61,7 @@ var (
 //
 // Returns two listeners used by the default and non-default management servers
 // respectively, and the xDS client.
-func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.ListenerWrapper, *testutils.ListenerWrapper, *xdsclient.XDSClient) {
+func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.ListenerWrapper, *testutils.ListenerWrapper, *xdsclient.Client) {
 	// Create listener wrappers which notify on to a channel whenever a new
 	// connection is accepted. We use this to track the number of transports
 	// used by the xDS client.

@@ -44,7 +44,7 @@ import (
 
 // Creates an xDS client with the given management server address, node ID
 // and transport builder.
-func createXDSClient(t *testing.T, mgmtServerAddress string, nodeID string, transportBuilder clients.TransportBuilder) *xdsclient.XDSClient {
+func createXDSClient(t *testing.T, mgmtServerAddress string, nodeID string, transportBuilder clients.TransportBuilder) *xdsclient.Client {
 	t.Helper()
 
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
