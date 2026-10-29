@@ -33,6 +33,7 @@ import (
 )
 
 type testServerTransportStream struct {
+	grpc.ServerTransportStream
 	method string
 }
 
@@ -40,6 +41,7 @@ func (s *testServerTransportStream) Method() string               { return s.met
 func (s *testServerTransportStream) SetHeader(metadata.MD) error  { return nil }
 func (s *testServerTransportStream) SendHeader(metadata.MD) error { return nil }
 func (s *testServerTransportStream) SetTrailer(metadata.MD) error { return nil }
+func (s *testServerTransportStream) EnableCompression(bool)       {}
 
 type testServerStream struct {
 	grpc.ServerStream
