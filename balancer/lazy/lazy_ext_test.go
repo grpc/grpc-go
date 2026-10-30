@@ -464,3 +464,34 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 	cc.Connect()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
+
+// TestExitIdleAfterClose verifies that calling ExitIdle, UpdateClientConnState,
+// or ResolverError on a closed lazy balancer does not invoke the child builder.
+func (s) TestExitIdleAfterClose(t *testing.T) {
+	childBuilderCalled := false
+	childBuilder := func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+		childBuilderCalled = true
+		return balancer.Get(pickfirst.Name).Build(cc, opts)
+	}
+
+	tcc := testutils.NewBalancerClientConn(t)
+	lb := lazy.NewBalancer(tcc, balancer.BuildOptions{}, childBuilder)
+	lb.Close()
+
+	lb.ExitIdle()
+	if childBuilderCalled {
+		t.Fatalf("Child builder was called after Close()")
+	}
+
+	if err := lb.UpdateClientConnState(balancer.ClientConnState{}); err != nil {
+		t.Fatalf("UpdateClientConnState on closed balancer returned error: %v", err)
+	}
+	if childBuilderCalled {
+		t.Fatalf("Child builder was called after UpdateClientConnState on closed balancer")
+	}
+
+	lb.ResolverError(errors.New("test error"))
+	if childBuilderCalled {
+		t.Fatalf("Child builder was called after ResolverError on closed balancer")
+	}
+}
