@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -32,6 +31,7 @@ import (
 // BenchmarkServerHeaderFields measures header-slice construction as the amount
 // of metadata varies.
 func BenchmarkServerHeaderFields(b *testing.B) {
+	st := status.New(codes.OK, "OK")
 	for _, mdCount := range []int{0, 4, 12} {
 		b.Run(fmt.Sprintf("writeHeaderLocked_mdCount=%d", mdCount), func(b *testing.B) {
 			t, s, cleanup := newBenchStream(b, mdCount, 0)
@@ -46,8 +46,6 @@ func BenchmarkServerHeaderFields(b *testing.B) {
 			}
 		})
 
-		st := status.New(codes.OK, "OK")
-
 		b.Run(fmt.Sprintf("writeStatus_mdCount=%d", mdCount), func(b *testing.B) {
 			t, s, cleanup := newBenchStream(b, 0, mdCount)
 			defer cleanup()
@@ -61,13 +59,9 @@ func BenchmarkServerHeaderFields(b *testing.B) {
 				}
 			}
 		})
-	}
 
-	// Trailers after the headers were already sent by a prior Write. This is
-	// the common path, as opposed to a trailers-only response.
-	for _, mdCount := range []int{0, 1} {
-		st := status.New(codes.OK, "OK")
-
+		// Trailers after the headers were already sent by a prior Write. This
+		// is the common path, as opposed to a trailers-only response.
 		b.Run(fmt.Sprintf("writeStatus_headersSent_mdCount=%d", mdCount), func(b *testing.B) {
 			t, s, cleanup := newBenchStream(b, 0, mdCount)
 			defer cleanup()
@@ -97,9 +91,8 @@ func newBenchStream(b *testing.B, headerCount, trailerCount int) (*http2Server, 
 
 	done := make(chan struct{})
 	t := &http2Server{
-		controlBuf:            newControlBuffer(done, true),
-		setResetPingStrikes:   func() {},
-		maxSendHeaderListSize: nil,
+		controlBuf:          newControlBuffer(done, true),
+		setResetPingStrikes: func() {},
 	}
 
 	// Drain the control buffer continuously, the way loopyWriter would in a
@@ -117,7 +110,7 @@ func newBenchStream(b *testing.B, headerCount, trailerCount int) (*http2Server, 
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &ServerStream{
 		Stream: Stream{
 			id:             1,

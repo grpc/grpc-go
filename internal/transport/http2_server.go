@@ -951,14 +951,12 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
-// headerFieldsCountFromMD returns an upper bound on the number of header fields that
-// appendHeaderFieldsFromMD will produce from md.
+// headerFieldsCountFromMD returns the total number of key-value pairs in md.
 func headerFieldsCountFromMD(md metadata.MD) int {
 	n := 0
 	for _, vv := range md {
 		n += len(vv)
 	}
-
 	return n
 }
 
@@ -1121,9 +1119,22 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	p := istatus.RawStatusProto(st)
 	hasStatusDetails := len(p.GetDetails()) > 0
 
+	// If the headers have not been sent yet and there are user headers to
+	// send, send them in a separate header frame first. This can fail, so do
+	// it before mutating s.trailer or allocating headerFields.
+	headersAlreadySent := s.updateHeaderSent()
+	if !headersAlreadySent && len(s.header) > 0 {
+		if err := t.writeHeaderLocked(s); err != nil {
+			return err
+		}
+	}
+	// If headers were not already sent and the block above did not send them,
+	// s.header is empty and this is a trailers-only response, which also needs
+	// :status and content-type.
+	trailersOnly := !headersAlreadySent
+
 	// Count the metadata header fields as well so the slice is not reallocated
 	// while they are appended below.
-	headersAlreadySent := s.updateHeaderSent()
 	headerFieldCount := 2 // grpc-status, grpc-message. Keep in sync with the appends below
 	if hasStatusDetails {
 		// Do not use the user's grpc-status-details-bin (if present) if we are
@@ -1134,20 +1145,14 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 		headerFieldCount++
 	}
 	headerFieldCount += headerFieldsCountFromMD(s.trailer)
-	if !headersAlreadySent && len(s.header) == 0 {
-		// Trailer only response gets :status and content-type as well.
+	if trailersOnly {
+		// Trailers-only response gets :status and content-type as well.
 		headerFieldCount += 2
 	}
 	headerFields := make([]hpack.HeaderField, 0, headerFieldCount)
-	if !headersAlreadySent { // No headers have been sent.
-		if len(s.header) > 0 { // Send a separate header frame.
-			if err := t.writeHeaderLocked(s); err != nil {
-				return err
-			}
-		} else { // Send a trailer only response.
-			headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
-			headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
-		}
+	if trailersOnly {
+		headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
 	}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status", Value: strconv.Itoa(int(st.Code()))})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(st.Message())})
