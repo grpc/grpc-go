@@ -20,6 +20,7 @@ package autosharding_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,12 +109,14 @@ func (s) TestParseConfig_Failure(t *testing.T) {
 		t.Fatalf("Balancer %q does not implement ConfigParser", autosharding.Name)
 	}
 	tests := []struct {
-		name  string
-		input string
+		name    string
+		input   string
+		wantErr string
 	}{
 		{
-			name:  "invalid-json",
-			input: "{{invalidjson{{",
+			name:    "invalid-json",
+			input:   "{{invalidjson{{",
+			wantErr: "autosharding: unable to unmarshal LBConfig",
 		},
 		{
 			name: "invalid-duration",
@@ -123,6 +126,7 @@ func (s) TestParseConfig_Failure(t *testing.T) {
 				"keyHeaderName": "header",
 				"initialAssignmentTimeout": "invalid"
 			}`,
+			wantErr: "autosharding: unable to unmarshal LBConfig",
 		},
 		{
 			name: "missing-channel-factory-key",
@@ -130,6 +134,7 @@ func (s) TestParseConfig_Failure(t *testing.T) {
 				"autoshardingTarget": "target",
 				"keyHeaderName": "header"
 			}`,
+			wantErr: "autosharding: channelFactoryKey field is required",
 		},
 		{
 			name: "missing-autosharding-target",
@@ -137,6 +142,7 @@ func (s) TestParseConfig_Failure(t *testing.T) {
 				"channelFactoryKey": "factory-key",
 				"keyHeaderName": "header"
 			}`,
+			wantErr: "autosharding: autoshardingTarget field is required",
 		},
 		{
 			name: "missing-key-header-name",
@@ -144,16 +150,36 @@ func (s) TestParseConfig_Failure(t *testing.T) {
 				"channelFactoryKey": "factory-key",
 				"autoshardingTarget": "target"
 			}`,
+			wantErr: "autosharding: keyHeaderName field is required",
 		},
 		{
-			name:  "empty-config",
-			input: `{}`,
+			name: "invalid-key-header-name-special-char",
+			input: `{
+				"channelFactoryKey": "factory-key",
+				"autoshardingTarget": "target",
+				"keyHeaderName": "!invalid"
+			}`,
+			wantErr: `autosharding: invalid keyHeaderName "!invalid"`,
+		},
+		{
+			name: "invalid-key-header-name-uppercase",
+			input: `{
+				"channelFactoryKey": "factory-key",
+				"autoshardingTarget": "target",
+				"keyHeaderName": "Invalid-Header"
+			}`,
+			wantErr: `autosharding: invalid keyHeaderName "Invalid-Header"`,
+		},
+		{
+			name:    "empty-config",
+			input:   `{}`,
+			wantErr: "autosharding: channelFactoryKey field is required",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := parser.ParseConfig(json.RawMessage(test.input)); err == nil {
-				t.Fatalf("ParseConfig() succeeded, want error")
+			if _, err := parser.ParseConfig(json.RawMessage(test.input)); err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("ParseConfig() = %v, want error containing %q", err, test.wantErr)
 			}
 		})
 	}

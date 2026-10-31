@@ -25,6 +25,12 @@ export GOBIN="${WORKDIR}"/bin
 export PATH="${GOBIN}:${PATH}"
 mkdir -p "${GOBIN}"
 
+# The version of the Go toolchain used to build the protoc plugins affects the
+# generated code. Build them with the minimum supported Go version, i.e. the go
+# line in the root go.mod, so that the generated code does not depend on the
+# locally installed Go version.
+export GOTOOLCHAIN="go$(awk '/^go /{print $2}' "$(dirname "${0}")"/../go.mod)"
+
 echo "removing existing generated files..."
 # grpc_testing_not_regenerated/*.pb.go is not re-generated,
 # see grpc_testing_not_regenerated/README.md for details.
@@ -55,6 +61,17 @@ mkdir -p "${WORKDIR}/googleapis/google/rpc"
 echo "Pulling code.proto from https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto..."
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}/googleapis/google/rpc/code.proto"
 
+echo "Pulling protos from https://github.com/GoogleCloudPlatform/autosharding..."
+if [ -d "${WORKDIR}/autosharding" ]; then
+  (cd "${WORKDIR}/autosharding" && git pull)
+else
+  git clone --quiet https://github.com/GoogleCloudPlatform/autosharding "${WORKDIR}/autosharding"
+fi
+
+# Pull in google/api/field_behavior.proto as a proto dependency
+mkdir -p "${WORKDIR}/googleapis/google/api"
+echo "Pulling field_behavior.proto from https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/field_behavior.proto..."
+curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/field_behavior.proto > "${WORKDIR}/googleapis/google/api/field_behavior.proto"
 
 mkdir -p "${WORKDIR}/out"
 
@@ -79,6 +96,7 @@ SOURCES=(
   "${WORKDIR}/grpc-proto/grpc/lookup/v1/rls_config.proto"
   "${WORKDIR}"/grpc-proto/grpc/testing/*.proto
   "${WORKDIR}"/grpc-proto/grpc/core/*.proto
+  "${WORKDIR}"/autosharding/proto/autosharding/v1/autosharding.proto
 )
 
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
@@ -106,6 +124,7 @@ for src in "${SOURCES[@]}"; do
     -I"${WORKDIR}/grpc-proto" \
     -I"${WORKDIR}/googleapis" \
     -I"${WORKDIR}/protobuf/src" \
+    -I"${WORKDIR}/autosharding" \
     "${src}"
 done
 
@@ -123,6 +142,11 @@ done
 # current location. Move it into the right place.
 mkdir -p "${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 mv "${WORKDIR}"/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* "${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+
+# The go_package option in the autosharding proto doesn't match the current
+# location. Move it into the right place.
+mkdir -p "${WORKDIR}/out/google.golang.org/grpc/balancer/autosharding/internal/proto"
+mv "${WORKDIR}"/out/github.com/GoogleCloudPlatform/autosharding/apiv1/*.pb.go "${WORKDIR}/out/google.golang.org/grpc/balancer/autosharding/internal/proto"
 
 # grpc_testing_not_regenerated/*.pb.go are not re-generated,
 # see grpc_testing_not_regenerated/README.md for details.

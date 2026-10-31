@@ -29,6 +29,11 @@ import (
 type sliceMapEntry struct {
 	startKey  []byte // Inclusive start key of the key-range
 	endpoints []int  // Indices into list[PickerEndpoint] in the Picker
+
+	// Set when the sharding server explicitly assigned no endpoints to this
+	// slice. Picks matching such slices fail even if fallback is enabled.
+	// Always false for slices synthesized to fill gaps.
+	fallbackDisabled bool
 }
 
 // sliceMap is an immutable data structure used by the Picker to map request
@@ -107,8 +112,9 @@ func buildSliceMap(endpointMap map[string]*endpointState, assignment *sharding.A
 	sm.slices = make([]sliceMapEntry, 0, len(assignment.Slices))
 	for _, s := range assignment.Slices {
 		entry := sliceMapEntry{
-			startKey:  s.StartKey,
-			endpoints: make([]int, 0, len(s.Endpoints)),
+			startKey:         s.StartKey,
+			endpoints:        make([]int, 0, len(s.Endpoints)),
+			fallbackDisabled: s.FallbackDisabled,
 		}
 
 		// Populate the endpoints for this slice by looking up the endpoint

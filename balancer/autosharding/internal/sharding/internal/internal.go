@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,18 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
-package wrr
+
+// Package internal contains functionality internal to the sharding package.
+package internal
 
 import (
-	"testing"
+	"google.golang.org/grpc/internal/backoff"
 )
 
-func (s) TestEDFOnEndpointsWithSameWeight(t *testing.T) {
-	wrr := NewEDF()
-	wrr.Add("1", 1)
-	wrr.Add("2", 1)
-	wrr.Add("3", 1)
-	expected := []string{"1", "2", "3", "1", "2", "3", "1", "2", "3", "1", "2", "3"}
-	for i := 0; i < len(expected); i++ {
-		item := wrr.Next().(string)
-		if item != expected[i] {
-			t.Errorf("wrr Next=%s, want=%s", item, expected[i])
-		}
-	}
-}
+var (
+	// DefaultBackoff is the default backoff function used for retrying streams.
+	// Overridden in tests.
+	DefaultBackoff = backoff.DefaultExponential.Backoff
+)
