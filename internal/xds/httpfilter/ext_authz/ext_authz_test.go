@@ -32,16 +32,19 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	teststats "google.golang.org/grpc/internal/testutils/stats"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	iextauthz "google.golang.org/grpc/internal/xds/httpfilter/ext_authz/internal"
 
@@ -517,6 +520,57 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 	}
 }
 
+// Test verifies that when filter_enabled is set to less than 100%, external
+// authorization is enabled for an RPC only if the random number drawn for it,
+// in the range [0, denominator), is less than the numerator.
+func (s) TestIsExtAuthzFilterEnabled(t *testing.T) {
+	tests := []struct {
+		name          string
+		filterEnabled xdsresource.FractionalPercent
+		randNum       uint32 // Random number returned by the overridden randUint32N.
+		wantEnabled   bool
+	}{
+		{
+			name:          "DenominatorHundred_RandomNumberBelowNumerator",
+			filterEnabled: xdsresource.FractionalPercent{Numerator: 25, Denominator: 100, PPM: 250000},
+			randNum:       24,
+			wantEnabled:   true,
+		},
+		{
+			name:          "DenominatorHundred_RandomNumberAtNumerator",
+			filterEnabled: xdsresource.FractionalPercent{Numerator: 25, Denominator: 100, PPM: 250000},
+			randNum:       25,
+			wantEnabled:   false,
+		},
+		{
+			name:          "DenominatorMillion_RandomNumberBelowNumerator",
+			filterEnabled: xdsresource.FractionalPercent{Numerator: 5, Denominator: 1000000, PPM: 5},
+			randNum:       4,
+			wantEnabled:   true,
+		},
+		{
+			name:          "DenominatorMillion_RandomNumberAtNumerator",
+			filterEnabled: xdsresource.FractionalPercent{Numerator: 5, Denominator: 1000000, PPM: 5},
+			randNum:       5,
+			wantEnabled:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origRandUint32N := randUint32N
+			defer func() { randUint32N = origRandUint32N }()
+			randUint32N = func(uint32) uint32 {
+				return tt.randNum
+			}
+
+			i := &clientInterceptor{config: config{filterEnabled: tt.filterEnabled}}
+			if got := i.isExtAuthzEnabled(); got != tt.wantEnabled {
+				t.Errorf("isExtAuthzEnabled() got = %v, want %v", got, tt.wantEnabled)
+			}
+		})
+	}
+}
+
 // Test verifies that BuildClientInterceptor returns appropriate errors for
 // invalid inputs or failures.
 func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
@@ -724,5 +778,50 @@ func (s) TestBuildClientInterceptor_ChannelCleanup(t *testing.T) {
 	defer intptr3.Close()
 	if dialCount != 2 {
 		t.Fatalf("Unexpected dialCount: got %d, want 2", dialCount)
+	}
+}
+
+// Test verifies that NewStream fails the RPC with UNAVAILABLE, without
+// creating the data plane stream, when the authz client is already closed
+// (its refcount has reached zero).
+func (s) TestClientInterceptor_AuthzClientClosed(t *testing.T) {
+	origCreateExtAuthzChannel := iextauthz.CreateExtAuthzChannel
+	iextauthz.CreateExtAuthzChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+		conn, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, nil, err
+		}
+		return conn, func() { conn.Close() }, nil
+	}
+	defer func() { iextauthz.CreateExtAuthzChannel = origCreateExtAuthzChannel }()
+
+	// NewStream records metrics, so the filter needs a metrics recorder.
+	cf := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{MetricsRecorder: teststats.NewTestMetricsRecorder()})
+	defer cf.Close()
+
+	cfg := config{
+		filterEnabled: xdsresource.FractionalPercent{Numerator: 100, Denominator: 100, PPM: 1000000},
+		statusOnError: codes.PermissionDenied,
+		grpcService: &grpcservice.Config{
+			TargetURI:          "localhost:1234",
+			ChannelCredentials: allowlistInsecureCreds,
+		},
+	}
+
+	// Closing the only interceptor using the authz client drops the client's
+	// refcount to zero, which closes it.
+	intptr := buildInterceptor(t, cf, cfg)
+	intptr.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
+		t.Error("newStream() called, want the RPC to fail before the data plane stream is created")
+		return nil, nil
+	}
+	const wantErr = "extauthz: authz client is closed"
+	if _, err := intptr.NewStream(ctx, resolver.RPCInfo{}, newStream); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("NewStream() returned unexpected results, got %v, want error containing %q", err, wantErr)
 	}
 }
