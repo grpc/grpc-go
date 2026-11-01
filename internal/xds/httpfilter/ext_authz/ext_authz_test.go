@@ -44,7 +44,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	teststats "google.golang.org/grpc/internal/testutils/stats"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	iextauthz "google.golang.org/grpc/internal/xds/httpfilter/ext_authz/internal"
 
@@ -795,8 +794,7 @@ func (s) TestClientInterceptor_AuthzClientClosed(t *testing.T) {
 	}
 	defer func() { iextauthz.CreateExtAuthzChannel = origCreateExtAuthzChannel }()
 
-	// NewStream records metrics, so the filter needs a metrics recorder.
-	cf := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{MetricsRecorder: teststats.NewTestMetricsRecorder()})
+	cf := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{})
 	defer cf.Close()
 
 	cfg := config{

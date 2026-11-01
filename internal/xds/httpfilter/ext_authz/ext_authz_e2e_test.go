@@ -53,10 +53,8 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	estats "google.golang.org/grpc/experimental/stats"
 	grpcinternal "google.golang.org/grpc/internal"
 	iresolver "google.golang.org/grpc/internal/resolver"
-	teststats "google.golang.org/grpc/internal/testutils/stats"
 	iextauthz "google.golang.org/grpc/internal/xds/httpfilter/ext_authz/internal"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -319,14 +317,14 @@ func makeStreamingRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wa
 // setupTestClient configures the management server with xDS resources that
 // include the ext_authz filter, and creates a new gRPC client that is closed
 // when the test completes. It fails the test on any error.
-func setupTestClient(t *testing.T, authServerAddr string, extAuthzConfig *v3extauthzfilterpb.ExtAuthz, serverAddr string, opts ...grpc.DialOption) *grpc.ClientConn {
+func setupTestClient(t *testing.T, authServerAddr string, extAuthzConfig *v3extauthzfilterpb.ExtAuthz, serverAddr string) *grpc.ClientConn {
 	t.Helper()
-	return setupTestClientWithFilters(t, []*v3httppb.HttpFilter{extAuthzHTTPFilter(authServerAddr, extAuthzConfig)}, serverAddr, opts...)
+	return setupTestClientWithFilters(t, []*v3httppb.HttpFilter{extAuthzHTTPFilter(authServerAddr, extAuthzConfig)}, serverAddr)
 }
 
 // setupTestClientWithFilters is like setupTestClient, but configures the given
 // HTTP filters, in order, ahead of the router filter.
-func setupTestClientWithFilters(t *testing.T, filters []*v3httppb.HttpFilter, serverAddr string, opts ...grpc.DialOption) *grpc.ClientConn {
+func setupTestClientWithFilters(t *testing.T, filters []*v3httppb.HttpFilter, serverAddr string) *grpc.ClientConn {
 	t.Helper()
 	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
@@ -352,8 +350,7 @@ func setupTestClientWithFilters(t *testing.T, filters []*v3httppb.HttpFilter, se
 		t.Fatalf("Failed to update management server with resources: %v", err)
 	}
 
-	dopts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder)}, opts...)
-	cc, err := grpc.NewClient("xds:///"+serviceName, dopts...)
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
 		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
@@ -1197,228 +1194,6 @@ func (s) TestExtAuthz_RequestHeaderFiltering(t *testing.T) {
 
 	makeUnaryRPC(outgoingCtx, t, cc, codes.OK, nil, nil, gotUnaryMD, wantHeaders)
 	makeStreamingRPC(outgoingCtx, t, cc, codes.OK, nil, nil, gotStreamingMD, wantHeaders)
-}
-
-// Test verifies that client-side metrics are emitted correctly during RPC
-// execution across different authorization outcomes.
-func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
-	tests := []struct {
-		name                       string
-		checkFunc                  func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
-		filterEnabled              *corepb.RuntimeFractionalPercent
-		decoderHeaderMutationRules *mutationpb.HeaderMutationRules
-		failureModeAllow           bool
-		wantMetric                 string
-		wantNotMetric              string
-	}{
-		{
-			name: "Allowed_RPCs",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-				}, nil
-			},
-			wantMetric: "grpc.client_ext_authz.allowed_rpcs",
-		},
-		{
-			name: "Denied_RPCs",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
-				}, nil
-			},
-			wantMetric: "grpc.client_ext_authz.denied_rpcs",
-		},
-		{
-			name: "Failed_RPCs_DeniedHeaderMutationFailed",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
-					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
-						DeniedResponse: &v3authpb.DeniedHttpResponse{
-							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric: "grpc.client_ext_authz.denied_rpcs",
-		},
-		{
-			name: "Failed_RPCs_DeniedHeaderMutationFailed_FailureModeAllow",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
-					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
-						DeniedResponse: &v3authpb.DeniedHttpResponse{
-							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			failureModeAllow: true,
-			wantMetric:       "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric:    "grpc.client_ext_authz.denied_rpcs",
-		},
-		{
-			name: "FilterDisabled_RPCs",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   0,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			wantMetric: "grpc.client_ext_authz.filter_disabled_rpcs",
-		},
-		{
-			name: "Failed_RPCs",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return nil, status.Error(codes.Internal, "internal server error")
-			},
-			wantMetric: "grpc.client_ext_authz.failed_rpcs",
-		},
-		{
-			name: "Failed_RPCs_HeaderMutationFailed",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-					HttpResponse: &v3authpb.CheckResponse_OkResponse{
-						OkResponse: &v3authpb.OkHttpResponse{
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric: "grpc.client_ext_authz.allowed_rpcs",
-		},
-		{
-			name: "Failed_RPCs_HeaderMutationFailed_FailureModeAllow",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-					HttpResponse: &v3authpb.CheckResponse_OkResponse{
-						OkResponse: &v3authpb.OkHttpResponse{
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			failureModeAllow: true,
-			wantMetric:       "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric:    "grpc.client_ext_authz.allowed_rpcs",
-		},
-		{
-			name: "Failed_RPCs_ResponseHeaderMutationFailed",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-					HttpResponse: &v3authpb.CheckResponse_OkResponse{
-						OkResponse: &v3authpb.OkHttpResponse{
-							ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric: "grpc.client_ext_authz.allowed_rpcs",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			for _, rpcType := range []string{"Unary", "Streaming"} {
-				t.Run(rpcType, func(t *testing.T) {
-					authAddr := startTestAuthServer(t, test.checkFunc)
-
-					backend, _, _ := startTestServiceBackend(t, nil)
-
-					extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-						FilterEnabled:              test.filterEnabled,
-						DecoderHeaderMutationRules: test.decoderHeaderMutationRules,
-						FailureModeAllow:           test.failureModeAllow,
-					}
-
-					tmr := teststats.NewTestMetricsRecorder()
-					cc := setupTestClient(t, authAddr, extAuthzCfg, backend.Address, grpc.WithStatsHandler(tmr))
-
-					client := testgrpc.NewTestServiceClient(cc)
-					ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-					defer cancel()
-
-					if rpcType == "Unary" {
-						client.EmptyCall(ctx, &testpb.Empty{})
-					} else {
-						stream, err := client.FullDuplexCall(ctx)
-						if err == nil {
-							stream.Send(&testpb.StreamingOutputCallRequest{})
-							stream.CloseSend()
-							stream.Recv()
-						}
-					}
-
-					wantData := teststats.MetricsData{
-						Handle:    estats.DescriptorForMetric(test.wantMetric),
-						IntIncr:   1,
-						LabelKeys: []string{"grpc.target"},
-						LabelVals: []string{"xds:///service-name"},
-					}
-					// Poll until the specific metric is recorded, then assert all fields
-					// with cmp.Diff
-					for {
-						if got, ok := tmr.MetricsData(test.wantMetric); ok {
-							if diff := cmp.Diff(wantData, got); diff != "" {
-								t.Fatalf("MetricsData mismatch (-want, +got):\n%s", diff)
-							}
-							break
-						}
-						select {
-						case <-ctx.Done():
-							t.Fatalf("Timed out waiting for metric %q: %v", test.wantMetric, ctx.Err())
-						case <-time.After(10 * time.Millisecond):
-						}
-					}
-
-					if test.wantNotMetric != "" {
-						if got, ok := tmr.MetricsData(test.wantNotMetric); ok {
-							t.Fatalf("Unexpected metric recorded %q: %v", test.wantNotMetric, got)
-						}
-					}
-				})
-			}
-		})
-	}
 }
 
 // Test verifies the ext_authz filter when the xDS server is not configured
