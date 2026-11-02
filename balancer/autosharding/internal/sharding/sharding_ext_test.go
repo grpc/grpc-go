@@ -623,8 +623,8 @@ func (s) TestClient_ReconnectUsesLatestAcceptedGeneration(t *testing.T) {
 }
 
 // Tests that InitialAssignmentTimeout fires when the server does not send a
-// complete assignment in time, and does not fire if a valid assignment arrives
-// before the timeout.
+// complete assignment in time, and does not fire if a valid assignment or an
+// error occurs before the timeout.
 func (s) TestClient_InitialAssignmentTimeout(t *testing.T) {
 	t.Run("timeout_fires_before_valid_assignment", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -707,6 +707,43 @@ func (s) TestClient_InitialAssignmentTimeout(t *testing.T) {
 		select {
 		case err := <-errCh:
 			t.Fatalf("Unexpected OnAssignmentError after a valid assignment: %v", err)
+		case <-time.After(initialAssignmentTimeout + defaultTestShortTimeout):
+		}
+	})
+
+	t.Run("error_cancels_initial_assignment_timer", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
+		srv := startTestShardingServer(t)
+		errCh := make(chan error, 1)
+		closeClient := sharding.NewClient(sharding.ClientOptions{
+			CC:                       srv.cc,
+			AutoshardingTarget:       "test-target",
+			UUID:                     "test-uuid",
+			InitialAssignmentTimeout: initialAssignmentTimeout,
+			OnAssignmentError:        func(err error) { errCh <- err },
+		})
+		defer closeClient()
+
+		stream := srv.waitForStream(ctx, t)
+		verifyInitialClientConfig(t, stream, &aspb.InitialClientConfig{
+			Target:           "test-target",
+			ClientUuid:       "test-uuid",
+			LatestGeneration: 0,
+		})
+
+		// Send metadata with no chunks to trigger an immediate assignment
+		// validation error on the open stream.
+		sendMetadata(t, stream, 1)
+		verifyAssignmentError(ctx, t, errCh, "no chunks were received")
+		verifyNACK(t, stream, 1, "")
+
+		// Wait past the initial assignment timeout, and verify that the timer
+		// does not fire and report a timeout error.
+		select {
+		case err := <-errCh:
+			t.Fatalf("Unexpected OnAssignmentError after initial assignment timer was cancelled: %v", err)
 		case <-time.After(initialAssignmentTimeout + defaultTestShortTimeout):
 		}
 	})
