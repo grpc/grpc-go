@@ -154,10 +154,14 @@ func (a *AllowedGRPCService) TargetURI() string {
 // SideChannelCredentials returns the channel and call credentials configured
 // for this service, paired with their identities, for use when creating the
 // side channel to it. The returned credentials are owned by the bootstrap
-// config: their cleanups are nil, and the underlying resources are released
+// config: their Build methods return no-op releases. Resources are released
 // via Cleanups when the config is no longer needed.
-func (a *AllowedGRPCService) SideChannelCredentials() (*xdscreds.ChannelCreds, []*xdscreds.CallCreds) {
-	return a.sideChannelCreds, a.sideCallCreds
+func (a *AllowedGRPCService) SideChannelCredentials() (xdscreds.BuildableChannelCreds, []xdscreds.BuildableCallCreds) {
+	var calls []xdscreds.BuildableCallCreds
+	for _, cc := range a.sideCallCreds {
+		calls = append(calls, cc)
+	}
+	return a.sideChannelCreds, calls
 }
 
 // Cleanups returns cleanups to run when the service is no longer needed.
@@ -256,7 +260,7 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 			return fmt.Errorf("xds: failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
 		identity := xdscreds.Identity{Type: cc.Type, Data: cc.Config}
-		sideChannelCreds = xdscreds.NewChannelCreds(bundle, identity, nil)
+		sideChannelCreds = xdscreds.NewChannelCreds(bundle, identity)
 		cleanups = append(cleanups, cancel)
 		break
 	}
@@ -278,7 +282,7 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 			return fmt.Errorf("xds: failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 		}
 		identity := xdscreds.Identity{Type: cfg.Type, Data: cfg.Config}
-		sideCallCreds = append(sideCallCreds, xdscreds.NewCallCreds(callCreds, identity, nil))
+		sideCallCreds = append(sideCallCreds, xdscreds.NewCallCreds(callCreds, identity))
 		cleanups = append(cleanups, cancel)
 	}
 

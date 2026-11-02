@@ -739,7 +739,7 @@ func (s) TestValidateCluster_Autosharding(t *testing.T) {
 	// from the allowed_grpc_services entry in the bootstrap configuration.
 	wantGS := &grpcservice.Config{
 		TargetURI:          shardingServiceURI,
-		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 	}
 	wantKey := wantGS.Key()
 	wantInfo := xdsresource.LBPolicyInfo{

@@ -36,65 +36,56 @@ import (
 const tlsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials"
 
 func init() {
-	RegisterChannelCredsBuilder(tlsCredsTypeURL, buildTLSCredentials)
+	RegisterChannelCredsParser(tlsCredsTypeURL, parseTLSCredentials)
 }
 
-// buildTLSCredentials builds TLS channel credentials from a TlsCredentials
-// plugin config, whose root and identity certificates are sourced from
-// certificate provider instances configured in the bootstrap config. Unknown
-// instance names and provider build failures are errors, resulting in the
-// resource being NACKed, the same way CommonTlsContext instances are handled
-// (gRFC A29). The returned cleanup closes the certificate providers.
-func buildTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver) (credentials.Bundle, func(), error) {
-	var tlsCfg tlscredspb.TlsCredentials
-	if err := anypb.UnmarshalTo(config, &tlsCfg, proto.UnmarshalOptions{}); err != nil {
-		return nil, nil, fmt.Errorf("credentials: failed to unmarshal TlsCredentials: %v", err)
+// parseTLSCredentials resolves and validates both provider references without
+// starting providers. Startup failures are reported by Build at channel creation.
+func parseTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver) (BuildableChannelCreds, error) {
+	var cfg tlscredspb.TlsCredentials
+	if err := anypb.UnmarshalTo(config, &cfg, proto.UnmarshalOptions{}); err != nil {
+		return nil, fmt.Errorf("credentials: failed to unmarshal TlsCredentials: %v", err)
 	}
 	if resolver == nil {
-		return nil, nil, fmt.Errorf("credentials: no bootstrap configuration available to resolve certificate provider instances")
+		return nil, fmt.Errorf("credentials: no bootstrap configuration available to resolve certificate provider instances")
 	}
-
-	rootInstanceName := tlsCfg.GetRootCertificateProvider().GetInstanceName()
-	if rootInstanceName == "" {
-		return nil, nil, fmt.Errorf("credentials: tls credentials must specify root_certificate_provider with an instance_name")
+	root := cfg.GetRootCertificateProvider()
+	if root.GetInstanceName() == "" {
+		return nil, fmt.Errorf("credentials: tls credentials must specify root_certificate_provider with an instance_name")
 	}
-	rootCfg, err := certProviderConfig(resolver, rootInstanceName, "root")
+	rootCfg, err := certProviderConfig(resolver, root.GetInstanceName(), "root")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	rootProvider, err := rootCfg.Build(certprovider.BuildOptions{
-		CertName: tlsCfg.GetRootCertificateProvider().GetCertificateName(),
-		WantRoot: true,
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("credentials: failed to build root certificate provider: %v", err)
-	}
-
-	b := &tlsBundle{rootProvider: rootProvider}
-	// The identity certificate provider is optional, and is configured only
-	// for mTLS. When the field is set, it must name a provider instance.
-	if identity := tlsCfg.GetIdentityCertificateProvider(); identity != nil {
-		identityInstanceName := identity.GetInstanceName()
-		if identityInstanceName == "" {
-			rootProvider.Close()
-			return nil, nil, fmt.Errorf("credentials: tls credentials identity_certificate_provider must specify an instance_name")
+	rootOpts := certprovider.BuildOptions{CertName: root.GetCertificateName(), WantRoot: true}
+	var identityCfg *certprovider.BuildableConfig
+	var identityOpts certprovider.BuildOptions
+	if identity := cfg.GetIdentityCertificateProvider(); identity != nil {
+		if identity.GetInstanceName() == "" {
+			return nil, fmt.Errorf("credentials: tls credentials identity_certificate_provider must specify an instance_name")
 		}
-		identityCfg, err := certProviderConfig(resolver, identityInstanceName, "identity")
+		identityCfg, err = certProviderConfig(resolver, identity.GetInstanceName(), "identity")
 		if err != nil {
-			rootProvider.Close()
-			return nil, nil, err
+			return nil, err
 		}
-		identityProvider, err := identityCfg.Build(certprovider.BuildOptions{
-			CertName:     identity.GetCertificateName(),
-			WantIdentity: true,
-		})
-		if err != nil {
-			rootProvider.Close()
-			return nil, nil, fmt.Errorf("credentials: failed to build identity certificate provider: %v", err)
-		}
-		b.identityProvider = identityProvider
+		identityOpts = certprovider.BuildOptions{CertName: identity.GetCertificateName(), WantIdentity: true}
 	}
-	return b, b.close, nil
+	return newChannelCreds(config, func() (credentials.Bundle, func(), error) {
+		rootProvider, err := rootCfg.Build(rootOpts)
+		if err != nil {
+			return nil, nil, fmt.Errorf("credentials: failed to build root certificate provider: %v", err)
+		}
+		bundle := &tlsBundle{rootProvider: rootProvider}
+		if identityCfg != nil {
+			identityProvider, err := identityCfg.Build(identityOpts)
+			if err != nil {
+				rootProvider.Close()
+				return nil, nil, fmt.Errorf("credentials: failed to build identity certificate provider: %v", err)
+			}
+			bundle.identityProvider = identityProvider
+		}
+		return bundle, bundle.close, nil
+	}), nil
 }
 
 // certProviderConfig looks up the certificate provider instance with the

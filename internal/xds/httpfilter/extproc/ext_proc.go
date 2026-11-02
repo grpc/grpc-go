@@ -154,8 +154,7 @@ func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions
 		deferredCloseTimeout = msg.GetDeferredCloseTimeout().AsDuration()
 	}
 
-	// Parse the GrpcService last, so that no error path can drop the built
-	// credentials: the caller owns them from here on.
+	// Parse validates the GrpcService without acquiring credentials.
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
@@ -206,8 +205,7 @@ func (builder) ParseFilterConfigOverride(ov proto.Message, opts httpfilter.Parse
 		failureModeAllowOpt = optional.New(override.GetFailureModeAllow().GetValue())
 	}
 
-	// Parse the GrpcService last, so that no error path can drop the built
-	// credentials: the caller owns them from here on.
+	// Parse validates the GrpcService without acquiring credentials.
 	var serverOpt optional.Optional[*grpcservice.Config]
 	if gs := override.GetGrpcService(); gs != nil {
 		server, err := grpcservice.Parse(gs, opts.BootstrapConfig, opts.ServerConfig)
@@ -242,7 +240,7 @@ var _ httpfilter.ClientFilterBuilder = builder{}
 // procChannelEntry is a shared external processor channel, together with the
 // GrpcService config it was created from. The config is used for channel
 // sharing comparisons when deciding whether the channel can be reused, and
-// its credentials are released when the channel is closed.
+// the channel's credentials are released when the channel is closed.
 type procChannelEntry struct {
 	server *grpcservice.Config
 	rc     *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
@@ -265,8 +263,8 @@ func (*clientFilter) Close() {}
 // attaches them to the channel.
 func sharesChannel(a, b *grpcservice.Config) bool {
 	targetEqual := a.TargetURI == b.TargetURI
-	channelCredsEqual := a.ChannelCredentials.Equal(b.ChannelCredentials)
-	callCredsEqual := slices.EqualFunc(a.CallCredentials, b.CallCredentials, (*xdscreds.CallCreds).Equal)
+	channelCredsEqual := xdscreds.EqualChannelCreds(a.ChannelCredentials, b.ChannelCredentials)
+	callCredsEqual := slices.EqualFunc(a.CallCredentials, b.CallCredentials, xdscreds.EqualCallCreds)
 	return targetEqual && channelCredsEqual && callCredsEqual
 }
 
@@ -331,12 +329,11 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server *grpcservice.Config) (*
 	client := v3procservicegrpc.NewExternalProcessorClient(cc)
 	// Create a new refcounted client. The onZero cleanup function removes the
 	// entry from the list, closes the underlying channel, and releases the
-	// credentials of the config generation the channel was created from.
+	// credentials acquired for that channel.
 	entry := &procChannelEntry{server: server}
 	entry.rc = grpcsync.NewRefCounted(client, func() {
 		cf.removeProcChannel(entry)
 		release()
-		entry.server.Close()
 	})
 
 	// Double-check if another goroutine created and stored a channel for an

@@ -455,12 +455,6 @@ func verifyConvertToServiceConfig(t *testing.T, policy *v3clusterpb.LoadBalancin
 	if err != nil {
 		t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(policy), err)
 	}
-	t.Cleanup(func() {
-		for _, cfg := range res.GRPCServices {
-			cfg.Close()
-		}
-	})
-
 	var got, want []map[string]any
 	if err := json.Unmarshal(res.LBConfig, &got); err != nil {
 		t.Fatalf("Error unmarshalling LB config (%q): %v", res.LBConfig, err)
@@ -572,7 +566,7 @@ func (s) TestConvertToServiceConfig_Autosharding_UntrustedServer(t *testing.T) {
 
 	wantGS := &grpcservice.Config{
 		TargetURI:          shardingServiceURI,
-		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 	}
 	wantKey := wantGS.Key()
 	wantGRPCServices := map[string]*grpcservice.Config{wantKey: wantGS}
@@ -705,7 +699,7 @@ func (s) TestConvertToServiceConfig_Autosharding_TrustedServer(t *testing.T) {
 		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{
 			Type: insecurePlugin.GetTypeUrl(),
 			Data: insecurePlugin.GetValue(),
-		}, nil),
+		}),
 	}
 	wantInsecureKey := wantInsecureGS.Key()
 
@@ -714,7 +708,7 @@ func (s) TestConvertToServiceConfig_Autosharding_TrustedServer(t *testing.T) {
 		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{
 			Type: xdsWithInsecureFallbackPlugin.GetTypeUrl(),
 			Data: xdsWithInsecureFallbackPlugin.GetValue(),
-		}, nil),
+		}),
 	}
 	wantXDSCredsKey := wantXDSCredsGS.Key()
 

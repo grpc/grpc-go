@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
@@ -46,6 +47,48 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+type providerConfigResolver map[string]*certprovider.BuildableConfig
+
+func (r providerConfigResolver) CertProviderConfigs() map[string]*certprovider.BuildableConfig {
+	return r
+}
+
+type countingProvider struct {
+	closed *int
+}
+
+func (*countingProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
+	return nil, nil
+}
+
+func (p *countingProvider) Close() {
+	(*p.closed)++
+}
+
+// Parsing must not start providers, including when validation fails after a
+// valid root provider reference has been resolved.
+func (s) TestTLSCredsParseDoesNotAcquireProviders(t *testing.T) {
+	for _, identity := range []string{"", "identity-instance", "missing-instance"} {
+		t.Run("identity="+identity, func(t *testing.T) {
+			starts, closes := 0, 0
+			cfg := certprovider.NewBuildableConfig(t.Name(), nil, func(certprovider.BuildOptions) certprovider.Provider {
+				starts++
+				return &countingProvider{closed: &closes}
+			})
+			resolver := providerConfigResolver{"root-instance": cfg, "identity-instance": cfg}
+			for range 10 {
+				_, err := xdscreds.GetChannelCredsParser(tlsCredsTypeURL)(tlsCredsConfig(t, "root-instance", identity), resolver)
+				if (err != nil) != (identity == "missing-instance") {
+					t.Fatalf("Parse error = %v, identity = %q", err, identity)
+				}
+			}
+			if starts != 0 || closes != 0 {
+				t.Fatalf("Parsing acquired resources: starts=%d, closes=%d; want both zero", starts, closes)
+			}
+		})
+	}
 }
 
 const (
@@ -108,9 +151,9 @@ func tlsCredsConfig(t *testing.T, root, identity string) *anypb.Any {
 	return a
 }
 
-// Tests that building TLS channel credentials validates the certificate
+// Tests that parsing TLS channel credentials validates the certificate
 // provider instance names against the bootstrap config.
-func (s) TestTLSCredsBuild_Errors(t *testing.T) {
+func (s) TestTLSCredsParse_Errors(t *testing.T) {
 	bc := testBootstrapConfig(t)
 
 	// The tlsCredsConfig helper cannot express an identity certificate
@@ -168,7 +211,7 @@ func (s) TestTLSCredsBuild_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(tt.config, tt.resolver)
+			_, err := xdscreds.GetChannelCredsParser(tlsCredsTypeURL)(tt.config, tt.resolver)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("Build returned error %v, want error containing %q", err, tt.wantErr)
 			}
@@ -226,7 +269,11 @@ func startTestTLSServer(t *testing.T, mTLS bool) net.Listener {
 func clientHandshake(t *testing.T, config *anypb.Any, bc *bootstrap.Config) error {
 	t.Helper()
 
-	bundle, cleanup, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(config, bc)
+	parsed, err := xdscreds.GetChannelCredsParser(tlsCredsTypeURL)(config, bc)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	bundle, cleanup, err := parsed.Build()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
@@ -269,7 +316,11 @@ func (s) TestTLSCredsHandshake(t *testing.T) {
 func (s) TestTLSCredsClose(t *testing.T) {
 	bc := testBootstrapConfig(t)
 
-	bundle, cleanup, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(tlsCredsConfig(t, "root-instance", ""), bc)
+	parsed, err := xdscreds.GetChannelCredsParser(tlsCredsTypeURL)(tlsCredsConfig(t, "root-instance", ""), bc)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	bundle, cleanup, err := parsed.Build()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
@@ -283,5 +334,80 @@ func (s) TestTLSCredsClose(t *testing.T) {
 	defer cancel()
 	if _, _, err := bundle.TransportCredentials().ClientHandshake(ctx, "x.test.example.com", client); err == nil || !strings.Contains(err.Error(), "closed") {
 		t.Fatalf("ClientHandshake() after close returned error %v, want error containing %q", err, "closed")
+	}
+}
+
+// The store deduplicates underlying providers, but each Build must own a
+// separate reference. Releasing one build must not shut down another's provider.
+func (s) TestTLSCredsBuildProviderLifetime(t *testing.T) {
+	for _, identity := range []string{"", "identity-instance"} {
+		t.Run("identity="+identity, func(t *testing.T) {
+			starts, closes := 0, 0
+			cfg := certprovider.NewBuildableConfig(t.Name(), nil, func(certprovider.BuildOptions) certprovider.Provider {
+				starts++
+				return &countingProvider{closed: &closes}
+			})
+			parsed, err := xdscreds.GetChannelCredsParser(tlsCredsTypeURL)(tlsCredsConfig(t, "root-instance", identity), providerConfigResolver{"root-instance": cfg, "identity-instance": cfg})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, release1, err := parsed.Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(release1)
+			_, release2, err := parsed.Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(release2)
+			want := 1
+			if identity != "" {
+				want = 2
+			}
+			if starts != want {
+				t.Fatalf("Provider starts = %d, want %d", starts, want)
+			}
+			release1()
+			if closes != 0 {
+				t.Fatalf("First release shut down %d shared providers", closes)
+			}
+			release2()
+			if closes != want {
+				t.Fatalf("Final release closed %d providers, want %d", closes, want)
+			}
+		})
+	}
+}
+
+// Configuration can be valid even when the provider cannot start. An identity
+// provider failure must release the root reference acquired earlier.
+func (s) TestTLSCredsBuildFailureCleanup(t *testing.T) {
+	for _, failing := range []string{"root", "identity"} {
+		t.Run(failing, func(t *testing.T) {
+			closes := 0
+			root := certprovider.NewBuildableConfig(t.Name()+"-root", nil, func(certprovider.BuildOptions) certprovider.Provider {
+				if failing == "root" {
+					return nil
+				}
+				return &countingProvider{closed: &closes}
+			})
+			identity := certprovider.NewBuildableConfig(t.Name()+"-identity", nil, func(certprovider.BuildOptions) certprovider.Provider { return nil })
+			parsed, err := xdscreds.GetChannelCredsParser(tlsCredsTypeURL)(tlsCredsConfig(t, "root", "identity"), providerConfigResolver{"root": root, "identity": identity})
+			if err != nil {
+				t.Fatalf("Valid config failed parsing: %v", err)
+			}
+			if _, release, err := parsed.Build(); err == nil {
+				release()
+				t.Fatal("Build succeeded, want provider startup failure")
+			}
+			want := 0
+			if failing == "identity" {
+				want = 1
+			}
+			if closes != want {
+				t.Fatalf("Closed %d providers, want %d", closes, want)
+			}
+		})
 	}
 }

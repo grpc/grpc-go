@@ -21,14 +21,19 @@ package grpcservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -141,6 +146,7 @@ func accessTokenPlugin(t *testing.T, token string) *anypb.Any {
 
 func (s) TestParse(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+	googleDefaultPlugin := &anypb.Any{TypeUrl: "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.google_default.v3.GoogleDefaultCredentials"}
 	xdsWithInsecureFallback, err := anypb.New(&xdscredspb.XdsCredentials{FallbackCredentials: insecurePlugin})
 	if err != nil {
 		t.Fatalf("Failed to marshal XdsCredentials: %v", err)
@@ -164,14 +170,36 @@ func (s) TestParse(t *testing.T) {
 			gs:     googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil),
 			sc:     trustedServerConfig(t),
 			config: bootstrapConfig(t, "{}"),
-			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil)},
+			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin))},
+		},
+		{
+			name:   "trusted_google_default_channel_creds",
+			gs:     googleGrpcService(target, []*anypb.Any{googleDefaultPlugin}, nil, nil),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(googleDefaultPlugin))},
 		},
 		{
 			name:   "trusted_xds_creds_resolve_to_fallback",
 			gs:     googleGrpcService(target, []*anypb.Any{xdsWithInsecureFallback}, nil, nil),
 			sc:     trustedServerConfig(t),
 			config: bootstrapConfig(t, "{}"),
-			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(xdsWithInsecureFallback), nil)},
+			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(xdsWithInsecureFallback))},
+		},
+		{
+			name: "trusted_skips_nil_and_unsupported_plugins",
+			gs: googleGrpcService(target, []*anypb.Any{
+				nil,
+				{TypeUrl: "type.googleapis.com/unsupported.ChannelCredentials"},
+				insecurePlugin,
+			}, []*anypb.Any{nil, tokenPlugin}, nil),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin)),
+				CallCredentials:    []xdscreds.BuildableCallCreds{xdscreds.NewCallCreds(nil, protoIdentity(tokenPlugin))},
+			},
 		},
 		{
 			// Call-creds plugins of unsupported types are skipped, while
@@ -182,8 +210,8 @@ func (s) TestParse(t *testing.T) {
 			config: bootstrapConfig(t, "{}"),
 			want: &Config{
 				TargetURI:          target,
-				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
-				CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, protoIdentity(tokenPlugin), nil)},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin)),
+				CallCredentials:    []xdscreds.BuildableCallCreds{xdscreds.NewCallCreds(nil, protoIdentity(tokenPlugin))},
 			},
 		},
 		{
@@ -201,11 +229,23 @@ func (s) TestParse(t *testing.T) {
 			wantErr: "no supported channel credentials",
 		},
 		{
+			// A malformed supported plugin must fail instead of falling back
+			// to the valid insecure plugin that follows it.
+			name: "trusted_invalid_channel_creds",
+			gs: googleGrpcService(target, []*anypb.Any{
+				{TypeUrl: "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials", Value: []byte{0xff}},
+				insecurePlugin,
+			}, nil, nil),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "failed to parse channel credentials",
+		},
+		{
 			name:   "untrusted_allowlisted_uses_allowlist_creds",
 			gs:     googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil),
 			sc:     untrustedServerConfig(t),
 			config: bootstrapConfig(t, allowedInsecure),
-			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)},
+			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"})},
 		},
 		{
 			// The proto's call-creds plugins are ignored along with its
@@ -216,14 +256,14 @@ func (s) TestParse(t *testing.T) {
 			config: bootstrapConfig(t, `{"dns:///my-service:443":{"channel_creds":[{"type":"insecure"}],"call_creds":[{"type":"jwt_token_file","config":{"jwt_token_file":"/tokens/token"}}]}}`),
 			want: &Config{
 				TargetURI:          target,
-				ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
-				CallCredentials: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
+				CallCredentials: []xdscreds.BuildableCallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
 					Type: "jwt_token_file",
 					// Bootstrap parsing normalizes the configuration JSON
 					// via json.Indent, and the identity carries the
 					// normalized bytes.
 					Data: json.RawMessage("{\n\"jwt_token_file\": \"/tokens/token\"\n}"),
-				}, nil)},
+				})},
 			},
 		},
 		{
@@ -255,7 +295,7 @@ func (s) TestParse(t *testing.T) {
 			want: &Config{
 				TargetURI:          target,
 				Timeout:            10 * time.Second,
-				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin)),
 			},
 		},
 		{
@@ -281,7 +321,7 @@ func (s) TestParse(t *testing.T) {
 			want: &Config{
 				TargetURI:          target,
 				InitialMetadata:    metadata.MD{"key-b": {"b"}, "key-a": {"raw-a"}},
-				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin)),
 			},
 		},
 	}
@@ -297,17 +337,6 @@ func (s) TestParse(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("Parse() returned unexpected error: %v", err)
-			}
-			// The cmp.Diff below compares credentials by identity only, so it
-			// cannot tell a built credential from a nil one; verify the
-			// credentials were built.
-			if got.ChannelCredentials.Bundle() == nil {
-				t.Error("Parse() returned channel credentials without a built bundle")
-			}
-			for i, cc := range got.CallCredentials {
-				if cc.Credentials() == nil {
-					t.Errorf("Parse() call credentials[%d] have no built credentials", i)
-				}
 			}
 			if diff := cmp.Diff(test.want, got); diff != "" {
 				t.Errorf("Parse() returned unexpected config (-want +got):\n%s", diff)
@@ -325,8 +354,7 @@ func (s) TestConfigDial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() returned unexpected error: %v", err)
 	}
-	defer cfg.Close()
-	if _, err := cfg.Dial(); err == nil || !strings.Contains(err.Error(), "transport level security") {
+	if _, _, err := cfg.Dial(); err == nil || !strings.Contains(err.Error(), "transport level security") {
 		t.Fatalf("Dial() returned error %v, want transport security error", err)
 	}
 }
@@ -387,14 +415,13 @@ func (s) TestConfigDialTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() returned unexpected error: %v", err)
 	}
-	defer cfg.Close()
 
 	// The backend certificate's SANs cover x.test.example.com.
-	cc, err := cfg.Dial(grpc.WithAuthority("x.test.example.com"))
+	cc, release, err := cfg.Dial(grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
 		t.Fatalf("Dial() returned unexpected error: %v", err)
 	}
-	defer cc.Close()
+	defer release()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -405,10 +432,10 @@ func (s) TestConfigDialTLS(t *testing.T) {
 
 func (s) TestConfigEqualAndKey(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
-	protoInsecure := xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil)
-	jsonInsecure := xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
-	callCredA := xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-a")}, nil)
-	callCredB := xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-b")}, nil)
+	protoInsecure := xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin))
+	jsonInsecure := xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"})
+	callCredA := xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-a")})
+	callCredB := xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-b")})
 
 	tests := []struct {
 		name string
@@ -417,20 +444,20 @@ func (s) TestConfigEqualAndKey(t *testing.T) {
 	}{
 		{
 			name: "equal",
-			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 1, InitialMetadata: metadata.Pairs("k", "v"), CallCredentials: []*xdscreds.CallCreds{callCredA}},
-			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil), Timeout: 1, InitialMetadata: metadata.Pairs("k", "v"), CallCredentials: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-a")}, nil)}},
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 1, InitialMetadata: metadata.Pairs("k", "v"), CallCredentials: []xdscreds.BuildableCallCreds{callCredA}},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin)), Timeout: 1, InitialMetadata: metadata.Pairs("k", "v"), CallCredentials: []xdscreds.BuildableCallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token", Data: []byte("token-a")})}},
 			want: true,
 		},
 		{
 			name: "equal_nil_and_empty_identity_data",
-			a:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure", Data: nil}, nil)},
-			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure", Data: []byte{}}, nil)},
+			a:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure", Data: nil})},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure", Data: []byte{}})},
 			want: true,
 		},
 		{
 			name: "equal_nil_and_empty_metadata_and_call_creds",
 			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: nil, CallCredentials: nil},
-			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.MD{}, CallCredentials: []*xdscreds.CallCreds{}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.MD{}, CallCredentials: []xdscreds.BuildableCallCreds{}},
 			want: true,
 		},
 		{
@@ -485,26 +512,26 @@ func (s) TestConfigEqualAndKey(t *testing.T) {
 		},
 		{
 			name: "different_channel_creds_data",
-			a:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: []byte("a")}, nil)},
-			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: []byte("b")}, nil)},
+			a:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: []byte("a")})},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: []byte("b")})},
 			want: false,
 		},
 		{
 			name: "different_call_creds",
 			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
-			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredA}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []xdscreds.BuildableCallCreds{callCredA}},
 			want: false,
 		},
 		{
 			name: "different_call_creds_data",
-			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredA}},
-			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredB}},
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []xdscreds.BuildableCallCreds{callCredA}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []xdscreds.BuildableCallCreds{callCredB}},
 			want: false,
 		},
 		{
 			name: "different_call_creds_order",
-			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredA, callCredB}},
-			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{callCredB, callCredA}},
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []xdscreds.BuildableCallCreds{callCredA, callCredB}},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []xdscreds.BuildableCallCreds{callCredB, callCredA}},
 			want: false,
 		},
 	}
@@ -519,4 +546,227 @@ func (s) TestConfigEqualAndKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+// lifecycleChannelCreds counts per-channel acquisitions independently of
+// provider deduplication.
+type lifecycleChannelCreds struct {
+	builds    atomic.Int32
+	releases  atomic.Int32
+	fail      bool
+	onRelease func()
+}
+
+func (*lifecycleChannelCreds) Identity() xdscreds.Identity {
+	return xdscreds.Identity{Type: "test-channel"}
+}
+
+func (c *lifecycleChannelCreds) Build() (credentials.Bundle, func(), error) {
+	c.builds.Add(1)
+	if c.fail {
+		return nil, nil, errors.New("channel build failed")
+	}
+	return insecure.NewBundle(), func() {
+		c.releases.Add(1)
+		if c.onRelease != nil {
+			c.onRelease()
+		}
+	}, nil
+}
+
+type lifecycleCallCreds struct {
+	builds   atomic.Int32
+	releases atomic.Int32
+	fail     bool
+	secure   bool
+}
+
+func (*lifecycleCallCreds) Identity() xdscreds.Identity {
+	return xdscreds.Identity{Type: "test-call"}
+}
+
+func (c *lifecycleCallCreds) Build() (credentials.PerRPCCredentials, func(), error) {
+	c.builds.Add(1)
+	if c.fail {
+		return nil, nil, errors.New("call build failed")
+	}
+	return &lifecyclePerRPCCreds{secure: c.secure}, func() { c.releases.Add(1) }, nil
+}
+
+type lifecyclePerRPCCreds struct{ secure bool }
+
+func (*lifecyclePerRPCCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return nil, nil
+}
+func (c *lifecyclePerRPCCreds) RequireTransportSecurity() bool { return c.secure }
+
+// Every successful Build is balanced on success, partial failure, and client
+// construction failure. Release closes the channel first, exactly once.
+func (s) TestConfigDialLifecycle(t *testing.T) {
+	tests := []struct {
+		name                string
+		channelFail         bool
+		callFail            int
+		clientFail          bool
+		wantChannelReleases int32
+		wantCallBuilds      [2]int32
+		wantCallReleases    [2]int32
+	}{
+		{name: "success", callFail: -1, wantChannelReleases: 1, wantCallBuilds: [2]int32{1, 1}, wantCallReleases: [2]int32{1, 1}},
+		{name: "channel_build_failure", channelFail: true, callFail: -1},
+		{name: "first_call_failure", callFail: 0, wantChannelReleases: 1, wantCallBuilds: [2]int32{1, 0}},
+		{name: "later_call_failure", callFail: 1, wantChannelReleases: 1, wantCallBuilds: [2]int32{1, 1}, wantCallReleases: [2]int32{1, 0}},
+		{name: "client_creation_failure", callFail: -1, clientFail: true, wantChannelReleases: 1, wantCallBuilds: [2]int32{1, 1}, wantCallReleases: [2]int32{1, 1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			channel := &lifecycleChannelCreds{fail: test.channelFail}
+			calls := [2]*lifecycleCallCreds{{fail: test.callFail == 0, secure: test.clientFail}, {fail: test.callFail == 1}}
+			cfg := &Config{TargetURI: target, ChannelCredentials: channel, CallCredentials: []xdscreds.BuildableCallCreds{calls[0], calls[1]}}
+			conn, release, err := cfg.Dial()
+			wantErr := test.channelFail || test.callFail >= 0 || test.clientFail
+			if (err != nil) != wantErr {
+				t.Fatalf("Dial error = %v, want failure %v", err, wantErr)
+			}
+			if wantErr {
+				if conn != nil || release != nil {
+					t.Fatal("Dial returned a channel or release with an error")
+				}
+			} else {
+				t.Cleanup(release)
+				channel.onRelease = func() {
+					if state := conn.(*grpc.ClientConn).GetState(); state != connectivity.Shutdown {
+						t.Errorf("Credential cleanup ran before channel shutdown: %v", state)
+					}
+				}
+				var wg sync.WaitGroup
+				for range 10 {
+					wg.Add(1)
+					go func() { defer wg.Done(); release() }()
+				}
+				wg.Wait()
+				release()
+			}
+			if got := channel.builds.Load(); got != 1 {
+				t.Errorf("Channel builds = %d, want 1", got)
+			}
+			if got := channel.releases.Load(); got != test.wantChannelReleases {
+				t.Errorf("Channel releases = %d, want %d", got, test.wantChannelReleases)
+			}
+			for i, call := range calls {
+				if got := call.builds.Load(); got != test.wantCallBuilds[i] {
+					t.Errorf("Call %d builds = %d, want %d", i, got, test.wantCallBuilds[i])
+				}
+				if got := call.releases.Load(); got != test.wantCallReleases[i] {
+					t.Errorf("Call %d releases = %d, want %d", i, got, test.wantCallReleases[i])
+				}
+			}
+		})
+	}
+}
+
+func (s) TestConfigDialIndependentLifetimes(t *testing.T) {
+	channel := &lifecycleChannelCreds{}
+	call := &lifecycleCallCreds{}
+	cfg := &Config{TargetURI: target, ChannelCredentials: channel, CallCredentials: []xdscreds.BuildableCallCreds{call}}
+	_, release1, err := cfg.Dial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release1)
+	conn2, release2, err := cfg.Dial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release2)
+	release1()
+	if state := conn2.(*grpc.ClientConn).GetState(); state == connectivity.Shutdown {
+		t.Fatal("Closing the first dial closed the second channel")
+	}
+	if got := channel.releases.Load(); got != 1 {
+		t.Fatalf("Channel releases = %d, want 1", got)
+	}
+	release2()
+	if channel.builds.Load() != 2 || channel.releases.Load() != 2 || call.builds.Load() != 2 || call.releases.Load() != 2 {
+		t.Fatal("Independent channel acquisitions were not all released")
+	}
+}
+
+const lifecycleChannelTypeURL = "type.googleapis.com/grpc.testing.LifecycleChannelCredentials"
+
+func init() {
+	// This parser is intentionally resource-free. Tests can inspect its Build
+	// counter to detect accidental acquisition by grpcservice.Parse.
+	xdscreds.RegisterChannelCredsParser(lifecycleChannelTypeURL, func(*anypb.Any, xdscreds.CertProviderConfigResolver) (xdscreds.BuildableChannelCreds, error) {
+		return &lifecycleChannelCreds{}, nil
+	})
+}
+
+func (s) TestParseDoesNotBuildCredentials(t *testing.T) {
+	bc, sc := bootstrapConfig(t, "{}"), trustedServerConfig(t)
+	for range 10 {
+		gs := googleGrpcService(target, []*anypb.Any{{TypeUrl: lifecycleChannelTypeURL}}, nil, nil)
+		cfg, err := Parse(gs, bc, sc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := cfg.ChannelCredentials.(*lifecycleChannelCreds).builds.Load(); got != 0 {
+			t.Fatalf("Parse built credentials %d times, want zero", got)
+		}
+		// A rejected call plugin after a valid channel plugin must not acquire
+		// anything either. No Config.Close is necessary on this error path.
+		gs.GetGoogleGrpc().CallCredentialsPlugin = []*anypb.Any{accessTokenPlugin(t, "")}
+		if _, err := Parse(gs, bc, sc); err == nil {
+			t.Fatal("Parse accepted an empty access token")
+		}
+	}
+}
+
+func (s) TestParseCopiesCredentialIdentity(t *testing.T) {
+	channelPlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+	callPlugin := accessTokenPlugin(t, "test-token")
+	cfg, err := Parse(googleGrpcService(target, []*anypb.Any{channelPlugin}, []*anypb.Any{callPlugin}, nil), bootstrapConfig(t, "{}"), trustedServerConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := cfg.Key()
+	callPlugin.Value[0] ^= 0xff
+	id := cfg.CallCredentials[0].Identity()
+	id.Data[0] ^= 0xff
+	if cfg.Key() != key {
+		t.Fatal("Mutating input or returned identity changed the config key")
+	}
+}
+
+// Closing a dial only releases the borrow. Bootstrap remains the owner of
+// allowlisted credentials, which are safe to use for another dial.
+func (s) TestConfigDialBootstrapCredentials(t *testing.T) {
+	bc := bootstrapConfig(t, fmt.Sprintf("{%q:{\"channel_creds\":[{\"type\":\"insecure\"}]}}", target))
+	cfg, err := Parse(googleGrpcService(target, nil, nil, nil), bc, untrustedServerConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle1, release1, err := cfg.ChannelCredentials.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	release1()
+	bundle2, release2, err := cfg.ChannelCredentials.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release2()
+	if bundle1 != bundle2 {
+		t.Fatal("Bootstrap credentials were rebuilt instead of borrowed")
+	}
+	_, close1, err := cfg.Dial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	close1()
+	_, close2, err := cfg.Dial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	close2()
 }

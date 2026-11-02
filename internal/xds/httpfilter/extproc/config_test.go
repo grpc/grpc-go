@@ -24,11 +24,14 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
@@ -65,7 +68,7 @@ const testBaseURI = "base-uri"
 // credentials configured for allowlisted targets by testParseOptions; want
 // configs compare against it by identity. It carries a real insecure bundle
 // so that configs built from it can be dialed.
-var allowlistInsecureCreds = xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "insecure"}, nil)
+var allowlistInsecureCreds = xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "insecure"})
 
 // testPerRPCCreds is a no-op PerRPCCredentials for fixtures whose configs are
 // dialed for real.
@@ -131,7 +134,7 @@ func overrideCreateExtProcChannelWithError(t *testing.T) {
 // identities, and ignores the per-RPC timeout and initial metadata.
 func (s) TestSharesChannel(t *testing.T) {
 	insecureCreds := func() *xdscreds.ChannelCreds {
-		return xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
+		return xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"})
 	}
 	const target = "dns:///proc-server:443"
 
@@ -155,14 +158,14 @@ func (s) TestSharesChannel(t *testing.T) {
 		{
 			name: "different_channel_creds",
 			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
-			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "other"}, nil)},
+			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "other"})},
 			want: false,
 		},
 		{
 			name: "different_call_creds",
 			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
-			b: &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), CallCredentials: []*xdscreds.CallCreds{
-				xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token"}, nil),
+			b: &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), CallCredentials: []xdscreds.BuildableCallCreds{
+				xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token"}),
 			}},
 			want: false,
 		},
@@ -705,8 +708,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: &grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "test-channel-creds"}, nil),
-					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "test-call-creds"}, nil)},
+					ChannelCredentials: xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "test-channel-creds"}),
+					CallCredentials:    []xdscreds.BuildableCallCreds{xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "test-call-creds"})},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -740,8 +743,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: &grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "test-channel-creds"}, nil),
-					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "test-call-creds"}, nil)},
+					ChannelCredentials: xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "test-channel-creds"}),
+					CallCredentials:    []xdscreds.BuildableCallCreds{xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "test-call-creds"})},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -976,5 +979,119 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 				t.Fatalf("BuildClientInterceptor() returned error: %v, want %v", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+type channelLifecycleCreds struct {
+	builds      atomic.Int32
+	releases    atomic.Int32
+	beforeBuild func()
+}
+
+func (*channelLifecycleCreds) Identity() xdscreds.Identity {
+	return xdscreds.Identity{Type: "lifecycle-test"}
+}
+
+func (c *channelLifecycleCreds) Build() (credentials.Bundle, func(), error) {
+	c.builds.Add(1)
+	if c.beforeBuild != nil {
+		c.beforeBuild()
+	}
+	return insecure.NewBundle(), func() { c.releases.Add(1) }, nil
+}
+
+func (s) TestChannelReuseDoesNotBuildCredentials(t *testing.T) {
+	first, second := &channelLifecycleCreds{}, &channelLifecycleCreds{}
+	filter := &clientFilter{}
+	a, err := filter.BuildClientInterceptor(baseConfig{server: &grpcservice.Config{TargetURI: "dns:///proc.test:443", ChannelCredentials: first}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeA := sync.OnceFunc(a.Close)
+	t.Cleanup(closeA)
+	b, err := filter.BuildClientInterceptor(baseConfig{server: &grpcservice.Config{TargetURI: "dns:///proc.test:443", ChannelCredentials: second, Timeout: time.Second}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeB := sync.OnceFunc(b.Close)
+	t.Cleanup(closeB)
+	if a.(*clientInterceptor).procClient != b.(*clientInterceptor).procClient {
+		t.Fatal("Equivalent configurations did not share a channel")
+	}
+	if first.builds.Load() != 1 || second.builds.Load() != 0 {
+		t.Fatal("Channel reuse built credentials for the unused config")
+	}
+	closeA()
+	if first.releases.Load() != 0 {
+		t.Fatal("Credentials released before the last channel user closed")
+	}
+	closeB()
+	if first.releases.Load() != 1 || second.releases.Load() != 0 {
+		t.Fatal("Shared channel credentials were not released exactly once")
+	}
+}
+
+func (s) TestConcurrentChannelCreationReleasesLosingCredentials(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	started := make(chan struct{}, 2)
+	unblock := make(chan struct{})
+	unblockOnce := sync.OnceFunc(func() { close(unblock) })
+	defer unblockOnce()
+	creds := &channelLifecycleCreds{beforeBuild: func() {
+		started <- struct{}{}
+		select {
+		case <-unblock:
+		case <-ctx.Done():
+		}
+	}}
+	filter := &clientFilter{}
+	cfg := baseConfig{server: &grpcservice.Config{TargetURI: "dns:///proc.test:443", ChannelCredentials: creds}}
+	type result struct {
+		interceptor httpfilter.ClientInterceptor
+		err         error
+	}
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			interceptor, err := filter.BuildClientInterceptor(cfg, nil)
+			results <- result{interceptor, err}
+		}()
+	}
+	for range 2 {
+		select {
+		case <-started:
+		case <-ctx.Done():
+			t.Fatal("Both channel creations did not reach credential Build")
+		}
+	}
+	unblockOnce()
+	interceptors := make([]httpfilter.ClientInterceptor, 0, 2)
+	for range 2 {
+		select {
+		case res := <-results:
+			if res.err != nil {
+				t.Fatal(res.err)
+			}
+			interceptors = append(interceptors, res.interceptor)
+		case <-ctx.Done():
+			t.Fatal("Channel creation did not complete")
+		}
+	}
+	closeAll := sync.OnceFunc(func() {
+		for _, interceptor := range interceptors {
+			interceptor.Close()
+		}
+	})
+	defer closeAll()
+	if creds.builds.Load() != 2 || creds.releases.Load() != 1 {
+		t.Fatalf("After the race: builds=%d releases=%d, want 2 and 1", creds.builds.Load(), creds.releases.Load())
+	}
+	if interceptors[0].(*clientInterceptor).procClient != interceptors[1].(*clientInterceptor).procClient {
+		t.Fatal("Concurrent requests retained separate channels")
+	}
+	closeAll()
+	if creds.releases.Load() != 2 {
+		t.Fatalf("Final cleanup released %d acquisitions, want 2", creds.releases.Load())
 	}
 }

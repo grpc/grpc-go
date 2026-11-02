@@ -1151,11 +1151,11 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 						}},
 						// Equal compares the built credentials by identity, so
 						// the fixture carries identity-only pairs.
-						sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+						sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 						sideCallCreds: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
 							Type: "jwt_token_file",
 							Data: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
-						}, nil)},
+						})},
 					},
 				},
 			},
@@ -1761,7 +1761,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}]}}`,
 			want: AllowedGRPCServices{target: {
 				targetURI:        target,
-				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 			}},
 		},
 		{
@@ -1769,11 +1769,11 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"}}]}}`,
 			want: AllowedGRPCServices{target: {
 				targetURI:        target,
-				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 				sideCallCreds: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
 					Type: "jwt_token_file",
 					Data: json.RawMessage(`{"jwt_token_file": "/var/run/secrets/tokens/istio-token"}`),
-				}, nil)},
+				})},
 			}},
 			wantCallCreds: 1,
 		},
@@ -1784,7 +1784,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "unsupported_call_creds_type"}]}}`,
 			want: AllowedGRPCServices{target: {
 				targetURI:        target,
-				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 			}},
 		},
 		{
@@ -1794,16 +1794,16 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-one"}}, {"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-two"}}]}}`,
 			want: AllowedGRPCServices{target: {
 				targetURI:        target,
-				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 				sideCallCreds: []*xdscreds.CallCreds{
 					xdscreds.NewCallCreds(nil, xdscreds.Identity{
 						Type: "jwt_token_file",
 						Data: json.RawMessage(`{"jwt_token_file": "/tokens/token-one"}`),
-					}, nil),
+					}),
 					xdscreds.NewCallCreds(nil, xdscreds.Identity{
 						Type: "jwt_token_file",
 						Data: json.RawMessage(`{"jwt_token_file": "/tokens/token-two"}`),
-					}, nil),
+					}),
 				},
 			}},
 			wantCallCreds: 2,
@@ -1813,7 +1813,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "tls", "config": {}}]}}`,
 			want: AllowedGRPCServices{target: {
 				targetURI:        target,
-				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: json.RawMessage("{}")}, nil),
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: json.RawMessage("{}")}),
 			}},
 		},
 		{
@@ -1821,7 +1821,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "unsupported_cred_type"}, {"type": "insecure"}]}}`,
 			want: AllowedGRPCServices{target: {
 				targetURI:        target,
-				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 			}},
 		},
 	}
@@ -1839,14 +1839,27 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			// a built credential from a nil one; verify the credentials were
 			// built.
 			chanCreds, callCreds := got[target].SideChannelCredentials()
-			if chanCreds == nil || chanCreds.Bundle() == nil {
+			if chanCreds == nil {
+				t.Fatal("SideChannelCredentials() returned no channel credentials config")
+			}
+			bundle, release, err := chanCreds.Build()
+			if err != nil {
+				t.Fatalf("Borrowing bootstrap channel credentials failed: %v", err)
+			}
+			defer release()
+			if bundle == nil {
 				t.Error("SideChannelCredentials() returned no built channel credentials")
 			}
 			if len(callCreds) != test.wantCallCreds {
 				t.Errorf("SideChannelCredentials() returned %d call credentials, want %d", len(callCreds), test.wantCallCreds)
 			}
 			for i, cc := range callCreds {
-				if cc.Credentials() == nil {
+				built, release, err := cc.Build()
+				if err != nil {
+					t.Fatalf("Borrowing bootstrap call credentials failed: %v", err)
+				}
+				defer release()
+				if built == nil {
 					t.Errorf("SideChannelCredentials() call credentials[%d] have no built credentials", i)
 				}
 			}
@@ -1954,7 +1967,7 @@ func (s) TestAllowedGRPCServices_Enabled(t *testing.T) {
 	cfg := `{"dns:///side-channel:443": {"channel_creds": [{"type": "insecure"}]}}`
 	want := AllowedGRPCServices{target: {
 		targetURI:        target,
-		sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+		sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}),
 	}}
 
 	tests := []struct {
