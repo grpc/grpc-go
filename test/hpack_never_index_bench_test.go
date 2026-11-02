@@ -24,7 +24,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 
@@ -56,15 +57,9 @@ func BenchmarkE2EHPACKNeverIndex(b *testing.B) {
 			for _, neverIndex := range []bool{false, true} {
 				name := fmt.Sprintf("stableHeaders=%d/highCardinalityHeaders=%d/neverIndex=%v", stable, n, neverIndex)
 				b.Run(name, func(b *testing.B) {
-					orig := envconfig.HPACKNeverIndexHeaders
-					b.Cleanup(func() { envconfig.HPACKNeverIndexHeaders = orig })
-					envconfig.HPACKNeverIndexHeaders = nil
+					var dopts []grpc.DialOption
 					if neverIndex {
-						set := make(map[string]struct{}, len(names))
-						for _, h := range names {
-							set[h] = struct{}{}
-						}
-						envconfig.HPACKNeverIndexHeaders = set
+						dopts = append(dopts, experimental.WithHPACKNeverIndexMetadataKeys(names...))
 					}
 
 					ss := &stubserver.StubServer{
@@ -72,7 +67,7 @@ func BenchmarkE2EHPACKNeverIndex(b *testing.B) {
 							return &testpb.Empty{}, nil
 						},
 					}
-					if err := ss.Start(nil); err != nil {
+					if err := ss.Start(nil, dopts...); err != nil {
 						b.Fatalf("Error starting endpoint server: %v", err)
 					}
 					defer ss.Stop()

@@ -22,6 +22,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/backoff"
@@ -62,6 +63,7 @@ func init() {
 	internal.JoinDialOptions = newJoinDialOption
 	internal.DisableGlobalDialOptions = newDisableGlobalDialOptions
 	internal.WithBufferPool = withBufferPool
+	internal.WithHPACKNeverIndexMetadataKeys = withHPACKNeverIndexMetadataKeys
 }
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -809,5 +811,15 @@ func WithMaxCallAttempts(n int) DialOption {
 func withBufferPool(bufferPool mem.BufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.BufferPool = bufferPool
+	})
+}
+
+func withHPACKNeverIndexMetadataKeys(keys ...string) DialOption {
+	set := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		set[strings.ToLower(k)] = struct{}{}
+	}
+	return newFuncDialOption(func(o *dialOptions) {
+		o.copts.HPACKNeverIndexMetadataKeys = set
 	})
 }

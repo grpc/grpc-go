@@ -83,3 +83,16 @@ func BufferPool(bufferPool mem.BufferPool) grpc.ServerOption {
 func AcceptCompressors(names ...string) grpc.CallOption {
 	return internal.AcceptCompressors.(func(...string) grpc.CallOption)(names...)
 }
+
+// WithHPACKNeverIndexMetadataKeys returns a grpc.DialOption that makes the
+// client send outgoing metadata with the given keys as HPACK never-indexed
+// literals, keeping them out of the HPACK dynamic table. Keys are
+// case-insensitive. If specified more than once, the last one wins.
+//
+// It is meant for metadata whose value changes on almost every RPC, such as
+// request IDs: indexing those only evicts table entries that could be reused.
+// The key is then sent in full on every RPC, so it should not be used for
+// metadata whose value repeats.
+func WithHPACKNeverIndexMetadataKeys(keys ...string) grpc.DialOption {
+	return internal.WithHPACKNeverIndexMetadataKeys.(func(...string) grpc.DialOption)(keys...)
+}

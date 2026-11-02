@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -124,20 +123,18 @@ func BenchmarkHPACKNeverIndex(b *testing.B) {
 			names[i] = fmt.Sprintf("x-unique-%02d", i)
 			highCardinality[names[i]] = true
 		}
+		// grpc-timeout changes on every RPC as well.
 		highCardinality["grpc-timeout"] = true
 
 		for _, neverIndex := range []bool{false, true} {
 			name := fmt.Sprintf("highCardinalityHeaders=%d/neverIndex=%v", n, neverIndex)
 			b.Run(name, func(b *testing.B) {
-				orig := envconfig.HPACKNeverIndexHeaders
-				b.Cleanup(func() { envconfig.HPACKNeverIndexHeaders = orig })
-				envconfig.HPACKNeverIndexHeaders = nil
+				var neverIndexKeys map[string]struct{}
 				if neverIndex {
-					set := make(map[string]struct{}, len(names))
+					neverIndexKeys = make(map[string]struct{}, len(names))
 					for _, h := range names {
-						set[h] = struct{}{}
+						neverIndexKeys[h] = struct{}{}
 					}
-					envconfig.HPACKNeverIndexHeaders = set
 				}
 
 				values := make([][]string, len(names))
@@ -162,9 +159,10 @@ func BenchmarkHPACKNeverIndex(b *testing.B) {
 				ctx = metadata.NewOutgoingContext(ctx, md)
 
 				t := &http2Client{
-					scheme:    "https",
-					userAgent: "grpc-go/benchmark",
-					md:        metadata.MD{},
+					scheme:              "https",
+					userAgent:           "grpc-go/benchmark",
+					md:                  metadata.MD{},
+					hpackNeverIndexKeys: neverIndexKeys,
 				}
 				callHdr := &CallHdr{
 					Method: "/grpc.testing.BenchmarkService/UnaryCall",
