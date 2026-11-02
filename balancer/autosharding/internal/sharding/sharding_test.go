@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -507,8 +508,10 @@ func (s) TestTruncateRunes(t *testing.T) {
 	}
 }
 
-// Test verifies that a non-timer error is reported even if a racing timer error
-// occurs.
+// Test simulates a race between a non-timer error and the initial assignment
+// timer firing. The non-timer error should be reported even if the timer fires
+// first. If the non-timer error happens first, then the timer error should be
+// suppressed.
 func (s) TestReportError_NonTimerErrorBeatsRacingTimer(t *testing.T) {
 	var reportedErrs []error
 	c := &autoshardingClient{
@@ -517,20 +520,27 @@ func (s) TestReportError_NonTimerErrorBeatsRacingTimer(t *testing.T) {
 			reportedErrs = append(reportedErrs, err)
 		},
 	}
-	defer func() {
-		if c.initialAssignmentTimer != nil {
-			c.initialAssignmentTimer.Stop()
-		}
-	}()
 
-	// Simulate a non-timer error acquiring mu first and stopping the timer,
-	// followed by an already-fired timer callback acquiring mu with
-	// errInitialAssignmentTimeout.
 	nonTimerErr := errors.New("stream error")
-	c.reportError(nonTimerErr)
-	c.reportError(errInitialAssignmentTimeout)
+	var wg sync.WaitGroup
+	wg.Go(func() { c.reportError(nonTimerErr) })
+	wg.Go(func() { c.reportError(errInitialAssignmentTimeout) })
+	wg.Wait()
 
-	if len(reportedErrs) != 1 || !errors.Is(reportedErrs[0], nonTimerErr) {
-		t.Fatalf("reportedErrs = %v, want [%v]", reportedErrs, nonTimerErr)
+	if len(reportedErrs) == 1 {
+		t.Logf("Only one error reported. So, this must be the non-timer error")
+		if !errors.Is(reportedErrs[0], nonTimerErr) {
+			t.Fatalf("reportedErrs = %v, want [%v]", reportedErrs, nonTimerErr)
+		}
+	} else if len(reportedErrs) == 2 {
+		t.Logf("Two errors reported. The first must be the timer error")
+		if !errors.Is(reportedErrs[0], errInitialAssignmentTimeout) {
+			t.Fatalf("reportedErrs[0] = %v, want %v", reportedErrs[0], errInitialAssignmentTimeout)
+		}
+		if !errors.Is(reportedErrs[1], nonTimerErr) {
+			t.Fatalf("reportedErrs[1] = %v, want %v", reportedErrs[1], nonTimerErr)
+		}
+	} else {
+		t.Fatalf("Got %d reported errors, want 1 or 2", len(reportedErrs))
 	}
 }

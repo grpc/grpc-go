@@ -89,8 +89,8 @@ func NewClient(opts ClientOptions) func() {
 	ac.logger = igrpclog.NewPrefixLogger(logger, opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
 
 	// Start a timer that will fire after the initial assignment timeout. If a
-	// result is not received before the timer fires, the onAssignment or
-	// onAssignmentError callback will be invoked.
+	// result (a valid assignment or an error) is not received before the timer
+	// fires, the onAssignmentError callback will be invoked.
 	//
 	// Even though ac is only returned at the end of this function to the
 	// caller, there is still a data race here:
