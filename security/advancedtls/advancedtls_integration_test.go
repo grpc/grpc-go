@@ -36,6 +36,7 @@ import (
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/security/advancedtls/internal/testutils"
 	"google.golang.org/grpc/security/advancedtls/testdata"
+	grpctestdata "google.golang.org/grpc/testdata"
 )
 
 const (
@@ -939,4 +940,342 @@ func (s) TestTLSVersions(t *testing.T) {
 			defer conn.Close()
 		})
 	}
+}
+
+func loadMLDSACertPool(t *testing.T, pemPaths ...string) *x509.CertPool {
+	t.Helper()
+	pool := x509.NewCertPool()
+	for _, p := range pemPaths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("os.ReadFile(%q) failed: %v", p, err)
+		}
+		if !pool.AppendCertsFromPEM(b) {
+			t.Fatalf("AppendCertsFromPEM(%q) failed", p)
+		}
+	}
+	return pool
+}
+
+// TestMLDSAEnd2End tests server-authenticated TLS and mutual TLS (mTLS)
+// handshakes and RPCs with advancedtls using ML-DSA-44, ML-DSA-65, ML-DSA-87,
+// 2-certificate ML-DSA-87 chains, mixed ML-DSA variants, and combined classical
+// RSA + ML-DSA root stores.
+func (s) TestMLDSAEnd2End(t *testing.T) {
+	tests := []struct {
+		desc              string
+		serverCertFile    string
+		serverKeyFile     string
+		serverRootFiles   []string
+		requireClientCert bool
+		clientCertFile    string
+		clientKeyFile     string
+		clientRootFiles   []string
+		wantServerSigAlgo string
+		wantClientSigAlgo string
+	}{
+		{
+			desc:              "mldsa44_server_tls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_mldsa44.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_mldsa44.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa44.pem")},
+			wantServerSigAlgo: "ML-DSA-44",
+		},
+		{
+			desc:              "mldsa65_server_tls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_mldsa65.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_mldsa65.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa65.pem")},
+			wantServerSigAlgo: "ML-DSA-65",
+		},
+		{
+			desc:              "mldsa87_server_tls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_mldsa87.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_mldsa87.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa87.pem")},
+			wantServerSigAlgo: "ML-DSA-87",
+		},
+		{
+			desc:              "mldsa87_chain_server_tls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_chain_mldsa87.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_chain_mldsa87.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa87.pem")},
+			wantServerSigAlgo: "ML-DSA-87",
+		},
+		{
+			desc:              "mldsa44_mtls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_mldsa44.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_mldsa44.key"),
+			serverRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa44.pem")},
+			requireClientCert: true,
+			clientCertFile:    grpctestdata.Path("x509/mldsa/client_mldsa44.pem"),
+			clientKeyFile:     grpctestdata.Path("x509/mldsa/client_mldsa44.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa44.pem")},
+			wantServerSigAlgo: "ML-DSA-44",
+			wantClientSigAlgo: "ML-DSA-44",
+		},
+		{
+			desc:              "mldsa65_mtls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_mldsa65.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_mldsa65.key"),
+			serverRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa65.pem")},
+			requireClientCert: true,
+			clientCertFile:    grpctestdata.Path("x509/mldsa/client_mldsa65.pem"),
+			clientKeyFile:     grpctestdata.Path("x509/mldsa/client_mldsa65.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa65.pem")},
+			wantServerSigAlgo: "ML-DSA-65",
+			wantClientSigAlgo: "ML-DSA-65",
+		},
+		{
+			desc:              "mldsa87_mtls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_mldsa87.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_mldsa87.key"),
+			serverRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa87.pem")},
+			requireClientCert: true,
+			clientCertFile:    grpctestdata.Path("x509/mldsa/client_mldsa87.pem"),
+			clientKeyFile:     grpctestdata.Path("x509/mldsa/client_mldsa87.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa87.pem")},
+			wantServerSigAlgo: "ML-DSA-87",
+			wantClientSigAlgo: "ML-DSA-87",
+		},
+		{
+			desc:              "mldsa87_chain_mtls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_chain_mldsa87.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_chain_mldsa87.key"),
+			serverRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa87.pem")},
+			requireClientCert: true,
+			clientCertFile:    grpctestdata.Path("x509/mldsa/client_chain_mldsa87.pem"),
+			clientKeyFile:     grpctestdata.Path("x509/mldsa/client_chain_mldsa87.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa87.pem")},
+			wantServerSigAlgo: "ML-DSA-87",
+			wantClientSigAlgo: "ML-DSA-87",
+		},
+		{
+			desc:              "mixed_mldsa_certs_mtls",
+			serverCertFile:    grpctestdata.Path("x509/mldsa/server_mldsa87.pem"),
+			serverKeyFile:     grpctestdata.Path("x509/mldsa/server_mldsa87.key"),
+			serverRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa44.pem")},
+			requireClientCert: true,
+			clientCertFile:    grpctestdata.Path("x509/mldsa/client_mldsa44.pem"),
+			clientKeyFile:     grpctestdata.Path("x509/mldsa/client_mldsa44.key"),
+			clientRootFiles:   []string{grpctestdata.Path("x509/mldsa/ca_mldsa87.pem")},
+			wantServerSigAlgo: "ML-DSA-87",
+			wantClientSigAlgo: "ML-DSA-44",
+		},
+		{
+			desc:              "mixed_rsa_server_and_mldsa65_client_mtls",
+			serverCertFile:    testdata.Path("server_cert_localhost_1.pem"),
+			serverKeyFile:     testdata.Path("server_key_localhost_1.pem"),
+			serverRootFiles:   []string{testdata.Path("client_trust_cert_1.pem"), grpctestdata.Path("x509/mldsa/ca_mldsa65.pem")},
+			requireClientCert: true,
+			clientCertFile:    grpctestdata.Path("x509/mldsa/client_mldsa65.pem"),
+			clientKeyFile:     grpctestdata.Path("x509/mldsa/client_mldsa65.key"),
+			clientRootFiles:   []string{testdata.Path("client_trust_cert_1.pem"), grpctestdata.Path("x509/mldsa/ca_mldsa65.pem")},
+			wantServerSigAlgo: "SHA256-RSA",
+			wantClientSigAlgo: "ML-DSA-65",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			srvCert, err := tls.LoadX509KeyPair(test.serverCertFile, test.serverKeyFile)
+			if err != nil {
+				t.Fatalf("LoadX509KeyPair(%q, %q) failed: %v", test.serverCertFile, test.serverKeyFile, err)
+			}
+
+			serverOptions := &Options{
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates: []tls.Certificate{srvCert},
+				},
+				RequireClientCert: test.requireClientCert,
+				VerificationType:  CertAndHostVerification,
+			}
+			if test.requireClientCert {
+				serverOptions.RootOptions = RootCertificateOptions{
+					RootCertificates: loadMLDSACertPool(t, test.serverRootFiles...),
+				}
+				serverOptions.AdditionalPeerVerification = func(info *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+					if info.Leaf == nil {
+						return nil, fmt.Errorf("missing client leaf certificate")
+					}
+					if got := info.Leaf.SignatureAlgorithm.String(); got != test.wantClientSigAlgo {
+						return nil, fmt.Errorf("client leaf SignatureAlgorithm = %q, want %q", got, test.wantClientSigAlgo)
+					}
+					return &PostHandshakeVerificationResults{}, nil
+				}
+			}
+
+			serverTLSCreds, err := NewServerCreds(serverOptions)
+			if err != nil {
+				t.Fatalf("NewServerCreds() failed: %v", err)
+			}
+			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
+			defer s.Stop()
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("failed to listen: %v", err)
+			}
+			defer lis.Close()
+			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
+			pb.RegisterGreeterServer(s, greeterServer{})
+			go s.Serve(lis)
+
+			clientOptions := &Options{
+				RootOptions: RootCertificateOptions{
+					RootCertificates: loadMLDSACertPool(t, test.clientRootFiles...),
+				},
+				VerificationType: CertAndHostVerification,
+				AdditionalPeerVerification: func(info *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+					if info.Leaf == nil {
+						return nil, fmt.Errorf("missing server leaf certificate")
+					}
+					if got := info.Leaf.SignatureAlgorithm.String(); got != test.wantServerSigAlgo {
+						return nil, fmt.Errorf("server leaf SignatureAlgorithm = %q, want %q", got, test.wantServerSigAlgo)
+					}
+					return &PostHandshakeVerificationResults{}, nil
+				},
+			}
+			if test.clientCertFile != "" {
+				cliCert, err := tls.LoadX509KeyPair(test.clientCertFile, test.clientKeyFile)
+				if err != nil {
+					t.Fatalf("LoadX509KeyPair(%q, %q) failed: %v", test.clientCertFile, test.clientKeyFile, err)
+				}
+				clientOptions.IdentityOptions = IdentityCertificateOptions{
+					Certificates: []tls.Certificate{cliCert},
+				}
+			}
+
+			clientTLSCreds, err := NewClientCreds(clientOptions)
+			if err != nil {
+				t.Fatalf("NewClientCreds() failed: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, _, err := callAndVerifyWithClientConn(ctx, addr, "mldsa rpc", clientTLSCreds, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+		})
+	}
+}
+
+// TestMLDSAPEMFileProviderEnd2End tests advancedtls with pemfile.NewProvider
+// using ML-DSA credentials and verifying credential rotation from ML-DSA-44 to
+// ML-DSA-87.
+func (s) TestMLDSAPEMFileProviderEnd2End(t *testing.T) {
+	tmpFiles, err := createTmpFiles()
+	if err != nil {
+		t.Fatalf("createTmpFiles() failed: %v", err)
+	}
+	defer tmpFiles.removeFiles()
+
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/client_mldsa44.pem"), tmpFiles.clientCertTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/client_mldsa44.key"), tmpFiles.clientKeyTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/ca_mldsa44.pem"), tmpFiles.clientTrustTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/server_mldsa44.pem"), tmpFiles.serverCertTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/server_mldsa44.key"), tmpFiles.serverKeyTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/ca_mldsa44.pem"), tmpFiles.serverTrustTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+
+	clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, err := createProviders(tmpFiles)
+	if err != nil {
+		t.Fatalf("createProviders() failed: %v", err)
+	}
+	defer clientIdentityProvider.Close()
+	defer clientRootProvider.Close()
+	defer serverIdentityProvider.Close()
+	defer serverRootProvider.Close()
+
+	serverOptions := &Options{
+		IdentityOptions: IdentityCertificateOptions{
+			IdentityProvider: serverIdentityProvider,
+		},
+		RootOptions: RootCertificateOptions{
+			RootProvider: serverRootProvider,
+		},
+		RequireClientCert: true,
+		VerificationType:  CertAndHostVerification,
+	}
+	serverTLSCreds, err := NewServerCreds(serverOptions)
+	if err != nil {
+		t.Fatalf("NewServerCreds() failed: %v", err)
+	}
+	s := grpc.NewServer(grpc.Creds(serverTLSCreds))
+	defer s.Stop()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer lis.Close()
+	addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
+	pb.RegisterGreeterServer(s, greeterServer{})
+	go s.Serve(lis)
+
+	clientOptions := &Options{
+		IdentityOptions: IdentityCertificateOptions{
+			IdentityProvider: clientIdentityProvider,
+		},
+		RootOptions: RootCertificateOptions{
+			RootProvider: clientRootProvider,
+		},
+		VerificationType: CertAndHostVerification,
+	}
+	clientTLSCreds, err := NewClientCreds(clientOptions)
+	if err != nil {
+		t.Fatalf("NewClientCreds() failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Initial connection with ML-DSA-44 credentials should succeed.
+	conn1, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc 1", clientTLSCreds, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn1.Close()
+
+	// Rotate server identity to ML-DSA-87 chain while client still trusts only ML-DSA-44 CA.
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/server_chain_mldsa87.pem"), tmpFiles.serverCertTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/server_chain_mldsa87.key"), tmpFiles.serverKeyTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(sleepInterval)
+
+	// New connection should fail until client trust root is updated to ML-DSA-87 CA.
+	ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+	conn2, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc 2", clientTLSCreds, true)
+	if err != nil {
+		cancel2()
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+	cancel2()
+
+	// Update client trust root to ML-DSA-87 CA; connection should succeed again.
+	if err := copyFileContents(grpctestdata.Path("x509/mldsa/ca_mldsa87.pem"), tmpFiles.clientTrustTmp.Name()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(sleepInterval)
+
+	conn3, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc 3", clientTLSCreds, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn3.Close()
 }
