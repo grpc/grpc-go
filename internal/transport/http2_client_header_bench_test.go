@@ -123,7 +123,8 @@ func BenchmarkHPACKNeverIndex(b *testing.B) {
 			names[i] = fmt.Sprintf("x-unique-%02d", i)
 			highCardinality[names[i]] = true
 		}
-		// grpc-timeout changes on every RPC as well.
+		// Exclude grpc-timeout from reusable-bytes/rpc as its value also varies
+		// with the deadline. It is not one of the metadata keys configured below.
 		highCardinality["grpc-timeout"] = true
 
 		for _, neverIndex := range []bool{false, true} {

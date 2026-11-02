@@ -59,7 +59,7 @@ func (s) TestHPACKNeverIndexMetadataKeys(t *testing.T) {
 	cc, err := grpc.NewClient(lis.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		experimental.WithHPACKNeverIndexMetadataKeys("x-stable"), // Overridden by the next option.
-		experimental.WithHPACKNeverIndexMetadataKeys("X-Request-Id"),
+		experimental.WithHPACKNeverIndexMetadataKeys("X-Request-Id", "x-trace-id"),
 	)
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) failed: %v", lis.Addr().String(), err)
@@ -80,7 +80,7 @@ func (s) TestHPACKNeverIndexMetadataKeys(t *testing.T) {
 	// The server never responds, so the RPC only ends when rpcCtx is canceled.
 	rpcCtx, rpcCancel := context.WithCancel(ctx)
 	defer rpcCancel()
-	rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "x-request-id", "abc-123", "x-stable", "stable-value")
+	rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "x-request-id", "abc-123", "x-trace-id", "def-456", "x-stable", "stable-value")
 	go testgrpc.NewTestServiceClient(cc).EmptyCall(rpcCtx, &testpb.Empty{})
 
 	var hf *http2.MetaHeadersFrame
@@ -94,6 +94,7 @@ func (s) TestHPACKNeverIndexMetadataKeys(t *testing.T) {
 
 	wantSensitive := map[string]bool{
 		"x-request-id": true,
+		"x-trace-id":   true,
 		"x-stable":     false,
 		"content-type": false,
 	}
