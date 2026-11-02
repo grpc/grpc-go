@@ -339,113 +339,10 @@ func (s) TestParseTimeOut(t *testing.T) {
 	runParseTests(t, testcases)
 }
 
-func (s) TestJSONUint32(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    jsonUint32
-		wantErr bool
-	}{
-		{
-			name:  "number",
-			input: `42`,
-			want:  42,
-		},
-		{
-			name:  "string",
-			input: `"42"`,
-			want:  42,
-		},
-		{
-			name:  "uint32 maximum",
-			input: `"4294967295"`,
-			want:  4294967295,
-		},
-		{
-			name:  "null",
-			input: `null`,
-			want:  0,
-		},
-		{
-			name:  "fractional leading zeros with exponent",
-			input: `"0.00000000001e11"`,
-			want:  1,
-		},
-		{
-			name:  "negative zero",
-			input: `"-0"`,
-			want:  0,
-		},
-		{
-			name:  "zero with oversized exponent",
-			input: `"0e999999999999999999999"`,
-			want:  0,
-		},
-		{
-			name:    "oversized exponent",
-			input:   `"1e999999999999999999999"`,
-			wantErr: true,
-		},
-		{
-			name:  "quoted exponent",
-			input: `"1e2"`,
-			want:  100,
-		},
-		{
-			name:  "quoted decimal exponent",
-			input: `"1.024e3"`,
-			want:  1024,
-		},
-		{
-			name:    "quoted comma-separated value",
-			input:   `"1,000"`,
-			wantErr: true,
-		},
-		{
-			name:  "quoted zero fraction",
-			input: `"1.0"`,
-			want:  1,
-		},
-		{
-			name:    "negative",
-			input:   `"-1"`,
-			wantErr: true,
-		},
-		{
-			name:    "uint32 overflow",
-			input:   `"4294967296"`,
-			wantErr: true,
-		},
-		{
-			name:    "nonzero fraction",
-			input:   `"1.5"`,
-			wantErr: true,
-		},
-		{
-			name:    "empty string",
-			input:   `""`,
-			wantErr: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			var got jsonUint32
-			err := json.Unmarshal([]byte(test.input), &got)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("json.Unmarshal(%q) error = %v, wantErr %v", test.input, err, test.wantErr)
-			}
-			if err == nil && got != test.want {
-				t.Fatalf("json.Unmarshal(%q) = %d, want %d", test.input, got, test.want)
-			}
-		})
-	}
-}
-
 func (s) TestParseMsgSize(t *testing.T) {
 	testcases := []parseTestCase{
 		{
-			name: "numeric integers",
+			name: "NumericIntegers",
 			scjs: `{
     "methodConfig": [
         {
@@ -471,7 +368,7 @@ func (s) TestParseMsgSize(t *testing.T) {
 			},
 		},
 		{
-			name: "stringified integers",
+			name: "StringifiedIntegers",
 			scjs: `{
     "methodConfig": [
         {
@@ -497,7 +394,7 @@ func (s) TestParseMsgSize(t *testing.T) {
 			},
 		},
 		{
-			name: "stringified exponent",
+			name: "StringifiedExponent",
 			scjs: `{
     "methodConfig": [
         {
@@ -523,7 +420,7 @@ func (s) TestParseMsgSize(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid stringified integer",
+			name: "InvalidStringifiedInteger",
 			scjs: `{
     "methodConfig": [
         {
@@ -559,7 +456,7 @@ func (s) TestParseRetryMaxAttempts(t *testing.T) {
 
 	testcases := []parseTestCase{
 		{
-			name: "numeric integer",
+			name: "NumericInteger",
 			scjs: `{
     "methodConfig": [
         {
@@ -589,7 +486,7 @@ func (s) TestParseRetryMaxAttempts(t *testing.T) {
 			},
 		},
 		{
-			name: "stringified integer",
+			name: "StringifiedInteger",
 			scjs: `{
     "methodConfig": [
         {
@@ -619,7 +516,7 @@ func (s) TestParseRetryMaxAttempts(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid stringified integer",
+			name: "InvalidStringifiedInteger",
 			scjs: `{
     "methodConfig": [
         {

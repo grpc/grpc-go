@@ -23,8 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -37,143 +35,6 @@ import (
 )
 
 const maxInt = int(^uint(0) >> 1)
-
-// jsonUint32 decodes service-config fields whose protobuf schema type is
-// uint32. ProtoJSON accepts JSON numbers, quoted numbers (including integral
-// decimal and exponent forms), and null for these fields.
-//
-// protojson cannot decode a scalar directly; it requires a protobuf message.
-// Using wrapperspb.UInt32Value would add wrapperspb to the root grpc package's
-// dependency graph, while borrowing an unrelated generated message would
-// introduce an undesirable package coupling. Keep this local decoder so
-// service-config parsing preserves ProtoJSON uint32 semantics without changing
-// the root grpc package dependency graph.
-//
-// normalizeJSONUint32 also preserves ProtoJSON edge cases such as negative zero
-// and zero with an exponent too large to fit in an integer. A big.Float-based
-// parser was avoided because it rejects the latter even though ProtoJSON accepts
-// it as zero. Malformed strings, non-integral values, negative nonzero values,
-// and values outside the uint32 range are rejected.
-type jsonUint32 uint32
-
-func (j *jsonUint32) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		*j = 0
-		return nil
-	}
-
-	var number json.Number
-	if err := json.Unmarshal(data, &number); err != nil {
-		return err
-	}
-
-	value, err := parseJSONUint32(number.String())
-	if err != nil {
-		return err
-	}
-	*j = jsonUint32(value)
-	return nil
-}
-
-func parseJSONUint32(s string) (uint32, error) {
-	value, ok := normalizeJSONUint32(s)
-	if !ok {
-		return 0, fmt.Errorf("invalid uint32 value %q", s)
-	}
-	return value, nil
-}
-
-func normalizeJSONUint32(number string) (uint32, bool) {
-	if number == "" {
-		return 0, false
-	}
-
-	negative := number[0] == '-'
-	if negative {
-		number = number[1:]
-		if number == "" {
-			return 0, false
-		}
-	}
-
-	exponentText := ""
-	if i := strings.IndexAny(number, "eE"); i >= 0 {
-		exponentText = number[i+1:]
-		number = number[:i]
-	}
-
-	integerPart := number
-	fractionalPart := ""
-	if i := strings.IndexByte(number, '.'); i >= 0 {
-		integerPart = number[:i]
-		fractionalPart = strings.TrimRight(number[i+1:], "0")
-	}
-
-	// Match ProtoJSON handling of zero, including negative zero and zero with
-	// an exponent that is too large to fit in an integer.
-	if integerPart == "0" {
-		integerPart = ""
-	}
-	if integerPart == "" && fractionalPart == "" {
-		return 0, true
-	}
-
-	// Only zero may carry a negative sign for an unsigned ProtoJSON value.
-	// The zero case was handled above, so all remaining negative values fail.
-	if negative {
-		return 0, false
-	}
-
-	exponent := 0
-	if exponentText != "" {
-		parsed, err := strconv.ParseInt(exponentText, 10, 32)
-		if err != nil {
-			return 0, false
-		}
-		exponent = int(parsed)
-	}
-
-	var digits string
-	if exponent >= 0 {
-		// Match ProtoJSON's bounded normalization before applying the final
-		// uint32 range check.
-		const maxDigits = 20
-		if len(fractionalPart) > exponent ||
-			len(integerPart) > maxDigits ||
-			exponent > maxDigits-len(integerPart) {
-			return 0, false
-		}
-
-		digits = integerPart + fractionalPart +
-			strings.Repeat("0", exponent-len(fractionalPart))
-	} else {
-		if len(fractionalPart) > 0 {
-			return 0, false
-		}
-
-		decimalPoint := len(integerPart) + exponent
-		if decimalPoint < 0 {
-			return 0, false
-		}
-
-		for _, digit := range integerPart[decimalPoint:] {
-			if digit != '0' {
-				return 0, false
-			}
-		}
-		digits = integerPart[:decimalPoint]
-	}
-
-	if digits == "" {
-		return 0, true
-	}
-
-	value, err := strconv.ParseUint(digits, 10, 32)
-	if err != nil {
-		return 0, false
-	}
-	return uint32(value), true
-}
 
 // MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
@@ -235,7 +96,7 @@ type healthCheckConfig struct {
 }
 
 type jsonRetryPolicy struct {
-	MaxAttempts          jsonUint32
+	MaxAttempts          internalserviceconfig.Uint32
 	InitialBackoff       internalserviceconfig.Duration
 	MaxBackoff           internalserviceconfig.Duration
 	BackoffMultiplier    float64
@@ -288,8 +149,8 @@ type jsonMC struct {
 	Name                    *[]jsonName
 	WaitForReady            *bool
 	Timeout                 *internalserviceconfig.Duration
-	MaxRequestMessageBytes  *jsonUint32
-	MaxResponseMessageBytes *jsonUint32
+	MaxRequestMessageBytes  *internalserviceconfig.Uint32
+	MaxResponseMessageBytes *internalserviceconfig.Uint32
 	RetryPolicy             *jsonRetryPolicy
 }
 
