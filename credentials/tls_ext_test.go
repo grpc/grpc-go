@@ -608,6 +608,15 @@ func (s) TestTLS_DisabledALPNServer(t *testing.T) {
 	}
 }
 
+// skipIfMLDSAUnsupported skips t if the running Go standard library does not
+// support ML-DSA X.509 certificates and PKCS#8 private keys (added in Go 1.27).
+func skipIfMLDSAUnsupported(t *testing.T) {
+	t.Helper()
+	if _, err := tls.LoadX509KeyPair(testdata.Path("x509/mldsa/server_mldsa44.pem"), testdata.Path("x509/mldsa/server_mldsa44.key")); err != nil {
+		t.Skipf("skipping ML-DSA test: crypto/tls does not support ML-DSA keys/certificates in this Go version: %v", err)
+	}
+}
+
 func loadCertPool(t *testing.T, pemFiles ...string) *x509.CertPool {
 	t.Helper()
 	pool := x509.NewCertPool()
@@ -627,6 +636,7 @@ func loadCertPool(t *testing.T, pemFiles ...string) *x509.CertPool {
 // unary RPCs using ML-DSA-44, ML-DSA-65, ML-DSA-87, and a 2-certificate
 // ML-DSA-87 chain.
 func (s) TestTLS_MLDSA_ServerAuth(t *testing.T) {
+	skipIfMLDSAUnsupported(t)
 	tests := []struct {
 		name              string
 		serverCertFile    string
@@ -719,6 +729,7 @@ func (s) TestTLS_MLDSA_ServerAuth(t *testing.T) {
 // chains, mixed ML-DSA variants (ML-DSA-87 server + ML-DSA-44 client), and a
 // combined classical RSA + ML-DSA-65 root store.
 func (s) TestTLS_MLDSA_MutualTLS(t *testing.T) {
+	skipIfMLDSAUnsupported(t)
 	tests := []struct {
 		name              string
 		serverCertFile    string
@@ -865,6 +876,7 @@ func (s) TestTLS_MLDSA_MutualTLS(t *testing.T) {
 // TestTLS_MLDSA_ChainSessionResumption tests TLS 1.3 session resumption with
 // 2-certificate ML-DSA-87 server and client chains.
 func (s) TestTLS_MLDSA_ChainSessionResumption(t *testing.T) {
+	skipIfMLDSAUnsupported(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -927,6 +939,7 @@ func (s) TestTLS_MLDSA_ChainSessionResumption(t *testing.T) {
 // TestTLS_MLDSA_RequiresTLS13 verifies that ML-DSA certificates cannot be used
 // when the TLS version is capped at TLS 1.2.
 func (s) TestTLS_MLDSA_RequiresTLS13(t *testing.T) {
+	skipIfMLDSAUnsupported(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 

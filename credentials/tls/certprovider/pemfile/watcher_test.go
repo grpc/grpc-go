@@ -20,6 +20,7 @@ package pemfile
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"os"
 	"path"
@@ -631,6 +632,9 @@ func (s) TestProvider_UpdateFailureRoot_MissingFile(t *testing.T) {
 // TestProvider_MLDSA tests that the file watcher provider loads and rotates
 // ML-DSA-44, ML-DSA-65, ML-DSA-87, and ML-DSA-87 chain certificates and keys.
 func (s) TestProvider_MLDSA(t *testing.T) {
+	if _, err := tls.LoadX509KeyPair(testdata.Path("x509/mldsa/server_mldsa44.pem"), testdata.Path("x509/mldsa/server_mldsa44.key")); err != nil {
+		t.Skipf("skipping ML-DSA test: crypto/tls does not support ML-DSA keys/certificates in this Go version: %v", err)
+	}
 	origDistributorFunc := newDistributor
 	distCh := testutils.NewChannel()
 	newDistributor = func() distributor { return newWrappedDistributor(distCh) }

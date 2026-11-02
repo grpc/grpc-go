@@ -942,6 +942,15 @@ func (s) TestTLSVersions(t *testing.T) {
 	}
 }
 
+// skipIfMLDSAUnsupported skips t if the running Go standard library does not
+// support ML-DSA X.509 certificates and PKCS#8 private keys (added in Go 1.27).
+func skipIfMLDSAUnsupported(t *testing.T) {
+	t.Helper()
+	if _, err := tls.LoadX509KeyPair(grpctestdata.Path("x509/mldsa/server_mldsa44.pem"), grpctestdata.Path("x509/mldsa/server_mldsa44.key")); err != nil {
+		t.Skipf("skipping ML-DSA test: crypto/tls does not support ML-DSA keys/certificates in this Go version: %v", err)
+	}
+}
+
 func loadMLDSACertPool(t *testing.T, pemPaths ...string) *x509.CertPool {
 	t.Helper()
 	pool := x509.NewCertPool()
@@ -962,6 +971,7 @@ func loadMLDSACertPool(t *testing.T, pemPaths ...string) *x509.CertPool {
 // 2-certificate ML-DSA-87 chains, mixed ML-DSA variants, and combined classical
 // RSA + ML-DSA root stores.
 func (s) TestMLDSAEnd2End(t *testing.T) {
+	skipIfMLDSAUnsupported(t)
 	tests := []struct {
 		desc              string
 		serverCertFile    string
@@ -1165,6 +1175,7 @@ func (s) TestMLDSAEnd2End(t *testing.T) {
 // using ML-DSA credentials and verifying credential rotation from ML-DSA-44 to
 // ML-DSA-87.
 func (s) TestMLDSAPEMFileProviderEnd2End(t *testing.T) {
+	skipIfMLDSAUnsupported(t)
 	tmpFiles, err := createTmpFiles()
 	if err != nil {
 		t.Fatalf("createTmpFiles() failed: %v", err)
