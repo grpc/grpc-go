@@ -221,13 +221,11 @@ type outlierDetectionBalancer struct {
 	endpoints *resolver.EndpointMap[*endpointInfo]
 	// addrs stores pointers to endpointInfo objects for each address. Addresses
 	// belonging to the same endpoint point to the same object.
-	addrs          map[string]*endpointInfo
-	cfg            *LBConfig
-	timerStartTime time.Time
-	intervalTimer  *time.Timer
-	// intervalTimerGeneration invalidates callbacks from previous configurations.
-	// Protected by mu.
-	intervalTimerGeneration uint64
+	addrs                   map[string]*endpointInfo
+	cfg                     *LBConfig
+	timerStartTime          time.Time
+	intervalTimer           *time.Timer
+	intervalTimerGeneration uint64 // Invalidates callbacks from previous configurations. Protected by mu.
 	inhibitPickerUpdates    bool
 	updateUnconditionally   bool
 	numEndpointsEjected     int // For fast calculations of percentage of endpoints ejected
