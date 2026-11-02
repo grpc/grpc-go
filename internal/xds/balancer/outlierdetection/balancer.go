@@ -221,13 +221,16 @@ type outlierDetectionBalancer struct {
 	endpoints *resolver.EndpointMap[*endpointInfo]
 	// addrs stores pointers to endpointInfo objects for each address. Addresses
 	// belonging to the same endpoint point to the same object.
-	addrs                 map[string]*endpointInfo
-	cfg                   *LBConfig
-	timerStartTime        time.Time
-	intervalTimer         *time.Timer
-	inhibitPickerUpdates  bool
-	updateUnconditionally bool
-	numEndpointsEjected   int // For fast calculations of percentage of endpoints ejected
+	addrs          map[string]*endpointInfo
+	cfg            *LBConfig
+	timerStartTime time.Time
+	intervalTimer  *time.Timer
+	// intervalTimerGeneration invalidates callbacks from previous configurations.
+	// Protected by mu.
+	intervalTimerGeneration uint64
+	inhibitPickerUpdates    bool
+	updateUnconditionally   bool
+	numEndpointsEjected     int // For fast calculations of percentage of endpoints ejected
 
 	scUpdateCh     *buffer.Unbounded[any]
 	pickerUpdateCh *buffer.Unbounded[any]
@@ -261,7 +264,8 @@ func (b *outlierDetectionBalancer) onIntervalConfig() {
 			interval = 0
 		}
 	}
-	b.intervalTimer = afterFunc(interval, b.intervalTimerAlgorithm)
+	generation := b.intervalTimerGeneration
+	b.intervalTimer = afterFunc(interval, func() { b.intervalTimerAlgorithm(generation) })
 }
 
 // onNoopConfig handles logic required specifically on the receipt of a
@@ -345,6 +349,9 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		}
 	}
 
+	// Stop cannot cancel a callback that has already started. Invalidate it
+	// before scheduling a timer for the new configuration.
+	b.intervalTimerGeneration++
 	if b.intervalTimer != nil {
 		b.intervalTimer.Stop()
 	}
@@ -652,11 +659,11 @@ func (b *outlierDetectionBalancer) run() {
 // intervalTimerAlgorithm ejects and unejects endpoints based on the Outlier
 // Detection configuration and data about each endpoint from the previous
 // interval.
-func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
+func (b *outlierDetectionBalancer) intervalTimerAlgorithm(generation uint64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	// Stop cannot cancel a timer callback that has already started.
-	if b.closed.HasFired() {
+	if b.closed.HasFired() || generation != b.intervalTimerGeneration {
 		return
 	}
 	b.timerStartTime = time.Now()
@@ -696,7 +703,7 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 	if b.intervalTimer != nil {
 		b.intervalTimer.Stop()
 	}
-	b.intervalTimer = afterFunc(time.Duration(b.cfg.Interval), b.intervalTimerAlgorithm)
+	b.intervalTimer = afterFunc(time.Duration(b.cfg.Interval), func() { b.intervalTimerAlgorithm(generation) })
 }
 
 // endpointsWithAtLeastRequestVolume returns a slice of endpoint information of

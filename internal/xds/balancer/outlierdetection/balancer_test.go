@@ -68,59 +68,111 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// TestIntervalTimerAfterClose covers an expired timer whose callback resumes
-// after Close has stopped the timer. It must not schedule another interval.
-func (s) TestIntervalTimerAfterClose(t *testing.T) {
-	originalAfterFunc := afterFunc
-	t.Cleanup(func() { afterFunc = originalAfterFunc })
-	rescheduled := make(chan struct{}, 1)
-	afterFunc = func(time.Duration, func()) *time.Timer {
-		rescheduled <- struct{}{}
-		timer := time.NewTimer(time.Hour)
-		t.Cleanup(func() { timer.Stop() })
-		return timer
-	}
+// TestIntervalTimerStaleCallback pauses an expired timer callback until its
+// configuration has been replaced or the balancer has closed.
+func (s) TestIntervalTimerStaleCallback(t *testing.T) {
+	for _, name := range []string{"close", "active_update", "disable", "disable_reenable"} {
+		t.Run(name, func(t *testing.T) {
+			stub.Register(t.Name(), stub.BalancerFuncs{})
+			od, _, cleanup := setup(t)
+			closeBalancer := sync.OnceFunc(cleanup)
+			t.Cleanup(closeBalancer)
 
-	od, _, cleanup := setup(t)
-	closeBalancer := sync.OnceFunc(cleanup)
-	defer closeBalancer()
-	od.cfg = &LBConfig{Interval: iserviceconfig.Duration(time.Hour)}
+			started, resume, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			unblock := sync.OnceFunc(func() { close(resume) })
+			originalAfterFunc := afterFunc
+			t.Cleanup(func() { afterFunc = originalAfterFunc })
+			var callbacks []func()
+			afterFunc = func(_ time.Duration, f func()) *time.Timer {
+				callbacks = append(callbacks, f)
+				if len(callbacks) == 1 {
+					return time.AfterFunc(0, func() {
+						close(started)
+						<-resume
+						f()
+						close(finished)
+					})
+				}
+				timer := time.NewTimer(time.Hour)
+				t.Cleanup(func() { timer.Stop() })
+				return timer
+			}
+			update := func(active bool, interval time.Duration) {
+				t.Helper()
+				cfg := &LBConfig{
+					Interval:    iserviceconfig.Duration(interval),
+					ChildPolicy: &iserviceconfig.BalancerConfig{Name: t.Name(), Config: emptyChildConfig{}},
+				}
+				if active {
+					cfg.SuccessRateEjection = &SuccessRateEjection{MinimumHosts: 5}
+				}
+				if err := od.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg}); err != nil {
+					t.Fatalf("UpdateClientConnState() failed: %v", err)
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			wait := func(ch <-chan struct{}, event string) {
+				t.Helper()
+				select {
+				case <-ch:
+				case <-ctx.Done():
+					t.Fatalf("timed out waiting for %s", event)
+				}
+			}
+			update(true, time.Hour)
+			t.Cleanup(func() {
+				unblock()
+				select {
+				case <-finished:
+				case <-time.After(defaultTestTimeout):
+					t.Error("timer callback did not finish during cleanup")
+				}
+			})
+			wait(started, "timer callback to start")
+			switch name {
+			case "close":
+				closeBalancer()
+			case "active_update":
+				update(true, 2*time.Hour)
+			case "disable":
+				update(false, time.Hour)
+			case "disable_reenable":
+				update(false, time.Hour)
+				update(true, 2*time.Hour)
+			}
+			wantCount := len(callbacks)
+			od.mu.Lock()
+			wantTimer, wantStart := od.intervalTimer, od.timerStartTime
+			od.mu.Unlock()
+			unblock()
+			wait(finished, "stale timer callback to finish")
+			if len(callbacks) != wantCount {
+				t.Fatalf("stale callback scheduled a timer: got %d registrations, want %d", len(callbacks), wantCount)
+			}
+			od.mu.Lock()
+			gotTimer, gotStart := od.intervalTimer, od.timerStartTime
+			od.mu.Unlock()
+			if gotTimer != wantTimer || gotStart != wantStart {
+				t.Fatal("stale callback changed the timer or interval start time")
+			}
+			if name == "active_update" || name == "disable_reenable" {
+				callbacks[len(callbacks)-1]()
+				if len(callbacks) != wantCount+1 {
+					t.Fatal("current callback did not schedule the next interval")
+				}
+			}
+		})
+	}
+}
 
-	started := make(chan struct{})
-	resume := make(chan struct{})
-	finished := make(chan struct{})
-	unblock := sync.OnceFunc(func() { close(resume) })
-	od.intervalTimer = time.AfterFunc(0, func() {
-		close(started)
-		<-resume
-		od.intervalTimerAlgorithm()
-		close(finished)
-	})
-	t.Cleanup(func() {
-		unblock()
-		<-finished
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	select {
-	case <-started:
-	case <-ctx.Done():
-		t.Fatal("interval timer callback did not start")
-	}
-	// The callback has already started, so Close cannot cancel it with Stop.
-	closeBalancer()
-	unblock()
-	select {
-	case <-finished:
-	case <-ctx.Done():
-		t.Fatal("interval timer callback did not finish after Close")
-	}
-	select {
-	case <-rescheduled:
-		t.Fatal("interval timer was rescheduled after Close")
-	default:
-	}
+// runIntervalTimerAlgorithm snapshots the current generation under the mutex,
+// since some tests update the configuration concurrently.
+func runIntervalTimerAlgorithm(od *outlierDetectionBalancer) {
+	od.mu.Lock()
+	generation := od.intervalTimerGeneration
+	od.mu.Unlock()
+	od.intervalTimerAlgorithm(generation)
 }
 
 func (lbc *LBConfig) Equal(lbc2 *LBConfig) bool {
@@ -593,7 +645,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				// Create test metrics recorder
 				tmr := stats.NewTestMetricsRecorder()
 				od.metricsRecorder = tmr
-				od.intervalTimerAlgorithm()
+				runIntervalTimerAlgorithm(od)
 
 				// verify no StateListener() call on the child, as no addresses got
 				// ejected (ejected address will cause an StateListener call).
@@ -648,7 +700,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				}
 
 				// should eject address that always errored.
-				od.intervalTimerAlgorithm()
+				runIntervalTimerAlgorithm(od)
 
 				// Due to the address being ejected, the SubConn with that address
 				// should be ejected, meaning a TRANSIENT_FAILURE connectivity state
@@ -707,7 +759,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				now = func() time.Time {
 					return time.Now().Add(time.Second * 1000)
 				}
-				od.intervalTimerAlgorithm()
+				runIntervalTimerAlgorithm(od)
 				for i := 0; i < test.wantEjections; i++ {
 					scw := allSubConns[len(allSubConns)-1-i]
 					// unejected SubConn should report latest persisted state - which is
@@ -868,7 +920,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		tmr := stats.NewTestMetricsRecorder()
 		od.metricsRecorder = tmr
 
-		od.intervalTimerAlgorithm()
+		runIntervalTimerAlgorithm(od)
 		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
@@ -903,7 +955,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		}
 
 		// should eject address that always errored.
-		od.intervalTimerAlgorithm()
+		runIntervalTimerAlgorithm(od)
 
 		// verify StateListener() got called with TRANSIENT_FAILURE for child
 		// in address that was ejected.
@@ -1094,7 +1146,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 				return
 			default:
 			}
-			od.intervalTimerAlgorithm()
+			runIntervalTimerAlgorithm(od)
 		}
 	}()
 
@@ -1287,7 +1339,7 @@ func (s) TestMultipleAddressesPerEndpoint(t *testing.T) {
 		t.Fatal("Timed out waiting for the outlier detection LB policy to be built.")
 	case od = <-lbChan:
 	}
-	od.intervalTimerAlgorithm()
+	runIntervalTimerAlgorithm(od)
 
 	// The first endpoint should be ejected, requests should only go to
 	// endpoints[1].
@@ -1333,7 +1385,7 @@ func (s) TestMultipleAddressesPerEndpoint(t *testing.T) {
 	odCfg.BaseEjectionTime = 0
 	<-time.After(time.Millisecond)
 	r.UpdateState(resolver.State{Endpoints: endpoints})
-	od.intervalTimerAlgorithm()
+	runIntervalTimerAlgorithm(od)
 	if err := roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{endpoints[0].Addresses[1], endpoints[1].Addresses[1]}); err != nil {
 		t.Fatalf("RPCs didn't go to the second addresses of both endpoints: %v", err)
 	}
@@ -1463,7 +1515,7 @@ func (s) TestEjectionStateResetsWhenEndpointAddressesChange(t *testing.T) {
 		t.Fatal("Timed out waiting for the outlier detection LB policy to be built.")
 	case od = <-lbChan:
 	}
-	od.intervalTimerAlgorithm()
+	runIntervalTimerAlgorithm(od)
 
 	// The first endpoint should be ejected, requests should only go to
 	// endpoints[1].
@@ -1478,7 +1530,7 @@ func (s) TestEjectionStateResetsWhenEndpointAddressesChange(t *testing.T) {
 		{Addresses: []resolver.Address{endpoints[0].Addresses[1]}},
 		endpoints[1],
 	}})
-	od.intervalTimerAlgorithm()
+	runIntervalTimerAlgorithm(od)
 	if err := roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{endpoints[0].Addresses[1], endpoints[1].Addresses[0]}); err != nil {
 		t.Fatalf("RPCs didn't go to the second addresses of both endpoints: %v", err)
 	}
