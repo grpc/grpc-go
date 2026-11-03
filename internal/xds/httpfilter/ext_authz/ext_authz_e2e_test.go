@@ -214,45 +214,41 @@ func startTestServiceBackend(t *testing.T, respHeaders metadata.MD) (*stubserver
 // error returned by the RPC, which is nil if the RPC is skipped.
 func makeUnaryRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantStatus codes.Code, wantRespHeaders, wantTrailers metadata.MD, headersCh chan metadata.MD, wantHeaders metadata.MD) error {
 	t.Helper()
-	var rpcErr error
-	t.Run("EmptyCall", func(t *testing.T) {
-		// TODO: Remove these skips once the fix for headers and trailers
-		// requested via call options (grpc.Header and grpc.Trailer) lands.
-		if len(wantTrailers) > 0 {
-			t.Skip("Unary RPC trailer/header passing using call options is currently not supported for denied streams")
-		}
-		if len(wantRespHeaders) > 0 {
-			t.Skip("Unary RPC response header mutation with CallOption is currently not supported")
-		}
-		client := testgrpc.NewTestServiceClient(cc)
-		var gotRespHeaders, gotTrailers metadata.MD
-		_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Header(&gotRespHeaders), grpc.Trailer(&gotTrailers))
-		rpcErr = err
-		if status.Code(err) != wantStatus {
-			t.Fatalf("EmptyCall RPC returned status code: %s, want: %s (error: %v)", status.Code(err), wantStatus, err)
-		}
+	// TODO: Remove these skips once the fix for headers and trailers
+	// requested via call options (grpc.Header and grpc.Trailer) lands.
+	if len(wantTrailers) > 0 {
+		t.Skip("Unary RPC trailer/header passing using call options is currently not supported for denied streams")
+	}
+	if len(wantRespHeaders) > 0 {
+		t.Skip("Unary RPC response header mutation with CallOption is currently not supported")
+	}
+	client := testgrpc.NewTestServiceClient(cc)
+	var gotRespHeaders, gotTrailers metadata.MD
+	_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Header(&gotRespHeaders), grpc.Trailer(&gotTrailers))
+	if status.Code(err) != wantStatus {
+		t.Fatalf("EmptyCall RPC returned status code: %s, want: %s (error: %v)", status.Code(err), wantStatus, err)
+	}
 
-		if err := compareMetadata(gotRespHeaders, wantRespHeaders); err != nil {
-			t.Fatalf("Unexpected header metadata received by the client: %v", err)
-		}
+	if err := compareMetadata(gotRespHeaders, wantRespHeaders); err != nil {
+		t.Fatalf("Unexpected header metadata received by the client: %v", err)
+	}
 
-		if err := compareMetadata(gotTrailers, wantTrailers); err != nil {
-			t.Fatalf("Unexpected trailer metadata received by the client: %v", err)
-		}
+	if err := compareMetadata(gotTrailers, wantTrailers); err != nil {
+		t.Fatalf("Unexpected trailer metadata received by the client: %v", err)
+	}
 
-		// Compare request headers only for RPCs with an OK status code.
-		if status.Code(err) == codes.OK && headersCh != nil {
-			select {
-			case gotMD := <-headersCh:
-				if err := compareMetadata(gotMD, wantHeaders); err != nil {
-					t.Fatalf("Unexpected header metadata received by the server handler: %v", err)
-				}
-			case <-ctx.Done():
-				t.Fatalf("Timeout when attempting to read incoming metadata received by the server handler")
+	// Compare request headers only for RPCs with an OK status code.
+	if status.Code(err) == codes.OK && headersCh != nil {
+		select {
+		case gotMD := <-headersCh:
+			if err := compareMetadata(gotMD, wantHeaders); err != nil {
+				t.Fatalf("Unexpected header metadata received by the server handler: %v", err)
 			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout when attempting to read incoming metadata received by the server handler")
 		}
-	})
-	return rpcErr
+	}
+	return err
 }
 
 // makeStreamingRPC is a helper function to make a streaming RPC and verify the
@@ -261,57 +257,51 @@ func makeUnaryRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantSt
 // error returned by the RPC.
 func makeStreamingRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantStatus codes.Code, wantRespHeaders, wantTrailers metadata.MD, headersCh chan metadata.MD, wantHeaders metadata.MD) error {
 	t.Helper()
-	var rpcErr error
-	t.Run("FullDuplexCall", func(t *testing.T) {
-		client := testgrpc.NewTestServiceClient(cc)
-		var gotTrailers metadata.MD
-		stream, err := client.FullDuplexCall(ctx, grpc.Trailer(&gotTrailers))
-		if err != nil {
-			rpcErr = err
-			if status.Code(err) != wantStatus {
-				t.Fatalf("FullDuplexCall RPC failed with status code = %v, want %v (error: %v)", status.Code(err), wantStatus, err)
-			}
-			return
-		}
-
-		// Send one empty message and close the sending side. Ignore the errors
-		// from the send and close, and rely on errors returned from recv.
-		stream.Send(&testpb.StreamingOutputCallRequest{})
-		stream.CloseSend()
-		gotRespHeaders, err := stream.Header()
-		if err != nil {
-			t.Fatalf("stream.Header() failed: %v", err)
-		}
-		_, err = stream.Recv()
-		if errors.Is(err, io.EOF) {
-			err = status.Error(codes.OK, "")
-		}
-		rpcErr = err
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
 		if status.Code(err) != wantStatus {
-			t.Fatalf("FullDuplexCall RPC returned error: %v, want: %s", err, wantStatus)
+			t.Fatalf("FullDuplexCall RPC failed with status code = %v, want %v (error: %v)", status.Code(err), wantStatus, err)
 		}
+		return err
+	}
 
-		if err := compareMetadata(gotRespHeaders, wantRespHeaders); err != nil {
-			t.Fatalf("Unexpected header metadata received by the client: %v", err)
-		}
+	// Send one empty message and close the sending side. Ignore the errors
+	// from the send and close, and rely on errors returned from recv.
+	stream.Send(&testpb.StreamingOutputCallRequest{})
+	stream.CloseSend()
+	gotRespHeaders, err := stream.Header()
+	if err != nil {
+		t.Fatalf("stream.Header() failed: %v", err)
+	}
+	_, err = stream.Recv()
+	if errors.Is(err, io.EOF) {
+		err = status.Error(codes.OK, "")
+	}
+	if status.Code(err) != wantStatus {
+		t.Fatalf("FullDuplexCall RPC returned error: %v, want: %s", err, wantStatus)
+	}
 
-		if err := compareMetadata(stream.Trailer(), wantTrailers); err != nil {
-			t.Fatalf("Unexpected trailer metadata received by the client: %v", err)
-		}
+	if err := compareMetadata(gotRespHeaders, wantRespHeaders); err != nil {
+		t.Fatalf("Unexpected header metadata received by the client: %v", err)
+	}
 
-		// Compare request headers only for RPCs with an OK status code.
-		if status.Code(err) == codes.OK && headersCh != nil {
-			select {
-			case gotMD := <-headersCh:
-				if err := compareMetadata(gotMD, wantHeaders); err != nil {
-					t.Fatalf("Unexpected header metadata received by the server handler: %v", err)
-				}
-			case <-ctx.Done():
-				t.Fatalf("Timeout when attempting to read incoming metadata received by the server handler")
+	if err := compareMetadata(stream.Trailer(), wantTrailers); err != nil {
+		t.Fatalf("Unexpected trailer metadata received by the client: %v", err)
+	}
+
+	// Compare request headers only for RPCs with an OK status code.
+	if status.Code(err) == codes.OK && headersCh != nil {
+		select {
+		case gotMD := <-headersCh:
+			if err := compareMetadata(gotMD, wantHeaders); err != nil {
+				t.Fatalf("Unexpected header metadata received by the server handler: %v", err)
 			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout when attempting to read incoming metadata received by the server handler")
 		}
-	})
-	return rpcErr
+	}
+	return err
 }
 
 // setupTestClient configures the management server with xDS resources that
@@ -547,7 +537,6 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 		failureModeAllow           bool
 		failureModeAllowHeaderAdd  bool
 		wantStatus                 codes.Code
-		wantErrorContains          string
 		wantTrailer                metadata.MD
 		wantHeaders                metadata.MD
 	}{
@@ -588,24 +577,6 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 				}, nil
 			},
 			wantStatus: codes.PermissionDenied,
-		},
-		{
-			name: "WithDeniedResponse_CustomMessage",
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{
-						Code:    int32(codes.PermissionDenied),
-						Message: "custom denial reason",
-					},
-					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
-						DeniedResponse: &v3authpb.DeniedHttpResponse{
-							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-						},
-					},
-				}, nil
-			},
-			wantStatus:        codes.PermissionDenied,
-			wantErrorContains: "custom denial reason",
 		},
 		{
 			name: "WithDeniedResponse_Headers",
@@ -711,15 +682,45 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			err := makeUnaryRPC(ctx, t, cc, tt.wantStatus, nil, tt.wantTrailer, gotUnaryMD, tt.wantHeaders)
-			if tt.wantErrorContains != "" && !strings.Contains(err.Error(), tt.wantErrorContains) {
-				t.Errorf("EmptyCall RPC returned status message %q, want it to contain %q", err.Error(), tt.wantErrorContains)
-			}
-			err = makeStreamingRPC(ctx, t, cc, tt.wantStatus, nil, tt.wantTrailer, gotStreamingMD, tt.wantHeaders)
-			if tt.wantErrorContains != "" && !strings.Contains(err.Error(), tt.wantErrorContains) {
-				t.Errorf("FullDuplexCall RPC returned status message %q, want it to contain %q", err.Error(), tt.wantErrorContains)
-			}
+			makeStreamingRPC(ctx, t, cc, tt.wantStatus, nil, tt.wantTrailer, gotStreamingMD, tt.wantHeaders)
+			// Make the unary RPC last, since it skips the test when trailers
+			// are expected.
+			makeUnaryRPC(ctx, t, cc, tt.wantStatus, nil, tt.wantTrailer, gotUnaryMD, tt.wantHeaders)
 		})
+	}
+}
+
+// Test verifies that when the external authorization server denies a data
+// plane RPC with a status message in its CheckResponse, the message is
+// included in the status returned to the client.
+func (s) TestExtAuthz_DeniedResponse_CustomMessage(t *testing.T) {
+	const customMsg = "custom denial reason"
+	backend, _, _ := startTestServiceBackend(t, nil)
+	authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+		return &v3authpb.CheckResponse{
+			Status: &statuspb.Status{
+				Code:    int32(codes.PermissionDenied),
+				Message: customMsg,
+			},
+			HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
+				DeniedResponse: &v3authpb.DeniedHttpResponse{
+					Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
+				},
+			},
+		}, nil
+	})
+	cc := setupTestClient(t, authAddr, &v3extauthzfilterpb.ExtAuthz{}, backend.Address)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err := makeUnaryRPC(ctx, t, cc, codes.PermissionDenied, nil, nil, nil, nil)
+	if err != nil && !strings.Contains(err.Error(), customMsg) {
+		t.Errorf("EmptyCall RPC returned status message %q, want it to contain %q", err.Error(), customMsg)
+	}
+	err = makeStreamingRPC(ctx, t, cc, codes.PermissionDenied, nil, nil, nil, nil)
+	if err != nil && !strings.Contains(err.Error(), customMsg) {
+		t.Errorf("FullDuplexCall RPC returned status message %q, want it to contain %q", err.Error(), customMsg)
 	}
 }
 
@@ -1081,8 +1082,10 @@ func (s) TestExtAuthz_Allowed_WithResponseHeaders(t *testing.T) {
 			cc := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
 
 			outgoingCtx := metadata.NewOutgoingContext(ctx, tt.outgoingHeaders)
-			makeUnaryRPC(outgoingCtx, t, cc, tt.wantStatus, tt.wantRespHeaders, nil, gotUnaryMD, tt.wantHeaders)
 			makeStreamingRPC(outgoingCtx, t, cc, tt.wantStatus, tt.wantRespHeaders, nil, gotStreamingMD, tt.wantHeaders)
+			// Make the unary RPC last, since it skips the test when response
+			// headers are expected.
+			makeUnaryRPC(outgoingCtx, t, cc, tt.wantStatus, tt.wantRespHeaders, nil, gotUnaryMD, tt.wantHeaders)
 		})
 	}
 }

@@ -214,11 +214,11 @@ func (*clientFilter) Close() {}
 
 // externalServiceClient returns an existing refcounted client for grpcService
 // config if present and its refcount is incremented successfully.
-func (cf *clientFilter) externalServiceClient(server *grpcservice.Config) *grpcsync.RefCounted[v3authgrpc.AuthorizationClient] {
+func (cf *clientFilter) externalServiceClient(config *grpcservice.Config) *grpcsync.RefCounted[v3authgrpc.AuthorizationClient] {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if i := slices.IndexFunc(cf.externalServices, func(e *externalServiceEntry) bool {
-		return httpfilter.SharesChannel(e.config, server) && e.client.TryIncrement()
+		return httpfilter.SharesChannel(e.config, config) && e.client.TryIncrement()
 	}); i != -1 {
 		return cf.externalServices[i].client
 	}
@@ -388,27 +388,26 @@ func (i *clientInterceptor) sendCheckRequest(ctx context.Context, method string,
 // handleFailure handles an error encountered during external authorization
 // based on the failure_mode_allow configuration:
 //   - If failure_mode_allow is false, an error with statusOnError is returned.
-//   - If failure_mode_allow is true, the failure mode header is appended to
-//     outgoingMD and nil is returned.
-func (i *clientInterceptor) handleFailure(outgoingMD metadata.MD, desc string, err error) error {
+//   - If failure_mode_allow is true, ctx is returned with the failure mode
+//     header appended to its outgoing metadata (if configured) and a nil error.
+func (i *clientInterceptor) handleFailure(ctx context.Context, err error) (context.Context, error) {
 	if !i.config.failureModeAllow {
-		return status.Errorf(i.config.statusOnError, "extauthz: %s: %v", desc, err)
+		return nil, status.Errorf(i.config.statusOnError, "extauthz: %v", err)
 	}
-	if i.config.failureModeAllowHeaderAdd && len(outgoingMD.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
-		outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
+	if i.config.failureModeAllowHeaderAdd {
+		// Since outgoingMD is a copy of the metadata in ctx, a new context is
+		// needed for the x-envoy-auth-failure-mode-allowed header added by
+		// handleFailure, if any, to be sent.
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-envoy-auth-failure-mode-allowed", "true")
 	}
-	return nil
+	return ctx, nil
 }
 
 // applyHeaderMutations applies the request header additions and removals from
 // okResp to a copy of outgoingMD and validates the response headers to add
-// against the configured header mutation rules.
-//
-// The request header mutations are all-or-nothing: if any of the mutations
-// fails, none of them are applied. If failure_mode_allow is false, an error is
-// returned; otherwise, outgoingMD is returned with only the failure mode header
-// appended (if configured) and a nil error. On success, it returns the mutated
-// metadata along with the validated response headers to add.
+// against the configured header mutation rules. It returns the mutated
+// metadata along with the validated response headers to add, or an error if
+// any of the mutations fails or the response headers to add are invalid.
 func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse, outgoingMD metadata.MD) (metadata.MD, []*v3corepb.HeaderValueOption, error) {
 	// Apply the request header mutations to a copy of the outgoing metadata, so
 	// that outgoingMD is left unmodified if any of the mutations fails.
@@ -417,19 +416,19 @@ func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse
 	// Apply the header additions specified by the external authorization
 	// server.
 	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetHeaders(), mutatedMD); err != nil {
-		return outgoingMD, nil, i.handleFailure(outgoingMD, "error applying header additions", err)
+		return nil, nil, fmt.Errorf("error applying header additions: %v", err)
 	}
 
 	// Apply the headers_to_remove specified by the external authorization
 	// server.
 	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(okResp.GetHeadersToRemove(), mutatedMD); err != nil {
-		return outgoingMD, nil, i.handleFailure(outgoingMD, "error applying header removals", err)
+		return nil, nil, fmt.Errorf("error applying header removals: %v", err)
 	}
 
 	// Validate response headers specified by the external authorization server
 	// against header mutation rules before creating the data plane stream.
 	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetResponseHeadersToAdd(), metadata.MD{}); err != nil {
-		return outgoingMD, nil, i.handleFailure(outgoingMD, "header validation fails for response headers", err)
+		return nil, nil, fmt.Errorf("header validation fails for response headers: %v", err)
 	}
 
 	return mutatedMD, okResp.GetResponseHeadersToAdd(), nil
@@ -463,10 +462,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 	resp, err := i.sendCheckRequest(ctx, ri.Method, outgoingMD)
 	if err != nil {
-		if err := i.handleFailure(outgoingMD, "RPC denied due to an error calling the external authorization server", err); err != nil {
+		ctx, err = i.handleFailure(ctx, fmt.Errorf("RPC denied due to an error calling the external authorization server: %v", err))
+		if err != nil {
 			return nil, err
 		}
-		ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
 		return newStream(ctx, opts...)
 	}
 
@@ -474,14 +473,14 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// a dataplane stream to the backend. Instead, we return a denied client
 	// stream wrapper that returns the denied error on stream operations.
 	if resp.GetStatus().GetCode() != int32(codes.OK) {
-		return i.handleDeniedResponse(ctx, resp, outgoingMD, newStream, opts)
+		return i.handleDeniedResponse(ctx, resp, newStream, opts)
 	}
 	return i.handleOkResponse(ctx, resp, outgoingMD, newStream, opts)
 }
 
 // handleDeniedResponse handles cases where the external authorization server
 // denies the RPC.
-func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3authpb.CheckResponse, outgoingMD metadata.MD, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
+func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3authpb.CheckResponse, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
 	// Per gRFC A92, the status message from the CheckResponse, if set, is
 	// included in the error returned for the data plane RPC.
 	msg := "extauthz: RPC denied by external authorization server"
@@ -509,10 +508,10 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 			// result, if failure_mode_allow is true, the RPC is sent to the
 			// backend even though the authorization server denied it.
 			// Otherwise, it fails with status_on_error.
-			if err := i.handleFailure(outgoingMD, "error applying header mutation rules on denied response", err); err != nil {
+			ctx, err = i.handleFailure(ctx, fmt.Errorf("error applying header mutation rules on denied response: %v", err))
+			if err != nil {
 				return nil, err
 			}
-			ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
 			return newStream(ctx, opts...)
 		}
 	}
@@ -539,18 +538,21 @@ func (i *clientInterceptor) handleOkResponse(ctx context.Context, resp *v3authpb
 	// If the response does not contain an OkResponse message despite having an
 	// OK status, we proceed to create the stream without making any header
 	// mutations.
-	okResp, _ := resp.GetHttpResponse().(*v3authpb.CheckResponse_OkResponse)
-	if okResp != nil {
-		var err error
-		outgoingMD, responseHeadersToAdd, err = i.applyHeaderMutations(okResp.OkResponse, outgoingMD)
+	if okResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_OkResponse); ok && okResp.OkResponse != nil {
+		mutatedMD, respHeaders, err := i.applyHeaderMutations(okResp.OkResponse, outgoingMD)
 		if err != nil {
-			return nil, err
+			ctx, err = i.handleFailure(ctx, err)
+			if err != nil {
+				return nil, err
+			}
+			return newStream(ctx, opts...)
 		}
+		// Create a new context with the mutated outgoing metadata. All
+		// subsequent Filters in the chain and the final RPC call will see this
+		// new context.
+		ctx = metadata.NewOutgoingContext(ctx, mutatedMD)
+		responseHeadersToAdd = respHeaders
 	}
-
-	// Create a new context with the mutated outgoing metadata. All subsequent
-	// Filters in the chain and the final RPC call will see this new context.
-	ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
 
 	// Create the underlying gRPC stream.
 	stream, err := newStream(ctx, opts...)
