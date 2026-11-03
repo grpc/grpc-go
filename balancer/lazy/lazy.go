@@ -89,6 +89,9 @@ type lazyBalancer struct {
 func (lb *lazyBalancer) Close() {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
+	if lb.closed {
+		return
+	}
 	lb.closed = true
 	lb.latestClientConnState = nil
 	lb.latestResolverError = nil
