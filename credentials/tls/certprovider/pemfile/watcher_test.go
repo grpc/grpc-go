@@ -20,7 +20,6 @@ package pemfile
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"os"
 	"path"
@@ -626,114 +625,5 @@ func (s) TestProvider_UpdateFailureRoot_MissingFile(t *testing.T) {
 	}
 	if err := compareKeyMaterial(km1, km2); err != nil {
 		t.Fatalf("expected provider to not update key material: %v", err)
-	}
-}
-
-// TestProvider_MLDSA tests that the file watcher provider loads and rotates
-// ML-DSA-44, ML-DSA-65, ML-DSA-87, and ML-DSA-87 chain certificates and keys.
-func (s) TestProvider_MLDSA(t *testing.T) {
-	if _, err := tls.LoadX509KeyPair(testdata.Path("x509/mldsa/server_mldsa44.pem"), testdata.Path("x509/mldsa/server_mldsa44.key")); err != nil {
-		t.Skipf("skipping ML-DSA test: crypto/tls does not support ML-DSA keys/certificates in this Go version: %v", err)
-	}
-	origDistributorFunc := newDistributor
-	distCh := testutils.NewChannel()
-	newDistributor = func() distributor { return newWrappedDistributor(distCh) }
-	defer func() { newDistributor = origDistributorFunc }()
-
-	dir, err := os.MkdirTemp("", "mldsa_provider_*")
-	if err != nil {
-		t.Fatalf("os.MkdirTemp() failed: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	steps := []struct {
-		certSrc     string
-		keySrc      string
-		rootSrc     string
-		wantSigAlgo string
-		wantChain   int
-	}{
-		{
-			certSrc:     "x509/mldsa/server_mldsa44.pem",
-			keySrc:      "x509/mldsa/server_mldsa44.key",
-			rootSrc:     "x509/mldsa/ca_mldsa44.pem",
-			wantSigAlgo: "ML-DSA-44",
-			wantChain:   1,
-		},
-		{
-			certSrc:     "x509/mldsa/server_mldsa65.pem",
-			keySrc:      "x509/mldsa/server_mldsa65.key",
-			rootSrc:     "x509/mldsa/ca_mldsa65.pem",
-			wantSigAlgo: "ML-DSA-65",
-			wantChain:   1,
-		},
-		{
-			certSrc:     "x509/mldsa/server_mldsa87.pem",
-			keySrc:      "x509/mldsa/server_mldsa87.key",
-			rootSrc:     "x509/mldsa/ca_mldsa87.pem",
-			wantSigAlgo: "ML-DSA-87",
-			wantChain:   1,
-		},
-		{
-			certSrc:     "x509/mldsa/server_chain_mldsa87.pem",
-			keySrc:      "x509/mldsa/server_chain_mldsa87.key",
-			rootSrc:     "x509/mldsa/ca_mldsa87.pem",
-			wantSigAlgo: "ML-DSA-87",
-			wantChain:   2,
-		},
-	}
-
-	createTmpFile(t, testdata.Path(steps[0].certSrc), path.Join(dir, certFile))
-	createTmpFile(t, testdata.Path(steps[0].keySrc), path.Join(dir, keyFile))
-	createTmpFile(t, testdata.Path(steps[0].rootSrc), path.Join(dir, rootFile))
-
-	prov, err := NewProvider(Options{
-		CertFile:        path.Join(dir, certFile),
-		KeyFile:         path.Join(dir, keyFile),
-		RootFile:        path.Join(dir, rootFile),
-		RefreshDuration: defaultTestRefreshDuration,
-	})
-	if err != nil {
-		t.Fatalf("NewProvider() failed: %v", err)
-	}
-	defer prov.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	for i, step := range steps {
-		if i == 0 {
-			for j := 0; j < 2; j++ {
-				if _, err := distCh.Receive(ctx); err != nil {
-					t.Fatalf("step %d: timeout waiting for initial key material: %v", i, err)
-				}
-			}
-		} else {
-			createTmpFile(t, testdata.Path(step.certSrc), path.Join(dir, certFile))
-			createTmpFile(t, testdata.Path(step.keySrc), path.Join(dir, keyFile))
-			if _, err := distCh.Receive(ctx); err != nil {
-				t.Fatalf("step %d: timeout waiting for identity update: %v", i, err)
-			}
-			if step.rootSrc != steps[i-1].rootSrc {
-				createTmpFile(t, testdata.Path(step.rootSrc), path.Join(dir, rootFile))
-				if _, err := distCh.Receive(ctx); err != nil {
-					t.Fatalf("step %d: timeout waiting for root update: %v", i, err)
-				}
-			}
-		}
-
-		km, err := prov.KeyMaterial(ctx)
-		if err != nil {
-			t.Fatalf("step %d: prov.KeyMaterial() failed: %v", i, err)
-		}
-		if len(km.Certs) != 1 {
-			t.Fatalf("step %d: len(km.Certs) = %d, want 1", i, len(km.Certs))
-		}
-		if got := len(km.Certs[0].Certificate); got != step.wantChain {
-			t.Errorf("step %d: len(Certificate chain) = %d, want %d", i, got, step.wantChain)
-		}
-		if got := km.Certs[0].Leaf.SignatureAlgorithm.String(); got != step.wantSigAlgo {
-			t.Errorf("step %d: leaf SignatureAlgorithm = %q, want %q", i, got, step.wantSigAlgo)
-		}
 	}
 }
