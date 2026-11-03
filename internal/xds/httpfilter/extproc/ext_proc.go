@@ -429,6 +429,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		metricsRecorder:        i.metricsRecorder,
 		target:                 i.target,
 		clientHeadersStartTime: timeNow(),
+		defaultWindowSize:      iextproc.DefaultFlowControlWindowSize,
 		// Construct request attributes once during stream initialization to capture
 		// the original, unmutated request metadata and RPC info. For streaming
 		// RPCs, where stream creation and message transmission are separable,
@@ -500,8 +501,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		downstreamToSidestreamPositiveUpdateCh: make(chan struct{}, 1),
 		upstreamToSidestreamPositiveUpdateCh:   make(chan struct{}, 1),
 	}
-	cs.downstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
-	cs.upstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
+	cs.downstreamToSidestreamWindow.Store(cs.defaultWindowSize)
+	cs.upstreamToSidestreamWindow.Store(cs.defaultWindowSize)
 
 	// When request header processing is "Send", defer creating the dataplane
 	// stream until the external processor responds, because gRPC transmits
@@ -559,6 +560,7 @@ type commonStream struct {
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
 	clientHeadersStartTime time.Time // holds the start time of client headers processing for metrics and relative timestamp calculations
+	defaultWindowSize      int64     // initial flow control window size captured at stream creation
 
 	// onFinish stores OnFinishCallOption callbacks to execute if calling the
 	// delegate (newStream) fails or if the RPC fails before delegating.
@@ -645,10 +647,10 @@ func (cs *commonStream) newProcessingRequest(isClientMessage bool) *v3procservic
 		}
 		if !cs.config.observabilityMode {
 			req.FlowControlInit = &v3procservicepb.ProcessingRequest_FlowControlInit{
-				InitialWindowDownstreamToSidestream: iextproc.DefaultFlowControlWindowSize,
-				InitialWindowUpstreamToSidestream:   iextproc.DefaultFlowControlWindowSize,
-				InitialWindowSidestreamToUpstream:   iextproc.DefaultFlowControlWindowSize,
-				InitialWindowSidestreamToDownstream: iextproc.DefaultFlowControlWindowSize,
+				InitialWindowDownstreamToSidestream: cs.defaultWindowSize,
+				InitialWindowUpstreamToSidestream:   cs.defaultWindowSize,
+				InitialWindowSidestreamToUpstream:   cs.defaultWindowSize,
+				InitialWindowSidestreamToDownstream: cs.defaultWindowSize,
 			}
 		}
 	}
@@ -1176,7 +1178,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 		// standalone processing request with window update and clear the pending
 		// update.
 		if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
-			if cs.pendingRespWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+			if cs.pendingRespWindowUpdate.Add(bodySize) >= cs.defaultWindowSize/2 {
 				if err := cs.sendClientWindowUpdate(); err != nil {
 					return err
 				}
@@ -1456,7 +1458,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			// standalone processing request with window update and clear the pending
 			// update.
 			if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
-				if cs.pendingReqWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+				if cs.pendingReqWindowUpdate.Add(bodySize) >= cs.defaultWindowSize/2 {
 					if err := cs.sendClientWindowUpdate(); err != nil {
 						return
 					}
