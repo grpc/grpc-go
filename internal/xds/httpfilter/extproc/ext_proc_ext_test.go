@@ -4564,16 +4564,16 @@ func (s) TestUnaryMetrics(t *testing.T) {
 			}
 
 			// Verify values in the map.
-			if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got != wantDurationSeconds {
+			if got := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got != wantDurationSeconds {
 				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_headers_duration", got, wantDurationSeconds)
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got != wantDurationSeconds {
+			if got := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got != wantDurationSeconds {
 				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_headers_duration", got, wantDurationSeconds)
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got != wantDurationSeconds {
+			if got := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got != wantDurationSeconds {
 				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_half_close_duration", got, wantDurationSeconds)
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got != wantDurationSeconds {
+			if got := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got != wantDurationSeconds {
 				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_trailers_duration", got, wantDurationSeconds)
 			}
 
