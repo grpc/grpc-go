@@ -302,3 +302,27 @@ type Timer interface {
 type EnforceMetricsRecorderEmbedding interface {
 	enforceMetricsRecorderEmbedding()
 }
+
+// EnforceStatsHandlerV2Embedding is used to enforce proper embedding of the V2
+// stats Handler implementation.
+type EnforceStatsHandlerV2Embedding interface {
+	enforceStatsHandlerV2Embedding()
+}
+
+// EnforceClientCallTracerEmbedding is used to enforce proper embedding of the
+// V2 ClientCallTracer implementation.
+type EnforceClientCallTracerEmbedding interface {
+	enforceClientCallTracerEmbedding()
+}
+
+// EnforceClientAttemptTracerEmbedding is used to enforce proper embedding of
+// the V2 ClientAttemptTracer implementation.
+type EnforceClientAttemptTracerEmbedding interface {
+	enforceClientAttemptTracerEmbedding()
+}
+
+// EnforceServerCallTracerEmbedding is used to enforce proper embedding of the
+// V2 ServerCallTracer implementation.
+type EnforceServerCallTracerEmbedding interface {
+	enforceServerCallTracerEmbedding()
+}

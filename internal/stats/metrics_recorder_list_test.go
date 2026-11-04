@@ -244,7 +244,7 @@ func (s) TestMetricRecorderListPanic(t *testing.T) {
 		OptionalLabels: []string{"int counter optional label"},
 		Default:        false,
 	})
-	mrl := istats.NewMetricsRecorderList(nil)
+	mrl := istats.NewMetricsRecorderList(nil, nil)
 
 	want := `Received 1 labels in call to record metric "simple counter", but expected 2.`
 	defer func() {
@@ -264,7 +264,7 @@ func (s) TestMetricsRecorderList_RegisterAsyncReporter(t *testing.T) {
 	spy2 := &spyMetricsRecorder{name: "spy2"}
 	spy3 := &spyMetricsRecorder{name: "spy3"}
 
-	list := istats.NewMetricsRecorderList([]gstats.Handler{spy1, spy2, spy3})
+	list := istats.NewMetricsRecorderList([]gstats.Handler{spy1, spy2, spy3}, nil)
 
 	desc := &estats.MetricDescriptor{Name: "test_metric", Description: "test"}
 	mockMetric := &mockAsyncMetric{d: desc}

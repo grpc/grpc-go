@@ -99,6 +99,18 @@ var (
 	// environment variable GRPC_EXPERIMENTAL_XDS_AUTHORITY_REWRITE to "true".
 	XDSAuthorityRewrite = boolFromEnv("GRPC_EXPERIMENTAL_XDS_AUTHORITY_REWRITE", false)
 
+	// StatsHandlerV2 gates the experimental V2 stats handler API
+	// (experimental/stats). It is disabled by default and is enabled by setting
+	// the environment variable GRPC_EXPERIMENTAL_ENABLE_STATS_HANDLER_V2 to
+	// "true".
+	//
+	// While disabled, a registered V2 handler has no effect: no tracer is
+	// created and no event is emitted, leaving the V1 stats.Handler path
+	// unchanged. Because internal/envconfig is not importable outside the
+	// module, only in-module tests can flip this by assigning to it directly
+	// and restoring the previous value.
+	StatsHandlerV2 = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_STATS_HANDLER_V2", false)
+
 	// PickFirstWeightedShuffling indicates whether weighted endpoint shuffling
 	// is enabled in the pick_first LB policy, as defined in gRFC A113. This
 	// feature can be disabled by setting the environment variable
