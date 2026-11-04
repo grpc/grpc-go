@@ -80,7 +80,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
-					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, Locality: clients.Locality{Region: node.Locality.Region, Zone: node.Locality.Zone, SubZone: node.Locality.SubZone}, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.GetMetadata().AsMap(), Locality: clients.Locality{Region: node.Locality.Region, Zone: node.Locality.Zone, SubZone: node.Locality.SubZone}, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
@@ -118,7 +118,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expTopLevelS: topLevelSCfg, expAuth2S: auth2SCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expTopLevelS},
-					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.GetMetadata().AsMap(), UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{"auth1": {XDSServers: []xdsclient.ServerConfig{expTopLevelS}}, "auth2": {XDSServers: []xdsclient.ServerConfig{expAuth2S}}},
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
@@ -153,7 +153,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
-					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.GetMetadata().AsMap(), UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
@@ -187,7 +187,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
-					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.GetMetadata().AsMap(), UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
@@ -221,7 +221,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
-					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.GetMetadata().AsMap(), UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
@@ -253,7 +253,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
-					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.GetMetadata().AsMap(), UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},

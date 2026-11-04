@@ -84,7 +84,7 @@ type Node struct {
 	Locality Locality
 	// Metadata provides additional context about the application by associating
 	// arbitrary key-value pairs with it.
-	Metadata any
+	Metadata map[string]any
 	// UserAgentName is the user agent name of application.
 	UserAgentName string
 	// UserAgentVersion is the user agent version of application.

@@ -103,7 +103,10 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 	if opts.backoff == nil {
 		opts.backoff = backoff.DefaultExponential.Backoff
 	}
-	np := internal.NodeProto(opts.clientConfig.Node)
+	np, err := internal.NodeProto(opts.clientConfig.Node)
+	if err != nil {
+		return nil, err
+	}
 	np.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	xc.ads = newADSStreamImpl(adsStreamOpts{
 		transport:          opts.transport,

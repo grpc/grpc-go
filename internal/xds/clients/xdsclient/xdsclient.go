@@ -109,6 +109,9 @@ func New(config Config) (*XDSClient, error) {
 	case config.Authorities == nil && config.Servers == nil:
 		return nil, errors.New("xdsclient: no servers or authorities specified")
 	}
+	if _, err := clientsinternal.NodeProto(config.Node); err != nil {
+		return nil, fmt.Errorf("xdsclient: %w", err)
+	}
 	if config.WatchExpiryTimeout == 0 {
 		config.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
@@ -361,7 +364,10 @@ func (c *XDSClient) DumpResources() ([]byte, error) {
 		retCfg = append(retCfg, a.dumpResources()...)
 	}
 
-	nodeProto := clientsinternal.NodeProto(c.config.Node)
+	nodeProto, err := clientsinternal.NodeProto(c.config.Node)
+	if err != nil {
+		return nil, err
+	}
 	nodeProto.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	resp := &v3statuspb.ClientStatusResponse{}
 	resp.Config = append(resp.Config, &v3statuspb.ClientConfig{
