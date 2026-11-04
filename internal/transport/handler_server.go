@@ -424,6 +424,15 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		st:               ht,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
+	for _, value := range req.Header.Values("grpc-accept-encoding") {
+		if value == "" {
+			continue
+		}
+		if s.clientAdvertisedCompressors != "" {
+			s.clientAdvertisedCompressors += ","
+		}
+		s.clientAdvertisedCompressors += value
+	}
 	s.Stream.buf.init(ht.bufferPool)
 	s.readRequester = s
 	s.trReader = transportReader{
