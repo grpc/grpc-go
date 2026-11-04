@@ -217,11 +217,11 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 		lrs.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(&resp))
 	}
 
-	internal := resp.GetLoadReportingInterval()
-	if err := internal.CheckValid(); err != nil {
+	interval := resp.GetLoadReportingInterval()
+	if err := interval.CheckValid(); err != nil {
 		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
 	}
-	loadReportingInterval := internal.AsDuration()
+	loadReportingInterval := interval.AsDuration()
 	if loadReportingInterval <= 0 {
 		// A valid Duration can be zero or negative, which can't be used as
 		// the period of a ticker.
