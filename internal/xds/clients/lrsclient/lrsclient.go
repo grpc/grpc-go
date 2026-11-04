@@ -155,7 +155,7 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 				c.logger.Warningf("Final send attempt failed: %v", err)
 			}
 		case <-ctx.Done():
-			c.logger.Warningf("Context canceled before finishing the final send attempt: %v", err)
+			c.logger.Warningf("Context canceled before finishing the final send attempt: %v", ctx.Err())
 		}
 
 		lrs.cancelStream()

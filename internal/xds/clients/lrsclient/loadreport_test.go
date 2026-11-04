@@ -58,11 +58,10 @@ func Test(t *testing.T) {
 }
 
 const (
-	testKey1                      = "test-key1"
-	testKey2                      = "test-key2"
-	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
-	defaultTestTimeout            = 5 * time.Second
-	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
+	testKey1                = "test-key1"
+	testKey2                = "test-key2"
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
 var (
@@ -150,9 +149,11 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
 	}
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ssCancel()
-	defer loadStore1.Stop(ssCtx)
+	// Cancel the context passed to Stop() upfront, since this test does not
+	// care about the final load report.
+	stopCtx, stopCancel := context.WithCancel(context.Background())
+	stopCancel()
+	defer loadStore1.Stop(stopCtx)
 
 	// Call the load reporting API to report load to the first management
 	// server, and ensure that a connection to the server is created.
@@ -237,9 +238,9 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Stop this load reporting stream, server should see error canceled.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ssCancel()
-	loadStore2.Stop(ssCtx)
+	shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shortCancel()
+	loadStore2.Stop(shortCtx)
 
 	// Server should receive a stream canceled error. There may be additional
 	// load reports from the client in the channel.
@@ -439,9 +440,9 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 	// Cancel the first load reporting call, and ensure that the stream does not
 	// close (because we have another call open).
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ssCancel()
-	loadStore1.Stop(ssCtx)
+	shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shortCancel()
+	loadStore1.Stop(shortCtx)
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(sCtx); err != context.DeadlineExceeded {
@@ -449,9 +450,9 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Stop the second load reporting call, and ensure the stream is closed.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ssCancel()
-	loadStore2.Stop(ssCtx)
+	shortCtx, shortCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shortCancel()
+	loadStore2.Stop(shortCtx)
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
 		t.Fatal("Timeout waiting for LRS stream to close")
 	}
@@ -466,9 +467,9 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ssCancel()
-	loadStore3.Stop(ssCtx)
+	shortCtx, shortCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shortCancel()
+	loadStore3.Stop(shortCtx)
 }
 
 // TestReportLoad_StopWithContext tests the behavior of LoadStore.Stop() when
@@ -724,9 +725,9 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 		t.Errorf("Got load report interval %v, want %v", got, want)
 	}
 
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer ssCancel()
-	loadStore1.Stop(ssCtx)
+	shortCtx, shortCancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer shortCancel()
+	loadStore1.Stop(shortCtx)
 }
 
 // Tests that the LRS client rejects a response from the LRS server with a load
@@ -766,11 +767,11 @@ func (s) TestReportLoad_NonPositiveLoadReportingInterval(t *testing.T) {
 			if err != nil {
 				t.Fatalf("client.ReportLoad() failed: %v", err)
 			}
-			defer func() {
-				ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
-				defer ssCancel()
-				loadStore.Stop(ssCtx)
-			}()
+			// Cancel the context passed to Stop() upfront, since this test
+			// does not care about the final load report.
+			stopCtx, stopCancel := context.WithCancel(context.Background())
+			stopCancel()
+			defer loadStore.Stop(stopCtx)
 			lrsServer := mgmtServer.LRSServer
 			if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 				t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
