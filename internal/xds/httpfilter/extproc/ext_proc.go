@@ -1619,27 +1619,6 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				cs.failProcStream(fmt.Errorf("external processor unexpectedly sent response body when response body processing is disabled"))
 				return
 			}
-			streamedResp, ok := cs.validateBodyResponse(resp.GetResponseBody())
-			if !ok {
-				return
-			}
-			if streamedResp.GetEndOfStream() {
-				cs.failProcStream(fmt.Errorf("external processor unexpectedly set end of stream in response body mutation"))
-				return
-			}
-			drainComplete := streamedResp.GetDrainComplete()
-			if drainComplete {
-				if !respDrainMarkerSent || cs.responseDrainComplete.HasFired() {
-					cs.failProcStream(fmt.Errorf("external processor prematurely sent response drain complete"))
-					return
-				}
-				if len(streamedResp.GetBody()) == 0 {
-					cs.responseDrainComplete.Fire()
-					cs.maybeHalfCloseProcStream()
-					break
-				}
-			}
-
 			// If response headers have been sent and mutated response headers have
 			// not been received before receiving the response body message, fail the
 			// RPC.
@@ -1655,12 +1634,30 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				return
 			}
 
-			// drain_complete is the final response body response.
+			// If response body is received enev afetr response drain has been
+			// completed, fail the RPC.
 			if cs.responseDrainComplete.HasFired() {
-				cs.failProcStream(fmt.Errorf("external processor sent response body after response drain complete"))
+				cs.failProcStream(fmt.Errorf("external processor sent response body after response drain completed"))
 				return
 			}
-			cs.mutatedRespBuffer.Put(streamedResp)
+			streamedResp, ok := cs.validateBodyResponse(resp.GetResponseBody())
+			if !ok {
+				return
+			}
+			if streamedResp.GetEndOfStream() {
+				cs.failProcStream(fmt.Errorf("external processor unexpectedly set end of stream in response body mutation"))
+				return
+			}
+			drainComplete := streamedResp.GetDrainComplete()
+			if drainComplete && !respDrainMarkerSent {
+				cs.failProcStream(fmt.Errorf("external processor prematurely sent response drain complete"))
+				return
+			}
+			// drain_complete is the final response body response. Only forward it if it
+			// carries body data.
+			if !drainComplete || len(streamedResp.GetBody()) > 0 {
+				cs.mutatedRespBuffer.Put(streamedResp)
+			}
 			if drainComplete {
 				cs.responseDrainComplete.Fire()
 				cs.maybeHalfCloseProcStream()
@@ -1717,7 +1714,7 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			// Signal that the response trailer is modified and ready to be sent to
 			// the client, and half-close the processor stream as all processing is complete.
 			cs.fireResponseTrailerReady()
-			cs.closeProcSend()
+			cs.halfCloseProcStream()
 			cs.responseDrainComplete.Fire()
 		}
 	}
@@ -1750,9 +1747,10 @@ func (cs *clientStream) applyMutations(mutation *v3procservicepb.HeaderMutation,
 	return cs.config.mutationRules.ApplyRemovals(mutation.GetRemoveHeaders(), md)
 }
 
-// closeProcSend gracefully half-closes the external processor stream across the
-// background send goroutine by pushing a nil sentinel onto miscSendCh.
-func (cs *clientStream) closeProcSend() {
+// halfCloseProcStream gracefully half-closes the external processor stream
+// across the background send goroutine by pushing a nil sentinel onto
+// controlSendCh.
+func (cs *clientStream) halfCloseProcStream() {
 	if !cs.procSendClosed.CompareAndSwap(false, true) {
 		return
 	}
@@ -1773,7 +1771,7 @@ func (cs *clientStream) maybeHalfCloseProcStream() {
 	reqDone := cs.config.processingModes.requestBodyMode == modeSkip || cs.requestDrainComplete.HasFired() || cs.discardRequests.Load()
 	respDone := cs.responseDrainComplete.HasFired() || cs.responseTrailerReady.HasFired()
 	if reqDone && respDone {
-		cs.closeProcSend()
+		cs.halfCloseProcStream()
 	}
 }
 
@@ -1790,14 +1788,17 @@ func (cs *clientStream) attachPendingWindowUpdates(req *v3procservicepb.Processi
 }
 
 // sendToProcServerLoop runs as a dedicated background goroutine that serializes
-// all outbound messages to the external processor server. It listens on the
-// downstreamSendCh and upstreamSendCh for messages to forward. It actively
-// monitors stream lifecycle events:
-//   - Drain/Bypass: If procStreamBypass fires, it initiates a graceful shutdown
-//     by sending a half-close (CloseSend) to the external processor server and
-//     returning so that no more messages can be sent to the external processor.
-//   - Cancellation/Failure: It aborts immediately if the context is canceled or
-//     the underlying stream fails.
+// all outbound messages to the external processor server across
+// downstreamSendCh, upstreamSendCh, and controlSendCh. It also handles stream
+// lifecycle events:
+//   - Directional drain: When requestDrainStarted or responseDrainStarted
+//     fires, it sends a drain_complete marker for that direction (unless EOS or
+//     trailers were already sent) and stops reading from the corresponding
+//     channel.
+//   - Half-close: When a nil sentinel arrives on controlSendCh, it half-closes
+//     the processor stream (CloseSend) and exits.
+//   - Bypass/Cancellation/Failure: It exits immediately if procStreamBypass or
+//     procStreamFailed fires, or if the context is canceled.
 func (cs *clientStream) sendToProcServerLoop() {
 	reqDrainStarted := cs.requestDrainStarted.Done()
 	respDrainStarted := cs.responseDrainStarted.Done()
@@ -1805,6 +1806,8 @@ func (cs *clientStream) sendToProcServerLoop() {
 	upstreamSendCh := cs.upstreamSendCh
 
 	sendReqDrainComplete := func() {
+		// Ignore the drain request if EOS has already been sent and consider drain
+		// complete when end-of-stream is seen on response.
 		if !cs.procStreamClosed.Load() && !cs.requestEOSSent.Load() {
 			req := cs.newProcessingRequest(true)
 			req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
@@ -1830,6 +1833,8 @@ func (cs *clientStream) sendToProcServerLoop() {
 	}
 
 	sendRespDrainComplete := func() {
+		// Ignore drain request if response trailers have already been sent.
+		// Consider drain complete when proc server sends trailers back.
 		if !cs.procStreamClosed.Load() && !cs.trailerSent.Load() {
 			req := cs.newProcessingRequest(false)
 			req.Request = &v3procservicepb.ProcessingRequest_ResponseBody{
@@ -1847,7 +1852,7 @@ func (cs *clientStream) sendToProcServerLoop() {
 		// Once drain complete is sent, we will never send another message on this
 		// channel. So we can set respDrainStarted and upstreamSendCh to nil to stop
 		// listening on them. Same as above, this relies on upstreamSendCh being
-		// unbuffered and its senders selecting on responseBypass.Done().
+		// unbuffered and its senders selecting on responseDrainStarted.Done().
 		respDrainStarted = nil
 		upstreamSendCh = nil
 	}
