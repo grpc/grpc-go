@@ -729,7 +729,8 @@ type clientStream struct {
 	// Add new bool fields here, not inline above.
 
 	// Not guarded by mu.
-	sentLast bool // sent an end stream
+	sentLast         bool // sent an end stream
+	receivedFirstMsg bool // set after the first message is received
 	// serverHeaderBinlogged is a boolean for whether server header has been
 	// logged. Server header will be logged when the first time one of those
 	// happens: stream.Header(), stream.Recv().
@@ -764,13 +765,6 @@ type streamAttempt struct {
 	parser          parser
 	decompressorV0  Decompressor
 	decompressorV1  encoding.Compressor
-
-	mu sync.Mutex // guards finished and transportStream closing
-
-	// Bool fields are grouped at the tail to eliminate alignment padding.
-	finished         bool
-	receivedFirstMsg bool
-	decompressorSet  bool
 }
 
 // newStream creates a new transport.ClientStream on the attempt's transport
@@ -800,9 +794,11 @@ func (sa *streamAttempt) writeMsg(hdr []byte, payld mem.BufferSlice, isLast bool
 }
 
 // readMsg reads and deserializes a single message from the transport stream.
-// It handles decompressor negotiation and validates cardinality on EOF.
-func (sa *streamAttempt) readMsg(m any, codec baseCodec, maxReceiveMessageSize int, acceptedCompressors []string, serverStreams bool, payInfo *payloadInfo) error {
-	if !sa.decompressorSet {
+// It handles decompressor negotiation and validates cardinality on EOF,
+// updating the caller-owned decompressorSet and receivedFirstMsg flags in
+// place.
+func (sa *streamAttempt) readMsg(m any, codec baseCodec, maxReceiveMessageSize int, acceptedCompressors []string, serverStreams bool, payInfo *payloadInfo, decompressorSet, receivedFirstMsg *bool) error {
+	if !*decompressorSet {
 		// Block until we receive headers containing received message encoding.
 		if ct := sa.transportStream.RecvCompress(); ct != "" && ct != encoding.Identity {
 			if sa.decompressorV0 == nil || sa.decompressorV0.Type() != ct {
@@ -820,7 +816,7 @@ func (sa *streamAttempt) readMsg(m any, codec baseCodec, maxReceiveMessageSize i
 			sa.decompressorV0 = nil
 		}
 		// Only initialize this state once per stream.
-		sa.decompressorSet = true
+		*decompressorSet = true
 	}
 	if err := recv(&sa.parser, codec, sa.transportStream, sa.decompressorV0, m, maxReceiveMessageSize, payInfo, sa.decompressorV1, false); err != nil {
 		if err == io.EOF {
@@ -828,7 +824,7 @@ func (sa *streamAttempt) readMsg(m any, codec baseCodec, maxReceiveMessageSize i
 				return statusErr
 			}
 			// Received no msg and status OK for non-server streaming rpcs.
-			if !serverStreams && !sa.receivedFirstMsg {
+			if !serverStreams && !*receivedFirstMsg {
 				return status.Error(codes.Internal, "cardinality violation: received no response message from non-server-streaming RPC")
 			}
 			return io.EOF // indicates successful end of stream.
@@ -836,29 +832,19 @@ func (sa *streamAttempt) readMsg(m any, codec baseCodec, maxReceiveMessageSize i
 
 		return toRPCErr(err)
 	}
-	sa.receivedFirstMsg = true
+	*receivedFirstMsg = true
 	return nil
 }
 
-// finish closes the underlying transport stream if it hasn't already been
-// closed. It returns alreadyFinished=true if the stream was already finished,
-// along with any trailers retrieved from the transport stream.
-func (sa *streamAttempt) finish(err error) (alreadyFinished bool, tr metadata.MD) {
-	sa.mu.Lock()
-	defer sa.mu.Unlock()
-	if sa.finished {
-		return true, nil
+// finish closes the underlying transport stream if it has been created and
+// returns any trailers retrieved from it. Callers must synchronize calls to
+// finish and ensure it is invoked at most once.
+func (sa *streamAttempt) finish(err error) metadata.MD {
+	if sa.transportStream == nil {
+		return nil
 	}
-	sa.finished = true
-	if err == io.EOF {
-		// Ending a stream with EOF indicates a success.
-		err = nil
-	}
-	if sa.transportStream != nil {
-		sa.transportStream.Close(err)
-		tr = sa.transportStream.Trailer()
-	}
-	return false, tr
+	sa.transportStream.Close(err)
+	return sa.transportStream.Trailer()
 }
 
 // Header returns the header metadata of the stream.
@@ -890,7 +876,7 @@ type csAttempt struct {
 	cs         *clientStream
 	pickResult balancer.PickResult
 
-	mu sync.Mutex // guards trInfo.tr
+	mu sync.Mutex // guards finished and trInfo.tr
 	// trInfo may be nil (if EnableTracing is false).
 	// trInfo.tr is set when created (if EnableTracing is true),
 	// and cleared when the finish method is called.
@@ -905,10 +891,12 @@ type csAttempt struct {
 	// Add new bool fields here, not inline above.
 
 	// Not guarded by mu.
-	// set for newStream errors that may be transparently retried
-	allowTransparentRetry bool
-	// set for pick errors that are returned as a status
-	drop bool
+	decompressorSet       bool
+	allowTransparentRetry bool // set for newStream errors that may be transparently retried
+	drop                  bool // set for pick errors that are returned as a status
+
+	// Guarded by mu.
+	finished bool
 }
 
 func (cs *clientStream) commitAttemptLocked() {
@@ -1409,7 +1397,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		defer payInfo.free()
 	}
 
-	if err := a.streamAttempt.readMsg(m, cs.codec, *cs.callInfo.maxReceiveMessageSize, cs.callInfo.acceptedResponseCompressors, cs.desc.ServerStreams, payInfo); err != nil {
+	if err := a.streamAttempt.readMsg(m, cs.codec, *cs.callInfo.maxReceiveMessageSize, cs.callInfo.acceptedResponseCompressors, cs.desc.ServerStreams, payInfo, &a.decompressorSet, &cs.receivedFirstMsg); err != nil {
 		return err
 	}
 	if a.trInfo != nil {
@@ -1433,14 +1421,17 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 }
 
 func (a *csAttempt) finish(err error) {
-	alreadyFinished, tr := a.streamAttempt.finish(err)
-	if alreadyFinished {
+	a.mu.Lock()
+	if a.finished {
+		a.mu.Unlock()
 		return
 	}
+	a.finished = true
 	if err == io.EOF {
 		// Ending a stream with EOF indicates a success.
 		err = nil
 	}
+	tr := a.streamAttempt.finish(err)
 
 	if a.pickResult.Done != nil {
 		br := false
@@ -1464,20 +1455,17 @@ func (a *csAttempt) finish(err error) {
 			Error:     err,
 		})
 	}
-	if a.trInfo != nil {
-		a.mu.Lock()
-		if a.trInfo.tr != nil {
-			if err == nil {
-				a.trInfo.tr.LazyPrintf("RPC: [OK]")
-			} else {
-				a.trInfo.tr.LazyPrintf("RPC: [%v]", err)
-				a.trInfo.tr.SetError()
-			}
-			a.trInfo.tr.Finish()
-			a.trInfo.tr = nil
+	if a.trInfo != nil && a.trInfo.tr != nil {
+		if err == nil {
+			a.trInfo.tr.LazyPrintf("RPC: [OK]")
+		} else {
+			a.trInfo.tr.LazyPrintf("RPC: [%v]", err)
+			a.trInfo.tr.SetError()
 		}
-		a.mu.Unlock()
+		a.trInfo.tr.Finish()
+		a.trInfo.tr = nil
 	}
+	a.mu.Unlock()
 }
 
 // newNonRetryClientStream creates a ClientStream with the specified
@@ -1609,6 +1597,9 @@ type addrConnStream struct {
 	sendCompressorV0 Compressor
 	sendCompressorV1 encoding.Compressor
 
+	// mu guards finished and is held for the entire finish method.
+	mu sync.Mutex
+
 	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
 	stopConnWatcher   func() bool // stops the callback registered to run on SubConn context expiration
 
@@ -1618,7 +1609,11 @@ type addrConnStream struct {
 	// Add new bool fields here, not inline above.
 
 	// Not guarded by mu.
-	sentLast bool
+	sentLast         bool
+	receivedFirstMsg bool
+	decompressorSet  bool
+
+	finished bool // guarded by mu
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1702,14 +1697,18 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 		as.callInfo.acceptedResponseCompressors,
 		as.desc.ServerStreams,
 		nil,
+		&as.decompressorSet,
+		&as.receivedFirstMsg,
 	)
 }
 
 func (as *addrConnStream) finish(err error) {
-	alreadyFinished, _ := as.streamAttempt.finish(err)
-	if alreadyFinished {
+	as.mu.Lock()
+	if as.finished {
+		as.mu.Unlock()
 		return
 	}
+	as.finished = true
 	if as.stopStreamWatcher != nil {
 		as.stopStreamWatcher()
 	}
@@ -1721,6 +1720,7 @@ func (as *addrConnStream) finish(err error) {
 		// Ending a stream with EOF indicates a success.
 		err = nil
 	}
+	as.streamAttempt.finish(err)
 
 	if err != nil {
 		as.ac.incrCallsFailed()
@@ -1728,6 +1728,7 @@ func (as *addrConnStream) finish(err error) {
 		as.ac.incrCallsSucceeded()
 	}
 	as.cancel()
+	as.mu.Unlock()
 }
 
 // ServerStream defines the server-side behavior of a streaming RPC.
