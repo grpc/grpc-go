@@ -60,9 +60,6 @@ func parseConfig(c json.RawMessage) (*iringhash.LBConfig, error) {
 	if cfg.MaxRingSize > envconfig.RingHashCap {
 		cfg.MaxRingSize = envconfig.RingHashCap
 	}
-	if !envconfig.RingHashSetRequestHashKey {
-		cfg.RequestHashHeader = ""
-	}
 	if cfg.RequestHashHeader != "" {
 		cfg.RequestHashHeader = strings.ToLower(cfg.RequestHashHeader)
 		// See rules in https://github.com/grpc/proposal/blob/master/A76-ring-hash-improvements.md#explicitly-setting-the-request-hash-key
