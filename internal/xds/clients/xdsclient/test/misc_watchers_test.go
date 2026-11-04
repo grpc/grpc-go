@@ -43,14 +43,14 @@ import (
 // testLDSWatcher is a test watcher that registers two watches corresponding to
 // the names passed in at creation time on a valid update.
 type testLDSWatcher struct {
-	client           *xdsclient.XDSClient
+	client           *xdsclient.Client
 	name1, name2     string
 	lw1, lw2         *listenerWatcher
 	cancel1, cancel2 func()
 	updateCh         *testutils.Channel
 }
 
-func newTestLDSWatcher(client *xdsclient.XDSClient, name1, name2 string) *testLDSWatcher {
+func newTestLDSWatcher(client *xdsclient.Client, name1, name2 string) *testLDSWatcher {
 	return &testLDSWatcher{
 		client:   client,
 		name1:    name1,

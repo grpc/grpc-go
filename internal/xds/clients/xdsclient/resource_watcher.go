@@ -41,7 +41,7 @@ type ResourceWatcher interface {
 
 	// AmbientError indicates an error occurred after a resource has been
 	// received that should not modify the use of that resource but may provide
-	// useful information about the state of the XDSClient for debugging
+	// useful information about the state of the Client for debugging
 	// purposes. The previous version of the resource should still be
 	// considered valid.
 	AmbientError(err error, done func())

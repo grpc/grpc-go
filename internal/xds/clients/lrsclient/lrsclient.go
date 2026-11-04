@@ -43,14 +43,14 @@ var (
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
 
-// LRSClient is an LRS (Load Reporting Service) client.
-type LRSClient struct {
+// Client is an LRS (Load Reporting Service) client.
+type Client struct {
 	transportBuilder clients.TransportBuilder
 	node             clients.Node
 	backoff          func(int) time.Duration // Backoff for LRS stream failures.
 	logger           *igrpclog.PrefixLogger
 
-	// The LRSClient owns a bunch of streams to individual LRS servers.
+	// The Client owns a bunch of streams to individual LRS servers.
 	//
 	// Once all references to a stream are dropped, the stream is closed.
 	mu         sync.Mutex
@@ -59,12 +59,12 @@ type LRSClient struct {
 }
 
 // New returns a new LRS Client configured with the provided config.
-func New(config Config) (*LRSClient, error) {
+func New(config Config) (*Client, error) {
 	if config.TransportBuilder == nil {
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
 
-	c := &LRSClient{
+	c := &Client{
 		transportBuilder: config.TransportBuilder,
 		node:             config.Node,
 		backoff:          defaultExponentialBackoff,
@@ -80,7 +80,7 @@ func New(config Config) (*LRSClient, error) {
 //
 // Caller must call Stop on the returned LoadStore when they are done reporting
 // load to this server.
-func (c *LRSClient) ReportLoad(si clients.ServerIdentifier) (*LoadStore, error) {
+func (c *Client) ReportLoad(si clients.ServerIdentifier) (*LoadStore, error) {
 	lrs, err := c.getOrCreateLRSStream(si)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (c *LRSClient) ReportLoad(si clients.ServerIdentifier) (*LoadStore, error) 
 //
 // If an active lrs stream exists for the given server identifier, it is
 // returned. Otherwise, a new lrs stream is created and returned.
-func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifier) (*streamImpl, error) {
+func (c *Client) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifier) (*streamImpl, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
