@@ -313,11 +313,14 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	md := metadata.MD{}
 	for _, h := range headers {
 		key := h.GetKey()
-		// raw_value takes precedence over the legacy value field.
-		rawValue := h.GetRawValue()
+		// The header value comes from raw_value when set, and from the
+		// legacy value field otherwise. raw_value already holds raw
+		// bytes, while the value field holds them base64-encoded.
 		val := h.GetValue()
-		if len(rawValue) > 0 {
-			val = string(rawValue)
+		fromRawValue := false
+		if raw := h.GetRawValue(); len(raw) > 0 {
+			val = string(raw)
+			fromRawValue = true
 		}
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
@@ -325,7 +328,7 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 		if err := validateHeaderValue(key, val); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid value for header key %q: %v", key, err)
 		}
-		if len(rawValue) == 0 && strings.HasSuffix(key, binHdrSuffix) {
+		if !fromRawValue && strings.HasSuffix(key, binHdrSuffix) {
 			// A binary header carried in the string value field is base64
 			// encoded. Decode it so the metadata holds raw bytes, matching
 			// what the transport layer encodes onto the wire.
