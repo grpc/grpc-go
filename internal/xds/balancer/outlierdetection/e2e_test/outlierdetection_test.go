@@ -204,6 +204,10 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 // Round Robined across the two healthy upstreams. Other than the intervals the
 // unhealthy upstream is ejected, RPC's should regularly round robin
 // across all three upstreams.
+//
+// maxEjectionPercent is 34 so that exactly one of the three upstreams may be
+// ejected: one ejection takes the ejected share to 33%, which must stay below
+// the cap for the ejection to be allowed (grpc/grpc-go#9582).
 func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -219,7 +223,7 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 					"interval": "0.050s",
 					"baseEjectionTime": "0.100s",
 					"maxEjectionTime": "300s",
-					"maxEjectionPercent": 33,
+					"maxEjectionPercent": 34,
 					"successRateEjection": {
 						"stdevFactor": 50,
 						"enforcementPercentage": 100,
@@ -242,7 +246,7 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 					"interval": "0.050s",
 					"baseEjectionTime": "0.100s",
 					"maxEjectionTime": "300s",
-					"maxEjectionPercent": 33,
+					"maxEjectionPercent": 34,
 					"failurePercentageEjection": {
 						"threshold": 50,
 						"enforcementPercentage": 100,
@@ -322,6 +326,11 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 // Once the Outlier Detection Balancer gets reconfigured with configuration
 // requiring counting RPC's, the Outlier Detection Balancer should start
 // ejecting any upstreams as specified in the configuration.
+//
+// The reconfigured maxEjectionPercent is 34 so that exactly one of the three
+// upstreams may be ejected: one ejection takes the ejected share to 33%,
+// which must stay below the cap for the ejection to be allowed
+// (grpc/grpc-go#9582).
 func (s) TestNoopConfiguration(t *testing.T) {
 	addresses, cancel := setupBackends(t)
 	defer cancel()
@@ -337,7 +346,7 @@ func (s) TestNoopConfiguration(t *testing.T) {
 			"interval": "0.050s",
 			"baseEjectionTime": "0.100s",
 			"maxEjectionTime": "300s",
-			"maxEjectionPercent": 33,
+			"maxEjectionPercent": 34,
 			"childPolicy": [{"%s": {}}]
 		  }
 		}
@@ -385,7 +394,7 @@ func (s) TestNoopConfiguration(t *testing.T) {
 			"interval": "0.050s",
 			"baseEjectionTime": "0.100s",
 			"maxEjectionTime": "300s",
-			"maxEjectionPercent": 33,
+			"maxEjectionPercent": 34,
 			"failurePercentageEjection": {
 				"threshold": 50,
 				"enforcementPercentage": 100,
