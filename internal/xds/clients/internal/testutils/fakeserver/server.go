@@ -151,7 +151,7 @@ func NewServer(addr string) *Server {
 		LRSRequestChan:     testutils.NewChannelWithSize(defaultChannelBufferSize),
 		NewConnChan:        testutils.NewChannelWithSize(defaultChannelBufferSize),
 		XDSResponseChan:    make(chan *Response, defaultChannelBufferSize),
-		LRSResponseChan:    make(chan *Response, 1), // The server only ever sends one response.
+		LRSResponseChan:    make(chan *Response, defaultChannelBufferSize),
 		LRSStreamOpenChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
 		LRSStreamCloseChan: testutils.NewChannelWithSize(defaultChannelBufferSize),
 		Address:            addr,
@@ -223,32 +223,47 @@ func (lrsS *lrsServer) StreamLoadStats(s v3lrsgrpc.LoadReportingService_StreamLo
 	lrsS.streamOpenChan.Send(nil)
 	defer lrsS.streamCloseChan.Send(nil)
 
-	req, err := s.Recv()
-	lrsS.reqChan.Send(&Request{req, err})
-	if err != nil {
+	errCh := make(chan error, 2)
+	go func() {
+		for {
+			req, err := s.Recv()
+			lrsS.reqChan.Send(&Request{req, err})
+			if err != nil {
+				if err == io.EOF {
+					errCh <- nil
+				} else {
+					errCh <- err
+				}
+				return
+			}
+		}
+	}()
+	go func() {
+		var retErr error
+		defer func() {
+			errCh <- retErr
+		}()
+
+		for {
+			select {
+			case r := <-lrsS.respChan:
+				if r.Err != nil {
+					retErr = r.Err
+					return
+				}
+				if err := s.Send(r.Resp.(*v3lrspb.LoadStatsResponse)); err != nil {
+					retErr = err
+					return
+				}
+			case <-s.Context().Done():
+				retErr = s.Context().Err()
+				return
+			}
+		}
+	}()
+
+	if err := <-errCh; err != nil {
 		return err
 	}
-
-	select {
-	case r := <-lrsS.respChan:
-		if r.Err != nil {
-			return r.Err
-		}
-		if err := s.Send(r.Resp.(*v3lrspb.LoadStatsResponse)); err != nil {
-			return err
-		}
-	case <-s.Context().Done():
-		return s.Context().Err()
-	}
-
-	for {
-		req, err := s.Recv()
-		lrsS.reqChan.Send(&Request{req, err})
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
+	return nil
 }
