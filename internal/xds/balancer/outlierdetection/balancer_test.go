@@ -356,7 +356,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-				MaxEjectionPercent: 10,
+				MaxEjectionPercent: 100,
 				FailurePercentageEjection: &FailurePercentageEjection{
 					Threshold:             50,
 					EnforcementPercentage: 100,
@@ -378,7 +378,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-				MaxEjectionPercent: 10,
+				MaxEjectionPercent: 100,
 				FailurePercentageEjection: &FailurePercentageEjection{
 					Threshold:             50,
 					EnforcementPercentage: 100,
@@ -400,7 +400,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-				MaxEjectionPercent: 10,
+				MaxEjectionPercent: 100,
 				FailurePercentageEjection: &FailurePercentageEjection{
 					Threshold:             50,
 					EnforcementPercentage: 0,
@@ -740,7 +740,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-			MaxEjectionPercent: 10,
+			MaxEjectionPercent: 100,
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           500,
 				EnforcementPercentage: 100,
@@ -906,6 +906,307 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
 		}); err != nil {
 			t.Fatalf("Error in Sub Conn update: %v", err)
+		}
+	}
+}
+
+// TestMaxEjectionPercentNotExceeded verifies that one interval never ejects
+// endpoints past MaxEjectionPercent (grpc/grpc-go#9582). With three endpoints
+// all failing and MaxEjectionPercent set to 50, only one endpoint may be
+// ejected: ejecting a second would take the ejected share from 33% to 67%.
+func (s) TestMaxEjectionPercentNotExceeded(t *testing.T) {
+	scsCh := testutils.NewChannel()
+	var scw1, scw2, scw3 balancer.SubConn
+	var err error
+	connectivityCh := make(chan struct{})
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+			if scw1 != nil { // UpdateClientConnState was already called, no need to recreate SubConns.
+				return nil
+			}
+			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{
+				StateListener: func(balancer.SubConnState) {},
+			})
+			if err != nil {
+				t.Errorf("error in od.NewSubConn call: %v", err)
+			}
+			scw1.Connect()
+			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{
+				StateListener: func(balancer.SubConnState) {},
+			})
+			if err != nil {
+				t.Errorf("error in od.NewSubConn call: %v", err)
+			}
+			scw2.Connect()
+			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{
+				StateListener: func(scs balancer.SubConnState) {
+					if scs.ConnectivityState == connectivity.Ready {
+						close(connectivityCh)
+					}
+				},
+			})
+			if err != nil {
+				t.Errorf("error in od.NewSubConn call: %v", err)
+			}
+			scw3.Connect()
+			return nil
+		},
+	})
+
+	od, tcc, cleanup := setup(t)
+	defer cleanup()
+
+	od.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "address1"}}},
+				{Addresses: []resolver.Address{{Addr: "address2"}}},
+				{Addresses: []resolver.Address{{Addr: "address3"}}},
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+			MaxEjectionPercent: 50,
+			FailurePercentageEjection: &FailurePercentageEjection{
+				Threshold:             50,
+				EnforcementPercentage: 100,
+				MinimumHosts:          3,
+				RequestVolume:         3,
+			},
+			ChildPolicy: &iserviceconfig.BalancerConfig{
+				Name:   t.Name(),
+				Config: emptyChildConfig{},
+			},
+		},
+	})
+
+	od.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker: &rrPicker{
+			scs: []balancer.SubConn{scw1, scw2, scw3},
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Transition the SubConns to READY so that they can register health
+	// listeners.
+	for range 3 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for creation of new SubConn.")
+		case sc := <-tcc.NewSubConnCh:
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		}
+	}
+	// Register health listeners after all the connectivity updates are
+	// processed to avoid data races while accessing the health listener within
+	// the TestClientConn.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for all SubConns to become READY.")
+	case <-connectivityCh:
+	}
+
+	scw1.RegisterHealthListener(func(healthState balancer.SubConnState) {
+		scsCh.Send(subConnWithState{sc: scw1, state: healthState})
+	})
+	scw2.RegisterHealthListener(func(healthState balancer.SubConnState) {
+		scsCh.Send(subConnWithState{sc: scw2, state: healthState})
+	})
+	scw3.RegisterHealthListener(func(healthState balancer.SubConnState) {
+		scsCh.Send(subConnWithState{sc: scw3, state: healthState})
+	})
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+	case picker := <-tcc.NewPickerCh:
+		// Every upstream fails every call, so all three are ejection
+		// candidates.
+		for i := 0; i < 3; i++ {
+			pi, err := picker.Pick(balancer.PickInfo{})
+			if err != nil {
+				t.Fatalf("picker.Pick failed with error: %v", err)
+			}
+			for c := 0; c < 5; c++ {
+				pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+			}
+		}
+
+		tmr := stats.NewTestMetricsRecorder()
+		od.metricsRecorder = tmr
+
+		od.intervalTimerAlgorithm()
+
+		// Exactly one endpoint may be ejected: a second ejection would
+		// take the ejected share from 33% to 67%, past MaxEjectionPercent.
+		gotSCWS, err := scsCh.Receive(ctx)
+		if err != nil {
+			t.Fatalf("Error waiting for SubConn to be ejected: %v", err)
+		}
+		if gotSCWS.(subConnWithState).state.ConnectivityState != connectivity.TransientFailure {
+			t.Fatalf("Unexpected subconnection state: %v", gotSCWS)
+		}
+
+		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+		defer cancel()
+		if _, err := scsCh.Receive(sCtx); err == nil {
+			t.Fatalf("Received unexpected subchannel state change: only one endpoint should have been ejected")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
+		}
+		// Note: ejections_unenforced is not asserted here because the test
+		// metrics recorder only keeps the most recent value per metric, so it
+		// cannot count the two skipped ejections.
+	}
+}
+
+// TestMaxEjectionPercentExactBoundary verifies that an ejection landing
+// exactly on MaxEjectionPercent is allowed: the cap is a maximum, not a
+// strict bound. With two endpoints and a 50% cap, the first ejection takes
+// the share to exactly 50% and must go through; the second would take it
+// to 100% and must be blocked. (grpc/grpc-go#9584 review.)
+func (s) TestMaxEjectionPercentExactBoundary(t *testing.T) {
+	scsCh := testutils.NewChannel()
+	var scw1, scw2 balancer.SubConn
+	var err error
+	connectivityCh := make(chan struct{})
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+			if scw1 != nil { // UpdateClientConnState was already called, no need to recreate SubConns.
+				return nil
+			}
+			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{
+				StateListener: func(balancer.SubConnState) {},
+			})
+			if err != nil {
+				t.Errorf("error in od.NewSubConn call: %v", err)
+			}
+			scw1.Connect()
+			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{
+				StateListener: func(scs balancer.SubConnState) {
+					if scs.ConnectivityState == connectivity.Ready {
+						close(connectivityCh)
+					}
+				},
+			})
+			if err != nil {
+				t.Errorf("error in od.NewSubConn call: %v", err)
+			}
+			scw2.Connect()
+			return nil
+		},
+	})
+
+	od, tcc, cleanup := setup(t)
+	defer cleanup()
+
+	od.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "address1"}}},
+				{Addresses: []resolver.Address{{Addr: "address2"}}},
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+			MaxEjectionPercent: 50,
+			FailurePercentageEjection: &FailurePercentageEjection{
+				Threshold:             50,
+				EnforcementPercentage: 100,
+				MinimumHosts:          2,
+				RequestVolume:         2,
+			},
+			ChildPolicy: &iserviceconfig.BalancerConfig{
+				Name:   t.Name(),
+				Config: emptyChildConfig{},
+			},
+		},
+	})
+
+	od.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker: &rrPicker{
+			scs: []balancer.SubConn{scw1, scw2},
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Transition the SubConns to READY so that they can register health
+	// listeners.
+	for range 2 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for creation of new SubConn.")
+		case sc := <-tcc.NewSubConnCh:
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		}
+	}
+	// Register health listeners after all the connectivity updates are
+	// processed to avoid data races while accessing the health listener within
+	// the TestClientConn.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for all SubConns to become READY.")
+	case <-connectivityCh:
+	}
+
+	scw1.RegisterHealthListener(func(healthState balancer.SubConnState) {
+		scsCh.Send(subConnWithState{sc: scw1, state: healthState})
+	})
+	scw2.RegisterHealthListener(func(healthState balancer.SubConnState) {
+		scsCh.Send(subConnWithState{sc: scw2, state: healthState})
+	})
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+	case picker := <-tcc.NewPickerCh:
+		// Every upstream fails every call, so both are ejection
+		// candidates.
+		for i := 0; i < 2; i++ {
+			pi, err := picker.Pick(balancer.PickInfo{})
+			if err != nil {
+				t.Fatalf("picker.Pick failed with error: %v", err)
+			}
+			for c := 0; c < 5; c++ {
+				pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+			}
+		}
+
+		tmr := stats.NewTestMetricsRecorder()
+		od.metricsRecorder = tmr
+
+		od.intervalTimerAlgorithm()
+
+		// Exactly one endpoint may be ejected: the first lands exactly on
+		// the 50% cap and is allowed; a second would take it to 100%.
+		gotSCWS, err := scsCh.Receive(ctx)
+		if err != nil {
+			t.Fatalf("Error waiting for SubConn to be ejected: %v", err)
+		}
+		if gotSCWS.(subConnWithState).state.ConnectivityState != connectivity.TransientFailure {
+			t.Fatalf("Unexpected subconnection state: %v", gotSCWS)
+		}
+
+		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+		defer cancel()
+		if _, err := scsCh.Receive(sCtx); err == nil {
+			t.Fatalf("Received unexpected subchannel state change: only one endpoint should have been ejected")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
 		}
 	}
 }

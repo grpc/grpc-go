@@ -188,10 +188,13 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 		Host:       "localhost",
 		SecLevel:   e2e.SecurityLevelNone,
 	}, []uint32{port1, port2, port3}, &v3clusterpb.OutlierDetection{
-		Interval:                       &durationpb.Duration{Nanos: 50000000}, // .5 seconds
-		BaseEjectionTime:               &durationpb.Duration{Seconds: 30},
-		MaxEjectionTime:                &durationpb.Duration{Seconds: 300},
-		MaxEjectionPercent:             &wrapperspb.UInt32Value{Value: 1},
+		Interval:         &durationpb.Duration{Nanos: 50000000}, // .5 seconds
+		BaseEjectionTime: &durationpb.Duration{Seconds: 30},
+		MaxEjectionTime:  &durationpb.Duration{Seconds: 300},
+		// 34 so that exactly one of the three backends may be ejected: one
+		// ejection takes the ejected share to 33%, which must stay below the
+		// cap for the ejection to be allowed (grpc/grpc-go#9582).
+		MaxEjectionPercent:             &wrapperspb.UInt32Value{Value: 34},
 		FailurePercentageThreshold:     &wrapperspb.UInt32Value{Value: 50},
 		EnforcingFailurePercentage:     &wrapperspb.UInt32Value{Value: 100},
 		FailurePercentageRequestVolume: &wrapperspb.UInt32Value{Value: 8},
@@ -277,6 +280,11 @@ func (s) TestOutlierDetectionXDSDefaultOn(t *testing.T) {
 	}, []uint32{port1, port2, port3}, &v3clusterpb.OutlierDetection{
 		// Need to set knobs to trigger ejection within the test time frame.
 		Interval: &durationpb.Duration{Nanos: 50000000},
+		// Set explicitly: the default MaxEjectionPercent (10) would not
+		// permit any ejection with three backends, since one ejection takes
+		// the ejected share to 33%. 34 permits exactly one ejection
+		// (grpc/grpc-go#9582).
+		MaxEjectionPercent: &wrapperspb.UInt32Value{Value: 34},
 		// EnforcingSuccessRateSet to nil, causes success rate algorithm to be
 		// turned on.
 		SuccessRateMinimumHosts:  &wrapperspb.UInt32Value{Value: 1},
