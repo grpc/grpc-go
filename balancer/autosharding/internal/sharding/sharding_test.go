@@ -20,8 +20,11 @@ package sharding
 
 import (
 	"bytes"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -502,5 +505,42 @@ func (s) TestTruncateRunes(t *testing.T) {
 				t.Errorf("truncateRunes(%q, %d) = %q, want %q", tc.input, tc.maxRunes, got, tc.want)
 			}
 		})
+	}
+}
+
+// Test simulates a race between a non-timer error and the initial assignment
+// timer firing. The non-timer error should be reported even if the timer fires
+// first. If the non-timer error happens first, then the timer error should be
+// suppressed.
+func (s) TestReportError_NonTimerErrorBeatsRacingTimer(t *testing.T) {
+	var reportedErrs []error
+	c := &autoshardingClient{
+		initialAssignmentTimer: time.NewTimer(time.Hour),
+		onAssignmentError: func(err error) {
+			reportedErrs = append(reportedErrs, err)
+		},
+	}
+
+	nonTimerErr := errors.New("stream error")
+	var wg sync.WaitGroup
+	wg.Go(func() { c.reportError(nonTimerErr) })
+	wg.Go(func() { c.reportError(errInitialAssignmentTimeout) })
+	wg.Wait()
+
+	if len(reportedErrs) == 1 {
+		t.Logf("Only one error reported. So, this must be the non-timer error")
+		if !errors.Is(reportedErrs[0], nonTimerErr) {
+			t.Fatalf("reportedErrs = %v, want [%v]", reportedErrs, nonTimerErr)
+		}
+	} else if len(reportedErrs) == 2 {
+		t.Logf("Two errors reported. The first must be the timer error")
+		if !errors.Is(reportedErrs[0], errInitialAssignmentTimeout) {
+			t.Fatalf("reportedErrs[0] = %v, want %v", reportedErrs[0], errInitialAssignmentTimeout)
+		}
+		if !errors.Is(reportedErrs[1], nonTimerErr) {
+			t.Fatalf("reportedErrs[1] = %v, want %v", reportedErrs[1], nonTimerErr)
+		}
+	} else {
+		t.Fatalf("Got %d reported errors, want 1 or 2", len(reportedErrs))
 	}
 }

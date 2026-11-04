@@ -68,3 +68,10 @@ type config struct {
 	// in the request sent to the external authorization server.
 	includePeerCertificate bool
 }
+
+// overrideConfig is an empty marker for an ExtAuthzPerRoute override, whose
+// fields are ignored per gRFC A92. Being non-nil, it still counts as an
+// override and re-enables the filter if a less specific level disabled it.
+type overrideConfig struct {
+	httpfilter.FilterConfig
+}
