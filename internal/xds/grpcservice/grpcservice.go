@@ -21,6 +21,7 @@
 package grpcservice
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -312,16 +313,32 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	md := metadata.MD{}
 	for _, h := range headers {
 		key := h.GetKey()
-		// raw_value takes precedence over the legacy value field.
+		// Per gRFC A102, raw_value takes precedence over the legacy
+		// value field. A binary header value is base64-encoded
+		// whichever field carries it, matching gRPC-C++'s
+		// ParseXdsHeader.
 		val := h.GetValue()
-		if len(h.GetRawValue()) > 0 {
-			val = string(h.GetRawValue())
+		if raw := h.GetRawValue(); len(raw) > 0 {
+			val = string(raw)
 		}
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
 		}
+		if len(val) == 0 {
+			return nil, fmt.Errorf("grpcservice: header key %q: either value or raw_value must be set", key)
+		}
 		if err := validateHeaderValue(key, val); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid value for header key %q: %v", key, err)
+		}
+		if strings.HasSuffix(key, "-bin") {
+			// A binary header value is base64-encoded. Decode it so
+			// the metadata holds raw bytes, matching what the
+			// transport layer encodes onto the wire.
+			b, err := decodeBinHeader(val)
+			if err != nil {
+				return nil, fmt.Errorf("grpcservice: invalid base64 value for binary header key %q: %v", key, err)
+			}
+			val = string(b)
 		}
 		md.Append(key, val)
 	}
@@ -351,4 +368,14 @@ func validateHeaderValue(key, val string) error {
 	// ValidatePair skips value validation for "-bin" keys, which may carry
 	// arbitrary bytes.
 	return imetadata.ValidatePair(key, val)
+}
+
+// decodeBinHeader decodes a base64-encoded binary header value, tolerating
+// both padded and unpadded encodings.
+func decodeBinHeader(v string) ([]byte, error) {
+	if len(v)%4 == 0 {
+		// Input was padded, or padding was not necessary.
+		return base64.StdEncoding.DecodeString(v)
+	}
+	return base64.RawStdEncoding.DecodeString(v)
 }
