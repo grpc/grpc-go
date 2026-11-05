@@ -322,12 +322,14 @@ func (s) TestParse(t *testing.T) {
 			},
 		},
 		{
-			// raw_value already carries bytes; it is used as-is.
-			name: "initial_metadata_bin_header_raw_value_not_decoded",
+			// A binary header value is base64-encoded whichever field
+			// carries it, matching gRPC-C++'s ParseXdsHeader: raw_value
+			// takes precedence, and its base64 form is decoded too.
+			name: "initial_metadata_bin_header_raw_value_base64_decoded",
 			gs: func() *v3corepb.GrpcService {
 				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
 				gs.InitialMetadata = []*v3corepb.HeaderValue{
-					{Key: "data-bin", Value: "aGVsbG8=", RawValue: []byte("hello")},
+					{Key: "data-bin", Value: "d29ybGQ=", RawValue: []byte("aGVsbG8=")},
 				}
 				return gs
 			}(),
@@ -338,6 +340,34 @@ func (s) TestParse(t *testing.T) {
 				InitialMetadata:    metadata.MD{"data-bin": {"hello"}},
 				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
 			},
+		},
+		{
+			name: "initial_metadata_bin_header_raw_value_invalid_base64",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "data-bin", RawValue: []byte("!!!")},
+				}
+				return gs
+			}(),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "invalid base64",
+		},
+		{
+			// Neither value nor raw_value set: ParseXdsHeader in
+			// gRPC-C++ rejects this, and so do we.
+			name: "initial_metadata_no_value_set",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "key-a"},
+				}
+				return gs
+			}(),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "either value or raw_value must be set",
 		},
 		{
 			name: "initial_metadata_bin_header_invalid_base64",
