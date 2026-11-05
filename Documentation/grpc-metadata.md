@@ -231,6 +231,9 @@ Do not use
 An example for updating metadata from a server interceptor is
 available [here](../examples/features/metadata_interceptor/server/main.go).
 
+For a summary of the metadata and other request information available in server
+handlers, see [Server Handler Context](handler-context.md).
+
 [FromIncomingContext]: <https://pkg.go.dev/google.golang.org/grpc/metadata#FromIncomingContext>
 [SetHeader]: <https://godoc.org/google.golang.org/grpc#SetHeader>
 [SetTrailer]: https://godoc.org/google.golang.org/grpc#SetTrailer
