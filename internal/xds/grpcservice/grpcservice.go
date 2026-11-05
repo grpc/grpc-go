@@ -313,25 +313,27 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	md := metadata.MD{}
 	for _, h := range headers {
 		key := h.GetKey()
-		// The header value comes from raw_value when set, and from the
-		// legacy value field otherwise. raw_value already holds raw
-		// bytes, while the value field holds them base64-encoded.
+		// Per gRFC A102, raw_value takes precedence over the legacy
+		// value field. A binary header value is base64-encoded
+		// whichever field carries it, matching gRPC-C++'s
+		// ParseXdsHeader.
 		val := h.GetValue()
-		fromRawValue := false
 		if raw := h.GetRawValue(); len(raw) > 0 {
 			val = string(raw)
-			fromRawValue = true
 		}
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
 		}
+		if len(val) == 0 {
+			return nil, fmt.Errorf("grpcservice: header key %q: either value or raw_value must be set", key)
+		}
 		if err := validateHeaderValue(key, val); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid value for header key %q: %v", key, err)
 		}
-		if !fromRawValue && strings.HasSuffix(key, binHdrSuffix) {
-			// A binary header carried in the string value field is base64
-			// encoded. Decode it so the metadata holds raw bytes, matching
-			// what the transport layer encodes onto the wire.
+		if strings.HasSuffix(key, "-bin") {
+			// A binary header value is base64-encoded. Decode it so
+			// the metadata holds raw bytes, matching what the
+			// transport layer encodes onto the wire.
 			b, err := decodeBinHeader(val)
 			if err != nil {
 				return nil, fmt.Errorf("grpcservice: invalid base64 value for binary header key %q: %v", key, err)
@@ -367,10 +369,6 @@ func validateHeaderValue(key, val string) error {
 	// arbitrary bytes.
 	return imetadata.ValidatePair(key, val)
 }
-
-// binHdrSuffix marks metadata keys whose values are arbitrary bytes, kept in
-// base64 form on the wire.
-const binHdrSuffix = "-bin"
 
 // decodeBinHeader decodes a base64-encoded binary header value, tolerating
 // both padded and unpadded encodings.
