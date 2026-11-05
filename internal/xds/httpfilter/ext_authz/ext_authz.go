@@ -406,7 +406,7 @@ func (i *clientInterceptor) sendCheckRequest(ctx context.Context, method string,
 //     incremented, and ctx is returned with the failure mode header appended
 //     to its outgoing metadata (if configured) and a nil error.
 func (i *clientInterceptor) handleFailure(ctx context.Context, err error) (context.Context, error) {
-	// Per gRFC A92,, count the RPC as failed whether the ext_authz call-out
+	// Per gRFC A92, count the RPC as failed whether the ext_authz call-out
 	// itself failed or its response contained invalid or disallowed header
 	// mutations.
 	extAuthzClientFailedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
