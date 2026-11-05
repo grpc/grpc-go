@@ -43,10 +43,12 @@ type TestMetricsRecorder struct {
 	intGaugeCh       *testutils.Channel
 	intUpDownCountCh *testutils.Channel
 
-	// mu protects data.
+	// mu protects data and numRecords.
 	mu sync.Mutex
 	// data is the most recent update for each metric name.
 	data map[string]*MetricsData
+	// numRecords is the number of times each metric name has been recorded.
+	numRecords map[string]int
 }
 
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
@@ -59,23 +61,25 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 		intGaugeCh:       testutils.NewChannelWithSize(10),
 		intUpDownCountCh: testutils.NewChannelWithSize(10),
 
-		data: make(map[string]*MetricsData),
+		data:       make(map[string]*MetricsData),
+		numRecords: make(map[string]int),
 	}
 }
 
-// Metric returns the most recent value recorded for the named metric, or 0 if
-// none has been recorded. Use MetricsData to check whether a metric has been
-// recorded at all.
-func (r *TestMetricsRecorder) Metric(name string) float64 {
-	md := r.MetricsData(name)
-	if md == nil {
-		return 0
+// Metric returns the most recent data for a metric, and whether this recorder
+// has received data for a metric.
+func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	md, ok := r.data[name]
+	if !ok {
+		return 0, false
 	}
 	switch md.Handle.Type {
 	case estats.MetricTypeFloatCount, estats.MetricTypeFloatHisto:
-		return md.FloatIncr
+		return md.FloatIncr, true
 	default:
-		return float64(md.IntIncr)
+		return float64(md.IntIncr), true
 	}
 }
 
@@ -87,11 +91,19 @@ func (r *TestMetricsRecorder) MetricsData(name string) *MetricsData {
 	return r.data[name]
 }
 
+// NumRecords returns the number of times the named metric has been recorded.
+func (r *TestMetricsRecorder) NumRecords(name string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.numRecords[name]
+}
+
 // ClearMetrics clears the metrics data store of the test metrics recorder.
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.data = make(map[string]*MetricsData)
+	r.numRecords = make(map[string]int)
 }
 
 // MetricsData represents data associated with a metric.
@@ -108,7 +120,8 @@ type MetricsData struct {
 }
 
 // record sends md on ch, first dropping a value not yet received if there is
-// one, and stores md as the most recent data for its metric.
+// one, stores md as the most recent data for its metric, and increments the
+// metric's record count.
 func (r *TestMetricsRecorder) record(ch *testutils.Channel, md MetricsData) {
 	ch.ReceiveOrFail()
 	ch.Send(md)
@@ -116,6 +129,7 @@ func (r *TestMetricsRecorder) record(ch *testutils.Channel, md MetricsData) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.data[md.Handle.Name] = &md
+	r.numRecords[md.Handle.Name]++
 }
 
 // WaitForInt64Count waits for an int64 count metric to be recorded and verifies

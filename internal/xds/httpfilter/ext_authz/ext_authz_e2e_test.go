@@ -106,11 +106,11 @@ func (s *testExtAuthzServer) Check(ctx context.Context, req *v3authpb.CheckReque
 	return nil, nil
 }
 
-// startTestAuthServer configures ext_authz environment variables and function
+// startTestAuthzServer configures ext_authz environment variables and function
 // hooks, starts a test external authorization server, and registers cleanup to
 // stop it. It takes checkFunc to handle Check RPCs and returns the server's
 // listener address.
-func startTestAuthServer(t *testing.T, checkFunc func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)) string {
+func startTestAuthzServer(t *testing.T, checkFunc func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)) string {
 	t.Helper()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtAuthzEnabled, true)
@@ -397,7 +397,7 @@ func (s) TestExtAuthz_FilterNotEnabled(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			backend, _, _ := startTestServiceBackend(t, nil)
 			var checkCount atomic.Int32
-			authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+			authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 				checkCount.Add(1)
 				return &v3authpb.CheckResponse{Status: &statuspb.Status{Code: int32(codes.OK)}}, nil
 			})
@@ -502,7 +502,7 @@ func (s) TestExtAuthz_AuthzRPC_Failure(t *testing.T) {
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
 					backend, gotUnaryMD, gotStreamingMD := startTestServiceBackend(t, nil)
-					authAddr := startTestAuthServer(t, failure.checkFunc)
+					authAddr := startTestAuthzServer(t, failure.checkFunc)
 
 					extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 						Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
@@ -672,7 +672,7 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			backend, gotUnaryMD, gotStreamingMD := startTestServiceBackend(t, nil)
-			authAddr := startTestAuthServer(t, tt.checkFunc)
+			authAddr := startTestAuthzServer(t, tt.checkFunc)
 
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 				DecoderHeaderMutationRules: tt.decoderHeaderMutationRules,
@@ -699,7 +699,7 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 func (s) TestExtAuthz_DeniedResponse_CustomMessage(t *testing.T) {
 	const customMsg = "custom denial reason"
 	backend, _, _ := startTestServiceBackend(t, nil)
-	authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		return &v3authpb.CheckResponse{
 			Status: &statuspb.Status{
 				Code:    int32(codes.PermissionDenied),
@@ -736,7 +736,7 @@ func (s) TestExtAuthz_Allowed_NoHTTPResponse(t *testing.T) {
 	defer cancel()
 
 	initialMetadata := metadata.Pairs("key1", "value1")
-	authAddr := startTestAuthServer(t, func(ctx context.Context, _ *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(ctx context.Context, _ *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "metadata not found in incoming context")
@@ -778,7 +778,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders(t *testing.T) {
 	defer cancel()
 
 	// Start a test ext_authz server that allows the data plane RPC.
-	authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		st := &statuspb.Status{Code: int32(codes.OK)}
 		return &v3authpb.CheckResponse{
 			Status: st,
@@ -823,7 +823,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 	defer cancel()
 
 	// Start a test ext_authz server that allows the data plane RPC.
-	authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		st := &statuspb.Status{Code: int32(codes.OK)}
 		return &v3authpb.CheckResponse{
 			Status: st,
@@ -930,7 +930,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 			defer cancel()
 
 			// Start a test ext_authz server that allows the data plane RPC.
-			authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+			authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 				st := &statuspb.Status{Code: int32(codes.OK)}
 				return &v3authpb.CheckResponse{
 					Status: st,
@@ -1057,7 +1057,7 @@ func (s) TestExtAuthz_Allowed_WithResponseHeaders(t *testing.T) {
 			defer cancel()
 
 			// Start a test ext_authz server that allows the data plane RPC.
-			authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+			authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 				return &v3authpb.CheckResponse{
 					Status: &statuspb.Status{Code: int32(codes.OK)},
 					HttpResponse: &v3authpb.CheckResponse_OkResponse{
@@ -1101,7 +1101,7 @@ func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *test
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		st := &statuspb.Status{Code: int32(codes.OK)}
 		return &v3authpb.CheckResponse{
 			Status: st,
@@ -1151,7 +1151,7 @@ func (s) TestExtAuthz_RequestHeaderFiltering(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	authAddr := startTestAuthServer(t, func(_ context.Context, req *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(_ context.Context, req *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		gotCheckMD := metadata.MD{}
 		for _, h := range req.GetAttributes().GetRequest().GetHttp().GetHeaderMap().GetHeaders() {
 			gotCheckMD.Append(h.GetKey(), string(h.GetRawValue()))
@@ -1214,7 +1214,7 @@ func (s) TestUntrustedServerAllowedGRPCServices(t *testing.T) {
 	defer cancel()
 
 	const mutatedHeader = "request-mutated"
-	authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		return &v3authpb.CheckResponse{
 			Status: &statuspb.Status{Code: int32(codes.OK)},
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
@@ -1337,7 +1337,7 @@ func (s) TestExtAuthz_CheckRequestAttributes(t *testing.T) {
 			var capturedReq atomic.Pointer[v3authpb.CheckRequest]
 			var capturedCheckMD atomic.Pointer[metadata.MD]
 
-			authServerAddr := startTestAuthServer(t, func(ctx context.Context, req *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+			authServerAddr := startTestAuthzServer(t, func(ctx context.Context, req *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 				md, _ := metadata.FromIncomingContext(ctx)
 				capturedCheckMD.Store(&md)
 				capturedReq.Store(req)
@@ -1450,7 +1450,7 @@ func (s) TestExtAuthz_PerRouteOverride(t *testing.T) {
 	defer cancel()
 
 	// Authz server denies all requests
-	authServerAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authServerAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		return &v3authpb.CheckResponse{
 			Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
 			HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
@@ -1592,7 +1592,7 @@ func (s) TestExtAuthz_PerRouteOverride_VirtualHostDisablesRouteReEnables(t *test
 	defer cancel()
 
 	// Authz server denies all requests.
-	authServerAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authServerAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		return &v3authpb.CheckResponse{
 			Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
 			HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
@@ -1706,7 +1706,7 @@ func (s) TestExtAuthz_PerRouteOverride_WeightedCluster(t *testing.T) {
 	defer cancel()
 
 	// Authz server denies all requests.
-	authServerAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authServerAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		return &v3authpb.CheckResponse{
 			Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
 			HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
@@ -1897,7 +1897,7 @@ func (s) TestExtAuthz_AllowedRPC_WithResponseHeaders_MultipleHeaderCalls(t *test
 	httpfilter.Register(cachedHeaderFilter{})
 	t.Cleanup(func() { httpfilter.UnregisterForTesting(cachedHeaderFilterTypeURL) })
 
-	authAddr := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+	authAddr := startTestAuthzServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 		return &v3authpb.CheckResponse{
 			Status: &statuspb.Status{Code: int32(codes.OK)},
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
@@ -1963,7 +1963,9 @@ func (s) TestExtAuthz_AllowedRPC_WithResponseHeaders_MultipleHeaderCalls(t *test
 }
 
 // Test verifies that client-side metrics are emitted correctly during RPC
-// execution across different authorization outcomes.
+// execution across different authorization outcomes. Each subtest makes a
+// single RPC, so every expected metric is checked to have been recorded
+// exactly once, with a value of 1.
 func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 	const (
 		allowedRPCs        = "grpc.client_ext_authz.allowed_rpcs"
@@ -1975,6 +1977,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 		name                       string
 		checkFunc                  func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
 		filterEnabled              *corepb.RuntimeFractionalPercent
+		denyAtDisable              *corepb.RuntimeFeatureFlag
 		decoderHeaderMutationRules *mutationpb.HeaderMutationRules
 		failureModeAllow           bool
 		// wantMetrics lists the ext_authz metrics expected to be recorded for
@@ -2049,7 +2052,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
-			wantMetrics: []string{failedRPCs},
+			wantMetrics: []string{deniedRPCs, failedRPCs},
 		},
 		{
 			name: "Failed_RPCs_DeniedHeaderMutationFailed_FailureModeAllow",
@@ -2071,7 +2074,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			failureModeAllow: true,
-			wantMetrics:      []string{failedRPCs, allowedRPCs},
+			wantMetrics:      []string{deniedRPCs, failedRPCs, allowedRPCs},
 		},
 		{
 			name: "FilterDisabled_RPCs",
@@ -2082,6 +2085,17 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				},
 			},
 			wantMetrics: []string{filterDisabledRPCs},
+		},
+		{
+			name: "FilterDisabled_RPCs_DenyAtDisable",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   0,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			denyAtDisable: &corepb.RuntimeFeatureFlag{DefaultValue: wrapperspb.Bool(true)},
+			wantMetrics:   []string{filterDisabledRPCs},
 		},
 		{
 			name: "Failed_RPCs",
@@ -2196,17 +2210,39 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 			},
 			wantMetrics: []string{failedRPCs},
 		},
+		{
+			name: "Failed_RPCs_ResponseHeaderMutationFailed_FailureModeAllow",
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							ResponseHeadersToAdd: []*corepb.HeaderValueOption{
+								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			failureModeAllow: true,
+			wantMetrics:      []string{failedRPCs, allowedRPCs},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			for _, rpcType := range []string{"Unary", "Streaming"} {
 				t.Run(rpcType, func(t *testing.T) {
-					authAddr := startTestAuthServer(t, test.checkFunc)
+					authAddr := startTestAuthzServer(t, test.checkFunc)
 
 					backend, _, _ := startTestServiceBackend(t, nil)
 
 					extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 						FilterEnabled:              test.filterEnabled,
+						DenyAtDisable:              test.denyAtDisable,
 						DecoderHeaderMutationRules: test.decoderHeaderMutationRules,
 						FailureModeAllow:           test.failureModeAllow,
 					}
@@ -2239,6 +2275,9 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 								t.Errorf("Unexpected metric %q recorded", name)
 							}
 							continue
+						}
+						if n := tmr.NumRecords(name); n != 1 {
+							t.Errorf("Metric %q recorded %d times, want 1", name, n)
 						}
 						want := &teststats.MetricsData{
 							Handle:    estats.DescriptorForMetric(name),

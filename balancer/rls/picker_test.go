@@ -278,13 +278,13 @@ func (s) Test_RLSDefaultTargetPicksMetric(t *testing.T) {
 	defer cancel()
 	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
 
-	if got := tmr.Metric("grpc.lb.rls.default_target_picks"); got != 1 {
+	if got, _ := tmr.Metric("grpc.lb.rls.default_target_picks"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.default_target_picks", got, 1)
 	}
-	if tmr.MetricsData("grpc.lb.rls.target_picks") != nil {
+	if _, ok := tmr.Metric("grpc.lb.rls.target_picks"); ok {
 		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.target_picks")
 	}
-	if tmr.MetricsData("grpc.lb.rls.failed_picks") != nil {
+	if _, ok := tmr.Metric("grpc.lb.rls.failed_picks"); ok {
 		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.failed_picks")
 	}
 }
@@ -324,13 +324,13 @@ func (s) Test_RLSTargetPicksMetric(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
-	if got := tmr.Metric("grpc.lb.rls.target_picks"); got != 1 {
+	if got, _ := tmr.Metric("grpc.lb.rls.target_picks"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.target_picks", got, 1)
 	}
-	if tmr.MetricsData("grpc.lb.rls.default_target_picks") != nil {
+	if _, ok := tmr.Metric("grpc.lb.rls.default_target_picks"); ok {
 		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.default_target_picks")
 	}
-	if tmr.MetricsData("grpc.lb.rls.failed_picks") != nil {
+	if _, ok := tmr.Metric("grpc.lb.rls.failed_picks"); ok {
 		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.failed_picks")
 	}
 }
@@ -364,13 +364,13 @@ func (s) Test_RLSFailedPicksMetric(t *testing.T) {
 	defer cancel()
 	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any entries for key"))
 
-	if got := tmr.Metric("grpc.lb.rls.failed_picks"); got != 1 {
+	if got, _ := tmr.Metric("grpc.lb.rls.failed_picks"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.failed_picks", got, 1)
 	}
-	if tmr.MetricsData("grpc.lb.rls.target_picks") != nil {
+	if _, ok := tmr.Metric("grpc.lb.rls.target_picks"); ok {
 		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.target_picks")
 	}
-	if tmr.MetricsData("grpc.lb.rls.default_target_picks") != nil {
+	if _, ok := tmr.Metric("grpc.lb.rls.default_target_picks"); ok {
 		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.default_target_picks")
 	}
 }

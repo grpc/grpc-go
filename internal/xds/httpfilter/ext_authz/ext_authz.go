@@ -399,17 +399,21 @@ func (i *clientInterceptor) sendCheckRequest(ctx context.Context, method string,
 }
 
 // handleFailure handles an error encountered during external authorization
-// based on the failure_mode_allow configuration:
+// based on the failure_mode_allow configuration. It always increments the
+// failed_rpcs metric, and:
 //   - If failure_mode_allow is false, an error with statusOnError is returned.
-//   - If failure_mode_allow is true, ctx is returned with the failure mode
-//     header appended to its outgoing metadata (if configured) and a nil error.
+//   - If failure_mode_allow is true, the allowed_rpcs metric is also
+//     incremented, and ctx is returned with the failure mode header appended
+//     to its outgoing metadata (if configured) and a nil error.
 func (i *clientInterceptor) handleFailure(ctx context.Context, err error) (context.Context, error) {
-	// Per gRFC A92, all header mutation failures are treated the same as a
-	// failed RPC.
+	// Per gRFC A92,, count the RPC as failed whether the ext_authz call-out
+	// itself failed or its response contained invalid or disallowed header
+	// mutations.
 	extAuthzClientFailedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 	if !i.config.failureModeAllow {
 		return nil, status.Errorf(i.config.statusOnError, "extauthz: %v", err)
 	}
+
 	// Per gRFC A92, an RPC allowed due to failure_mode_allow is also counted as
 	// allowed, so that the other metrics reflect how traffic is handled
 	// independently of failures.
@@ -420,6 +424,7 @@ func (i *clientInterceptor) handleFailure(ctx context.Context, err error) (conte
 		// handleFailure, if any, to be sent.
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-envoy-auth-failure-mode-allowed", "true")
 	}
+
 	return ctx, nil
 }
 
@@ -500,8 +505,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 }
 
 // handleDeniedResponse handles cases where the external authorization server
-// denies the RPC.
+// denies the RPC. It always increments the denied_rpcs metric.
 func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3authpb.CheckResponse, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
+	extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
+
 	// Per gRFC A92, the status message from the CheckResponse, if set, is
 	// included in the error returned for the data plane RPC.
 	msg := "extauthz: RPC denied by external authorization server"
@@ -511,7 +518,6 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 
 	deniedResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_DeniedResponse)
 	if !ok {
-		extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		// Per gRFC A92, the status code to fail the RPC with is derived
 		// from denied_response.status. If denied_response is omitted by the
 		// authorization server despite a non-OK decision, we default to
@@ -538,8 +544,6 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 		}
 	}
 
-	extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
-
 	// Compute the status to return to the caller based on the status returned
 	// by the external authorization server.
 	code := codes.PermissionDenied
@@ -559,6 +563,9 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 // allows the RPC.
 func (i *clientInterceptor) handleOkResponse(ctx context.Context, resp *v3authpb.CheckResponse, outgoingMD metadata.MD, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
 	var responseHeadersToAdd []*v3corepb.HeaderValueOption
+	// If the response does not contain an OkResponse message despite having an
+	// OK status, we proceed to create the stream without making any header
+	// mutations.
 	if okResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_OkResponse); ok && okResp.OkResponse != nil {
 		mutatedMD, respHeaders, err := i.applyHeaderMutations(okResp.OkResponse, outgoingMD)
 		if err != nil {

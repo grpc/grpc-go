@@ -117,13 +117,13 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 			}
 			wsc.weight(test.nowTime, test.weightExpirationPeriod, test.blackoutPeriod, true)
 
-			if got := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != test.endpointWeightStaleWant {
+			if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != test.endpointWeightStaleWant {
 				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, test.endpointWeightStaleWant)
 			}
-			if got := tmr.Metric("grpc.lb.wrr.endpoint_weight_not_yet_usable"); got != test.endpointWeightNotYetUsableWant {
+			if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_not_yet_usable"); got != test.endpointWeightNotYetUsableWant {
 				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_not_yet_usable", got, test.endpointWeightNotYetUsableWant)
 			}
-			if got := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != test.endpointWeightStaleWant {
+			if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != test.endpointWeightStaleWant {
 				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, test.endpointWeightStaleWant)
 			}
 		})
@@ -153,7 +153,7 @@ func (s) TestWRR_Metrics_Scheduler_RR_Fallback(t *testing.T) {
 	// There is only one SubConn, so no matter if the SubConn has a weight or
 	// not will fallback to round robin.
 	p.regenerateScheduler()
-	if got := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
+	if got, _ := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
 	}
 	tmr.ClearMetrics()
@@ -167,7 +167,7 @@ func (s) TestWRR_Metrics_Scheduler_RR_Fallback(t *testing.T) {
 	}
 	p.weightedPickers = append(p.weightedPickers, pickerWeightedEndpoint{weightedEndpoint: ew2})
 	p.regenerateScheduler()
-	if got := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
+	if got, _ := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
 	}
 }

@@ -234,18 +234,18 @@ func (s) TestWRRMetricsBasic(t *testing.T) {
 		t.Fatalf("Error from EmptyCall: %v", err)
 	}
 
-	if got := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
+	if got, _ := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
 	}
-	if got := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, 0)
 	}
-	if got := tmr.Metric("grpc.lb.wrr.endpoint_weight_not_yet_usable"); got != 1 {
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_not_yet_usable"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_not_yet_usable", got, 1)
 	}
 	// Unusable, so no endpoint weight. Due to only one SubConn, this will never
 	// update the weight. Thus, this will stay 0.
-	if got := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, 0)
 	}
 }

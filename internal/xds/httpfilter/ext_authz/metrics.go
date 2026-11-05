@@ -46,7 +46,7 @@ var (
 	})
 	extAuthzClientFailedRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.client_ext_authz.failed_rpcs",
-		Description: "Number of RPCs for which the ext_authz call-out failed or contained invalid data (e.g., disallowed header mutations)",
+		Description: "Number of RPCs for which the ext_authz call-out failed or contained invalid data (e.g., disallowed header mutations).",
 		Unit:        "{RPCs}",
 		Labels:      []string{"grpc.target"},
 		Default:     false,

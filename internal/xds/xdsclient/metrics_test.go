@@ -156,7 +156,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	// Invalid should have no recording point.
-	if got := tmr.Metric("grpc.xds_client.resource_updates_invalid"); got != 0 {
+	if got, _ := tmr.Metric("grpc.xds_client.resource_updates_invalid"); got != 0 {
 		t.Fatalf("Unexpected data for metric \"grpc.xds_client.resource_updates_invalid\", got: %v, want: %v", got, 0)
 	}
 
@@ -183,7 +183,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	// Valid should stay the same at 1.
-	if got := tmr.Metric("grpc.xds_client.resource_updates_valid"); got != 1 {
+	if got, _ := tmr.Metric("grpc.xds_client.resource_updates_valid"); got != 1 {
 		t.Fatalf("Unexpected data for metric \"grpc.xds_client.resource_updates_invalid\", got: %v, want: %v", got, 1)
 	}
 }

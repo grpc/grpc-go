@@ -547,10 +547,10 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				if _, err := scsCh.Receive(sCtx); err == nil {
 					t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
 				}
-				if got := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
 					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %f, want 0", got)
 				}
-				if got := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
 					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %f, want 0", got)
 				}
 
@@ -617,10 +617,10 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 					t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
 				}
 
-				if got := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != float64(test.wantEjections) {
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != float64(test.wantEjections) {
 					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %f, want %f", got, float64(test.wantEjections))
 				}
-				if got := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != float64(test.wantFailures-test.wantEjections) {
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != float64(test.wantFailures-test.wantEjections) {
 					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %f, want %f", got, float64(test.wantFailures-test.wantEjections))
 				}
 
@@ -819,10 +819,10 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		if _, err := scsCh.Receive(sCtx); err == nil {
 			t.Fatalf("Received unexpected subchannel state change when expecting none")
 		}
-		if got := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 0", got)
 		}
-		if got := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
 		}
 
@@ -869,10 +869,10 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		if _, err := scsCh.Receive(sCtx); err == nil {
 			t.Fatalf("Received unexpected subchannel state change when expecting none")
 		}
-		if got := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
 		}
-		if got := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
 		}
 
