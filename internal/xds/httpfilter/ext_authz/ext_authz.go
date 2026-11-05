@@ -477,6 +477,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// TryIncrement returns false, the underlying authz client is closed, so
 	// we fail the RPC with an Unavailable status.
 	if !i.authzClient.TryIncrement() {
+		// The authz client is closed only once no interceptor or in-flight RPC
+		// holds a reference to it. No metric is recorded here because Check RPC
+		// is never attempted, so this is neither an ext_authz call-out failure
+		// nor a header mutation failure.
 		return nil, status.Error(codes.Unavailable, "extauthz: authz client is closed")
 	}
 	defer i.authzClient.Decrement()

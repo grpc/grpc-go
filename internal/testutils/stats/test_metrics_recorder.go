@@ -43,12 +43,10 @@ type TestMetricsRecorder struct {
 	intGaugeCh       *testutils.Channel
 	intUpDownCountCh *testutils.Channel
 
-	// mu protects data and numRecords.
+	// mu protects data.
 	mu sync.Mutex
 	// data is the most recent update for each metric name.
 	data map[string]*MetricsData
-	// numRecords is the number of times each metric name has been recorded.
-	numRecords map[string]int
 }
 
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
@@ -61,8 +59,7 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 		intGaugeCh:       testutils.NewChannelWithSize(10),
 		intUpDownCountCh: testutils.NewChannelWithSize(10),
 
-		data:       make(map[string]*MetricsData),
-		numRecords: make(map[string]int),
+		data: make(map[string]*MetricsData),
 	}
 }
 
@@ -91,19 +88,11 @@ func (r *TestMetricsRecorder) MetricsData(name string) *MetricsData {
 	return r.data[name]
 }
 
-// NumRecords returns the number of times the named metric has been recorded.
-func (r *TestMetricsRecorder) NumRecords(name string) int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.numRecords[name]
-}
-
 // ClearMetrics clears the metrics data store of the test metrics recorder.
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.data = make(map[string]*MetricsData)
-	r.numRecords = make(map[string]int)
 }
 
 // MetricsData represents data associated with a metric.
@@ -117,19 +106,26 @@ type MetricsData struct {
 
 	LabelKeys []string
 	LabelVals []string
+
+	// RecordCount is the number of times this metric has been recorded, across
+	// all label values.
+	RecordCount int
 }
 
 // record sends md on ch, first dropping a value not yet received if there is
-// one, stores md as the most recent data for its metric, and increments the
-// metric's record count.
+// one, and stores md as the most recent data for its metric, with RecordCount
+// set to the number of times the metric has been recorded.
 func (r *TestMetricsRecorder) record(ch *testutils.Channel, md MetricsData) {
 	ch.ReceiveOrFail()
-	ch.Send(md)
+	ch.Send(md) // RecordCount is zero on the channel.
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if prev, ok := r.data[md.Handle.Name]; ok {
+		md.RecordCount = prev.RecordCount
+	}
+	md.RecordCount++
 	r.data[md.Handle.Name] = &md
-	r.numRecords[md.Handle.Name]++
 }
 
 // WaitForInt64Count waits for an int64 count metric to be recorded and verifies

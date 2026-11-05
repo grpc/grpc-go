@@ -1980,6 +1980,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 		denyAtDisable              *corepb.RuntimeFeatureFlag
 		decoderHeaderMutationRules *mutationpb.HeaderMutationRules
 		failureModeAllow           bool
+		wantCode                   codes.Code
 		// wantMetrics lists the ext_authz metrics expected to be recorded for
 		// the RPC. None of the other ext_authz metrics may be recorded.
 		wantMetrics []string
@@ -1991,6 +1992,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 					Status: &statuspb.Status{Code: int32(codes.OK)},
 				}, nil
 			},
+			wantCode:    codes.OK,
 			wantMetrics: []string{allowedRPCs},
 		},
 		{
@@ -2000,6 +2002,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
 				}, nil
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{deniedRPCs},
 		},
 		{
@@ -2014,6 +2017,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 					},
 				}, nil
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{deniedRPCs},
 		},
 		{
@@ -2031,6 +2035,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 					},
 				}, nil
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{deniedRPCs},
 		},
 		{
@@ -2052,6 +2057,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{deniedRPCs, failedRPCs},
 		},
 		{
@@ -2074,6 +2080,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			failureModeAllow: true,
+			wantCode:         codes.OK,
 			wantMetrics:      []string{deniedRPCs, failedRPCs, allowedRPCs},
 		},
 		{
@@ -2084,6 +2091,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 					Denominator: v3typepb.FractionalPercent_HUNDRED,
 				},
 			},
+			wantCode:    codes.OK,
 			wantMetrics: []string{filterDisabledRPCs},
 		},
 		{
@@ -2095,6 +2103,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				},
 			},
 			denyAtDisable: &corepb.RuntimeFeatureFlag{DefaultValue: wrapperspb.Bool(true)},
+			wantCode:      codes.PermissionDenied,
 			wantMetrics:   []string{filterDisabledRPCs},
 		},
 		{
@@ -2102,6 +2111,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
 				return nil, status.Error(codes.Internal, "internal server error")
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{failedRPCs},
 		},
 		{
@@ -2110,6 +2120,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				return nil, status.Error(codes.Internal, "internal server error")
 			},
 			failureModeAllow: true,
+			wantCode:         codes.OK,
 			wantMetrics:      []string{failedRPCs, allowedRPCs},
 		},
 		{
@@ -2130,6 +2141,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{failedRPCs},
 		},
 		{
@@ -2151,6 +2163,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			failureModeAllow: true,
+			wantCode:         codes.OK,
 			wantMetrics:      []string{failedRPCs, allowedRPCs},
 		},
 		{
@@ -2169,6 +2182,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{failedRPCs},
 		},
 		{
@@ -2188,6 +2202,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			failureModeAllow: true,
+			wantCode:         codes.OK,
 			wantMetrics:      []string{failedRPCs, allowedRPCs},
 		},
 		{
@@ -2208,6 +2223,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
+			wantCode:    codes.PermissionDenied,
 			wantMetrics: []string{failedRPCs},
 		},
 		{
@@ -2229,6 +2245,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			failureModeAllow: true,
+			wantCode:         codes.OK,
 			wantMetrics:      []string{failedRPCs, allowedRPCs},
 		},
 	}
@@ -2255,13 +2272,23 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 					defer cancel()
 
 					if rpcType == "Unary" {
-						client.EmptyCall(ctx, &testpb.Empty{})
+						if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != test.wantCode {
+							t.Fatalf("EmptyCall RPC returned status code %v, want %v", status.Code(err), test.wantCode)
+						}
 					} else {
 						stream, err := client.FullDuplexCall(ctx)
 						if err == nil {
+							// Send one empty message and close the sending
+							// side. Ignore the errors from the send and close,
+							// and rely on the error returned from recv.
 							stream.Send(&testpb.StreamingOutputCallRequest{})
 							stream.CloseSend()
-							stream.Recv()
+							if _, err = stream.Recv(); errors.Is(err, io.EOF) {
+								err = nil
+							}
+						}
+						if status.Code(err) != test.wantCode {
+							t.Fatalf("FullDuplexCall RPC returned status code %v, want %v", status.Code(err), test.wantCode)
 						}
 					}
 
@@ -2276,14 +2303,12 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 							}
 							continue
 						}
-						if n := tmr.NumRecords(name); n != 1 {
-							t.Errorf("Metric %q recorded %d times, want 1", name, n)
-						}
 						want := &teststats.MetricsData{
-							Handle:    estats.DescriptorForMetric(name),
-							IntIncr:   1,
-							LabelKeys: []string{"grpc.target"},
-							LabelVals: []string{"xds:///service-name"},
+							Handle:      estats.DescriptorForMetric(name),
+							IntIncr:     1,
+							LabelKeys:   []string{"grpc.target"},
+							LabelVals:   []string{"xds:///service-name"},
+							RecordCount: 1,
 						}
 						if diff := cmp.Diff(want, got); diff != "" {
 							t.Errorf("Metric %q mismatch (-want, +got):\n%s", name, diff)
