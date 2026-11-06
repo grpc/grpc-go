@@ -1139,7 +1139,8 @@ func (s) TestHeaderAfterContextCancelTrailersOnly(t *testing.T) {
 	// processed.
 	cancel()
 
-	// Verify that stream.Header() returns (nil,nil) for a trailers only response.
+	// Verify that stream.Header() returns (nil, nil) for a trailers-only
+	// response.
 	if headerMetadata, err := stream.Header(); err != nil || headerMetadata != nil {
 		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
 	}
