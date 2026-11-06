@@ -901,7 +901,7 @@ func (cs *clientStream) retryLocked(attempt *csAttempt, lastErr error) error {
 			// even though the transport stream finished with a real status.
 			// Prefer that status so callers keep getting status-compatible
 			// errors (e.g. Invoke's contract in call.go).
-			if err == io.EOF && attempt.transportStream != nil {
+			if errors.Is(err, io.EOF) && cs.desc == unaryStreamDesc && attempt.transportStream != nil {
 				select {
 				case <-attempt.transportStream.Done():
 					if st := attempt.transportStream.Status(); st.Code() != codes.OK {

@@ -36,6 +36,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1159,5 +1161,56 @@ func (s) TestRetryTransparentRetryKeepsTrailersStatus(t *testing.T) {
 				t.Fatalf("EmptyCall() returned code %v, want NotFound", got)
 			}
 		})
+	}
+}
+
+// slowSendOnOutHeader delays each attempt between sending headers and sending
+// the request, so the server's trailers-only response arrives first.
+type slowSendOnOutHeader struct{}
+
+func (slowSendOnOutHeader) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+func (slowSendOnOutHeader) HandleRPC(_ context.Context, s stats.RPCStats) {
+	if _, ok := s.(*stats.OutHeader); ok {
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+func (slowSendOnOutHeader) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+func (slowSendOnOutHeader) HandleConn(context.Context, stats.ConnStats) {}
+
+// TestRetryExhaustionKeepsStatus is a regression test for the second path
+// losing the server status: when retry-policy attempts run out, shouldRetry
+// wraps the replayed send's bare io.EOF in "max retries exhausted", and
+// Invoke returned that instead of the server's status.
+func (s) TestRetryExhaustionKeepsStatus(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := grpc.NewServer()
+	healthpb.RegisterHealthServer(srv, health.NewServer()) // any service; the called one is absent
+	go func() { _ = srv.Serve(lis) }()
+	defer srv.Stop()
+
+	for _, slow := range []bool{false, true} {
+		opts := []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultServiceConfig(`{"methodConfig":[{"name":[{}],"retryPolicy":{"maxAttempts":5,"initialBackoff":"0.01s","maxBackoff":"0.05s","backoffMultiplier":2,"retryableStatusCodes":["UNIMPLEMENTED"]}}]}`),
+		}
+		if slow {
+			opts = append(opts, grpc.WithStatsHandler(slowSendOnOutHeader{}))
+		}
+		cc, err := grpc.NewClient(lis.Addr().String(), opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = cc.Invoke(context.Background(), "/missing.Service/Method", &healthpb.HealthCheckRequest{}, &healthpb.HealthCheckResponse{})
+		_ = cc.Close()
+		if got := status.Code(err); got != codes.Unimplemented {
+			t.Errorf("slowSend=%v: status.Code = %v, want Unimplemented; err = %v", slow, got, err)
+		}
 	}
 }
