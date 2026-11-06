@@ -1207,7 +1207,11 @@ func (s) TestRetryExhaustionKeepsStatus(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = cc.Invoke(context.Background(), "/missing.Service/Method", &healthpb.HealthCheckRequest{}, &healthpb.HealthCheckResponse{})
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
+		err = cc.Invoke(ctx, "/missing.Service/Method", &healthpb.HealthCheckRequest{}, &healthpb.HealthCheckResponse{})
 		_ = cc.Close()
 		if got := status.Code(err); got != codes.Unimplemented {
 			t.Errorf("slowSend=%v: status.Code = %v, want Unimplemented; err = %v", slow, got, err)
