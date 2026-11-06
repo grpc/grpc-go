@@ -401,7 +401,8 @@ func (i *clientInterceptor) sendCheckRequest(ctx context.Context, method string,
 // handleFailure handles an error encountered during external authorization
 // based on the failure_mode_allow configuration. It always increments the
 // failed_rpcs metric, and:
-//   - If failure_mode_allow is false, an error with statusOnError is returned.
+//   - If failure_mode_allow is false, the denied_rpcs metric is also
+//     incremented, and an error with statusOnError is returned.
 //   - If failure_mode_allow is true, the allowed_rpcs metric is also
 //     incremented, and ctx is returned with the failure mode header appended
 //     to its outgoing metadata (if configured) and a nil error.
@@ -411,6 +412,7 @@ func (i *clientInterceptor) handleFailure(ctx context.Context, err error) (conte
 	// mutations.
 	extAuthzClientFailedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 	if !i.config.failureModeAllow {
+		extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		return nil, status.Errorf(i.config.statusOnError, "extauthz: %v", err)
 	}
 
@@ -466,8 +468,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	if !i.isExtAuthzEnabled() {
 		extAuthzClientFilterDisabledRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		if i.config.denyAtDisable {
+			extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 			return nil, status.Error(i.config.statusOnError, "extauthz: RPC denied due to the filter being disabled")
 		}
+		extAuthzClientAllowedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		return newStream(ctx, opts...)
 	}
 
@@ -509,10 +513,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 }
 
 // handleDeniedResponse handles cases where the external authorization server
-// denies the RPC. It always increments the denied_rpcs metric.
+// denies the RPC.
 func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3authpb.CheckResponse, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
-	extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
-
 	// Per gRFC A92, the status message from the CheckResponse, if set, is
 	// included in the error returned for the data plane RPC.
 	msg := "extauthz: RPC denied by external authorization server"
@@ -526,6 +528,7 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 		// from denied_response.status. If denied_response is omitted by the
 		// authorization server despite a non-OK decision, we default to
 		// PERMISSION_DENIED as the standard authorization rejection status.
+		extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		return nil, status.Error(codes.PermissionDenied, msg)
 	}
 
@@ -547,6 +550,8 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 			return newStream(ctx, opts...)
 		}
 	}
+
+	extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 
 	// Compute the status to return to the caller based on the status returned
 	// by the external authorization server.

@@ -2081,7 +2081,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 			},
 			failureModeAllow: true,
 			wantCode:         codes.OK,
-			wantMetrics:      []string{deniedRPCs, failedRPCs, allowedRPCs},
+			wantMetrics:      []string{failedRPCs, allowedRPCs},
 		},
 		{
 			name: "FilterDisabled_RPCs",
@@ -2092,7 +2092,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				},
 			},
 			wantCode:    codes.OK,
-			wantMetrics: []string{filterDisabledRPCs},
+			wantMetrics: []string{allowedRPCs, filterDisabledRPCs},
 		},
 		{
 			name: "FilterDisabled_RPCs_DenyAtDisable",
@@ -2104,7 +2104,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 			},
 			denyAtDisable: &corepb.RuntimeFeatureFlag{DefaultValue: wrapperspb.Bool(true)},
 			wantCode:      codes.PermissionDenied,
-			wantMetrics:   []string{filterDisabledRPCs},
+			wantMetrics:   []string{deniedRPCs, filterDisabledRPCs},
 		},
 		{
 			name: "Failed_RPCs",
@@ -2112,7 +2112,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				return nil, status.Error(codes.Internal, "internal server error")
 			},
 			wantCode:    codes.PermissionDenied,
-			wantMetrics: []string{failedRPCs},
+			wantMetrics: []string{deniedRPCs, failedRPCs},
 		},
 		{
 			name: "Failed_RPCs_FailureModeAllow",
@@ -2142,7 +2142,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			wantCode:    codes.PermissionDenied,
-			wantMetrics: []string{failedRPCs},
+			wantMetrics: []string{deniedRPCs, failedRPCs},
 		},
 		{
 			name: "Failed_RPCs_HeaderMutationFailed_FailureModeAllow",
@@ -2183,7 +2183,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			wantCode:    codes.PermissionDenied,
-			wantMetrics: []string{failedRPCs},
+			wantMetrics: []string{deniedRPCs, failedRPCs},
 		},
 		{
 			name: "Failed_RPCs_HeadersToRemoveFailed_FailureModeAllow",
@@ -2224,7 +2224,7 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			wantCode:    codes.PermissionDenied,
-			wantMetrics: []string{failedRPCs},
+			wantMetrics: []string{deniedRPCs, failedRPCs},
 		},
 		{
 			name: "Failed_RPCs_ResponseHeaderMutationFailed_FailureModeAllow",
