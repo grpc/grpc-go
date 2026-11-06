@@ -6869,3 +6869,118 @@ func (s) TestUntrustedServerAllowedGRPCServices(t *testing.T) {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
 }
+
+// TestBidiStreamingProcStreamFailureBeforeHalfClose tests the scenario where
+// the external processor stream fails after one message is sent and one
+// message is received on a bidi streaming RPC, but before the half-close, with
+// failure_mode_allow set to false, in both normal and observability mode.
+// Verifies that CloseSend returns nil and Recv returns the processor failure
+// status.
+func (s) TestBidiStreamingProcStreamFailureBeforeHalfClose(t *testing.T) {
+	tests := []struct {
+		name              string
+		observabilityMode bool
+	}{
+		{
+			name:              "NormalMode",
+			observabilityMode: false,
+		},
+		{
+			name:              "ObservabilityMode",
+			observabilityMode: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			failProc := make(chan struct{})
+			lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				// Receive request headers and respond with no mutations.
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+				if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+					return err
+				}
+				// Receive the request body and send it back unmodified.
+				req, err := stream.Recv()
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(requestBodyResponse(req.GetRequestBody().GetBody())); err != nil {
+					return err
+				}
+				// Fail once the client has received the response.
+				select {
+				case <-failProc:
+				case <-stream.Context().Done():
+				}
+				return status.Error(codes.Unavailable, "abrupt stream failure")
+			})
+
+			stub := stubserver.StartTestService(t, &stubserver.StubServer{
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+					for {
+						in, err := stream.Recv()
+						if err != nil {
+							return err
+						}
+						if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.GetPayload()}); err != nil {
+							return err
+						}
+					}
+				},
+			})
+			defer stub.Stop()
+
+			cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+					RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+					ResponseHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
+				},
+				FailureModeAllow:     false,
+				ObservabilityMode:    tc.observabilityMode,
+				DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+			}, stub.Address)
+			if err != nil {
+				t.Fatalf("Failed to dial: %v", err)
+			}
+			defer cc.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			onFinishCalled := make(chan struct{})
+			onFinish := grpc.OnFinish(func(error) { close(onFinishCalled) })
+
+			client := testgrpc.NewTestServiceClient(cc)
+			stream, err := client.FullDuplexCall(ctx, onFinish)
+			if err != nil {
+				t.Fatalf("FullDuplexCall() failed: %v", err)
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+				t.Fatalf("stream.Send() failed: %v", err)
+			}
+			if _, err := stream.Recv(); err != nil {
+				t.Fatalf("stream.Recv() failed: %v", err)
+			}
+
+			// Fail the processor stream. The ext_proc filter finishes the RPC
+			// when the processor stream fails, which calls OnFinish. Wait for
+			// it to ensure the failure happens before the half-close.
+			close(failProc)
+			select {
+			case <-onFinishCalled:
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for OnFinish to be called")
+			}
+
+			if err := stream.CloseSend(); err != nil {
+				t.Fatalf("stream.CloseSend() = %v, want nil", err)
+			}
+			if _, err := stream.Recv(); status.Code(err) != codes.Internal {
+				t.Fatalf("stream.Recv() returned error code %v, want %v (error: %v)", status.Code(err), codes.Internal, err)
+			}
+		})
+	}
+}
