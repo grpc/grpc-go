@@ -6984,3 +6984,62 @@ func (s) TestBidiStreamingProcStreamFailureBeforeHalfClose(t *testing.T) {
 		})
 	}
 }
+
+// TestStreamingContextCanceledBeforeHalfClose tests the scenario where the RPC
+// context of a streaming RPC is canceled before CloseSend is called. Verifies
+// that CloseSend returns nil.
+func (s) TestStreamingContextCanceledBeforeHalfClose(t *testing.T) {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive request headers and respond with no mutations.
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+		if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+			return err
+		}
+		// Receive request body messages without responding.
+		for {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+		}
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			_, err := stream.Recv()
+			return err
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow: false,
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	// Context() blocks until the dataplane stream is created.
+	stream.Context()
+	cancel()
+
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() = %v, want nil", err)
+	}
+}

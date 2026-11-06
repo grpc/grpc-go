@@ -764,6 +764,10 @@ func (ocs *observabilityClientStream) Trailer() metadata.MD {
 	return nil
 }
 
+// CloseSend forwards the half-close to the external processor (if request body
+// processing is enabled) and to the dataplane stream. It always returns nil, as
+// required by the grpc.ClientStream contract; any failure is reported by
+// RecvMsg instead.
 func (ocs *observabilityClientStream) CloseSend() error {
 	if _, ok := ocs.procStreamErr.Load().(error); ok {
 		return nil
@@ -1085,6 +1089,10 @@ func (cs *clientStream) Trailer() metadata.MD {
 	}
 }
 
+// CloseSend forwards the half-close to the external processor, or directly to
+// the dataplane stream if the external processor is bypassed or request body
+// processing is disabled. It always returns nil, as required by the
+// grpc.ClientStream contract; any failure is reported by RecvMsg instead.
 func (cs *clientStream) CloseSend() error {
 	if cs.discardRequests.Load() {
 		return nil
@@ -1105,12 +1113,12 @@ func (cs *clientStream) CloseSend() error {
 	}
 	// If external processor stream is active, client CloseSend is sent to the
 	// processor server as request message with `EndOfStreamWithoutMessage` set.
-	s, err = cs.sendClientReqToProcServer(cs.halfClose())
+	s, _ = cs.sendClientReqToProcServer(cs.halfClose())
 	if s != nil {
 		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
 		s.CloseSend()
 	}
-	return err
+	return nil
 }
 
 func (cs *clientStream) Context() context.Context {
