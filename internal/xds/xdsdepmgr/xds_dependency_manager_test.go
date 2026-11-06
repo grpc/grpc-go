@@ -151,6 +151,13 @@ func setupManagementServerAndClient(t *testing.T, allowResourceSubset bool) (str
 
 func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
 	t.Helper()
+	return createXDSClientWithWatchExpiry(t, bootstrapContents, 0)
+}
+
+// createXDSClientWithWatchExpiry creates an xDS client whose resource watch
+// expiry timeout is the given duration. A zero duration selects the default.
+func createXDSClientWithWatchExpiry(t *testing.T, bootstrapContents []byte, watchExpiry time.Duration) xdsclient.XDSClient {
+	t.Helper()
 
 	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
@@ -158,7 +165,7 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 	}
 
 	pool := xdsclient.NewPool(config)
-	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name(), WatchExpiryTimeout: watchExpiry})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
@@ -1756,5 +1763,175 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 	// Verify both clusters are now present.
 	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Tests that an aggregate cluster is not failed as a whole when one of its
+// children has a cluster resource error, as specified in gRFC A74. The failed
+// child is skipped and the healthy children stay in the list of leaf clusters.
+// Also verifies that the aggregate cluster reports the error of the first
+// failed child when no child is left.
+func (s) TestAggregateClusterChildResourceError(t *testing.T) {
+	// A cluster resource that the xDS client rejects.
+	nackedCluster := func(name string) *v3clusterpb.Cluster {
+		c := makeLogicalDNSClusterResource(name, "localhost", 8081)
+		c.LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+		return c
+	}
+	nackedErr := func(nodeID string) error {
+		return fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))
+	}
+	goodClusterResult := &xdsresource.ClusterResult{
+		Config: xdsresource.ClusterConfig{
+			Cluster: &xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
+				ClusterName: "good-cluster",
+				DNSHostName: "localhost:8081",
+			},
+			EndpointConfig: &xdsresource.EndpointConfig{
+				DNSEndpoints: &xdsresource.DNSUpdate{
+					Endpoints: []resolver.Endpoint{
+						{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+						{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
+					},
+				},
+			},
+		},
+	}
+	aggregateResult := func(children, leaves []string) *xdsresource.ClusterResult {
+		return &xdsresource.ClusterResult{
+			Config: xdsresource.ClusterConfig{
+				Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:             xdsresource.ClusterTypeAggregate,
+					ClusterName:             defaultTestClusterName,
+					PrioritizedClusterNames: children,
+				},
+				AggregateConfig: &xdsresource.AggregateConfig{LeafClusters: leaves},
+			},
+		}
+	}
+
+	tests := []struct {
+		name string
+		// Children of the aggregate cluster, in priority order.
+		children []string
+		// Cluster resources sent by the management server besides the
+		// aggregate cluster.
+		clusters []*v3clusterpb.Cluster
+		// Expected clusters in the XDSConfig.
+		wantClusters func(nodeID string) map[string]*xdsresource.ClusterResult
+	}{
+		{
+			name:     "rejected_child_first",
+			children: []string{"bad-cluster", "good-cluster"},
+			clusters: []*v3clusterpb.Cluster{nackedCluster("bad-cluster"), makeLogicalDNSClusterResource("good-cluster", "localhost", 8081)},
+			wantClusters: func(string) map[string]*xdsresource.ClusterResult {
+				return map[string]*xdsresource.ClusterResult{
+					defaultTestClusterName: aggregateResult([]string{"bad-cluster", "good-cluster"}, []string{"good-cluster"}),
+					"good-cluster":         goodClusterResult,
+				}
+			},
+		},
+		{
+			name:     "rejected_child_last",
+			children: []string{"good-cluster", "bad-cluster"},
+			clusters: []*v3clusterpb.Cluster{nackedCluster("bad-cluster"), makeLogicalDNSClusterResource("good-cluster", "localhost", 8081)},
+			wantClusters: func(string) map[string]*xdsresource.ClusterResult {
+				return map[string]*xdsresource.ClusterResult{
+					defaultTestClusterName: aggregateResult([]string{"good-cluster", "bad-cluster"}, []string{"good-cluster"}),
+					"good-cluster":         goodClusterResult,
+				}
+			},
+		},
+		{
+			name:     "missing_child",
+			children: []string{"missing-cluster", "good-cluster"},
+			clusters: []*v3clusterpb.Cluster{makeLogicalDNSClusterResource("good-cluster", "localhost", 8081)},
+			wantClusters: func(string) map[string]*xdsresource.ClusterResult {
+				return map[string]*xdsresource.ClusterResult{
+					defaultTestClusterName: aggregateResult([]string{"missing-cluster", "good-cluster"}, []string{"good-cluster"}),
+					"good-cluster":         goodClusterResult,
+				}
+			},
+		},
+		{
+			name:     "all_children_failed",
+			children: []string{"bad-cluster-1", "bad-cluster-2"},
+			clusters: []*v3clusterpb.Cluster{nackedCluster("bad-cluster-1"), nackedCluster("bad-cluster-2")},
+			wantClusters: func(nodeID string) map[string]*xdsresource.ClusterResult {
+				return map[string]*xdsresource.ClusterResult{
+					defaultTestClusterName: {Err: nackedErr(nodeID)},
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			nodeID := uuid.New().String()
+			mgmtServer, bootstrapContents := setupManagementServerForTest(t, nodeID, true)
+			// Use a short watch expiry so that the missing cluster is reported
+			// as not found quickly.
+			xdsClient := createXDSClientWithWatchExpiry(t, bootstrapContents, 100*time.Millisecond)
+
+			watcher := newTestWatcher()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			dnsR := replaceDNSResolver(t)
+			dnsR.UpdateState(resolver.State{
+				Endpoints: []resolver.Endpoint{
+					{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+					{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
+				},
+			})
+
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+				Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)},
+				Clusters:  append([]*v3clusterpb.Cluster{makeAggregateClusterResource(defaultTestClusterName, test.children)}, test.clusters...),
+			}
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+			defer dm.Close()
+			// Closing the watcher first avoids a deadlock in dm.Close() if the
+			// management server keeps sending updates.
+			defer watcher.close()
+
+			wantXdsConfig := &xdsresource.XDSConfig{
+				Listener: &xdsresource.ListenerUpdate{
+					APIListener: &xdsresource.HTTPConnectionManagerConfig{
+						RouteConfigName: defaultTestRouteConfigName,
+						HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					},
+				},
+				RouteConfig: &xdsresource.RouteConfigUpdate{
+					VirtualHosts: []*xdsresource.VirtualHost{{
+						Domains: []string{defaultTestServiceName},
+						Routes: []*xdsresource.Route{{
+							Prefix:           newStringP("/"),
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+							ActionType:       xdsresource.RouteActionRoute,
+						}},
+					}},
+				},
+				VirtualHost: &xdsresource.VirtualHost{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
+				},
+				Clusters: test.wantClusters(nodeID),
+			}
+			if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
