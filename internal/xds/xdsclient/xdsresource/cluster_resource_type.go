@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
@@ -44,7 +45,10 @@ func (d *clusterResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdscl
 	if !ok {
 		return nil, fmt.Errorf("no server config found for {%+v}", opts.ServerConfig)
 	}
-	name, cluster, err := unmarshalClusterResource(resource.ToAny(), d.bootstrapConfig, serverCfg)
+	name, cluster, err := unmarshalClusterResource(&anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
+	}, d.bootstrapConfig, serverCfg)
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err

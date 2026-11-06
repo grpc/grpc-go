@@ -96,6 +96,14 @@ func wrrLocalityAny(t *testing.T, m proto.Message) *anypb.Any {
 	return testutils.MarshalAny(t, wrrLocality(t, m))
 }
 
+func toAnyProto(t *testing.T, m proto.Message) *xdsclient.AnyProto {
+	a := testutils.MarshalAny(t, m)
+	return &xdsclient.AnyProto{
+		TypeURL: a.GetTypeUrl(),
+		Value:   a.GetValue(),
+	}
+}
+
 type customLBConfig struct {
 	serviceconfig.LoadBalancingConfig
 }
@@ -638,7 +646,7 @@ func (s) TestValidateCluster_LBPolicyInfo(t *testing.T) {
 	decoder := xdsresource.NewClusterResourceTypeDecoder(bootstrapCfg, map[xdsclient.ServerConfig]*bootstrap.ServerConfig{
 		xdsServerCfg: serverCfg,
 	})
-	res, err := decoder.Decode(xdsclient.NewAnyProto(testutils.MarshalAny(t, cluster)), xdsclient.DecodeOptions{ServerConfig: &xdsServerCfg})
+	res, err := decoder.Decode(toAnyProto(t, cluster), xdsclient.DecodeOptions{ServerConfig: &xdsServerCfg})
 	if err != nil {
 		t.Fatalf("decoder.Decode(%+v) failed: %v", cluster, err)
 	}
@@ -781,7 +789,7 @@ func (s) TestValidateCluster_Autosharding(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cluster := edsClusterWithLBPolicy(test.lbPolicy)
-			res, err := decoder.Decode(xdsclient.NewAnyProto(testutils.MarshalAny(t, cluster)), decodeOpts)
+			res, err := decoder.Decode(toAnyProto(t, cluster), decodeOpts)
 			if err != nil {
 				t.Fatalf("decoder.Decode(%+v) failed: %v", cluster, err)
 			}
@@ -814,7 +822,7 @@ func (s) TestValidateCluster_Autosharding_InvalidLBConfig(t *testing.T) {
 		GrpcService:        googleGrpcService(shardingServiceURI),
 		AutoshardingTarget: "my-target",
 	}))
-	_, err := decoder.Decode(xdsclient.NewAnyProto(testutils.MarshalAny(t, cluster)), decodeOpts)
+	_, err := decoder.Decode(toAnyProto(t, cluster), decodeOpts)
 	const wantErr = "keyHeaderName field is required"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("decoder.Decode(%+v) returned error: %v, want error containing %q", cluster, err, wantErr)
