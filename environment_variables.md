@@ -23,13 +23,13 @@ in effect.
 
 ## Logging
 
-See [Log Levels](Documentation/log_levels.md) for a description of the log
-severities and how they are used.
-
 The variables in this section configure the default logger, and none of them
 have any effect if the application installs its own logger via
 [`grpclog.SetLoggerV2`](https://pkg.go.dev/google.golang.org/grpc/grpclog#SetLoggerV2).
 They are read once, when the `grpclog` package is initialized.
+
+See [Log Levels](Documentation/log_levels.md) for a description of the log
+severities and how they are used.
 
 *   `GRPC_GO_LOG_SEVERITY_LEVEL`
 
@@ -39,11 +39,9 @@ They are read once, when the `grpclog` package is initialized.
     all-uppercase and all-lowercase spellings are recognized, so `INFO` and
     `info` work but `Info` does not.
 
-    There is no fallback for an unrecognized value: rather than leaving the
-    default in effect, it silences the logger entirely, so that no message of
-    any severity is written. `FATAL` is not a recognized value and has this
-    effect. Fatal-severity logging still terminates the process in that case;
-    only the log output is suppressed.
+    Unrecognized values (including `FATAL`) do not fall back to the default;
+    instead, they suppress all log output. Fatal log calls still terminate the
+    process, even though nothing is written to stderr.
 
 *   `GRPC_GO_LOG_VERBOSITY_LEVEL`
 
