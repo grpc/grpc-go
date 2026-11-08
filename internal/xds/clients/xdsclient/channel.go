@@ -211,7 +211,7 @@ func (xc *xdsChannel) onResponse(resp response, onDone func()) ([]string, error)
 	// Lookup the resource parser based on the resource type.
 	rType, ok := xc.clientConfig.ResourceTypes[resp.typeURL]
 	if !ok {
-		return nil, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceTypeUnsupported, "Resource type URL %q unknown in response from server", resp.typeURL)
+		return nil, fmt.Errorf("%w: resource type URL %q unknown in response from server", errResourceTypeUnsupported, resp.typeURL)
 	}
 
 	updates, md, err := xc.decodeResponse(&rType, resp)
@@ -285,7 +285,7 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 		perResourceErrors[name] = err
 		// Add place holder in the map so we know this resource name was in
 		// the response.
-		ret[name] = dataAndErrTuple{Err: xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error())}
+		ret[name] = dataAndErrTuple{Err: fmt.Errorf("%w: %w", ErrNACKed, err)}
 	}
 
 	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
@@ -297,7 +297,7 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 	errRet := combineErrors(rType.TypeName, topLevelErrors, perResourceErrors)
 	md.ErrState = &xdsresource.UpdateErrorMetadata{
 		Version:   resp.version,
-		Err:       xdsresource.NewError(xdsresource.ErrorTypeNACKed, errRet.Error()),
+		Err:       fmt.Errorf("%w: %w", ErrNACKed, errRet),
 		Timestamp: timestamp,
 	}
 	return ret, md, errRet

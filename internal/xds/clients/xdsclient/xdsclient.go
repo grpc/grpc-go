@@ -288,7 +288,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 	// map of xdsChannels.
 	tr, err := c.transportBuilder.Build(serverConfig.ServerIdentifier)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("xds: failed to create transport for server config %v: %v", serverConfig, err)
+		return nil, func() {}, fmt.Errorf("xds: failed to create transport for server config %v: %w", serverConfig, err)
 	}
 	state := &channelState{
 		parent:                c,
@@ -305,7 +305,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 		logPrefix:          clientPrefix(c),
 	})
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("xds: failed to create a new channel for server config %v: %v", serverConfig, err)
+		return nil, func() {}, fmt.Errorf("xds: failed to create a new channel for server config %v: %w", serverConfig, err)
 	}
 	state.channel = channel
 	c.xdsActiveChannels[*serverConfig] = state
@@ -392,7 +392,7 @@ func (cs *channelState) adsStreamFailure(err error) {
 		return
 	}
 
-	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv && cs.parent.metricsReporter != nil {
+	if !errors.Is(err, errStreamFailedAfterRecv) && cs.parent.metricsReporter != nil {
 		cs.parent.metricsReporter.ReportMetric(&metrics.ServerFailure{
 			ServerURI: cs.serverConfig.ServerIdentifier.ServerURI,
 		})

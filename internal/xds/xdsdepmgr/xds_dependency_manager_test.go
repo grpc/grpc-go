@@ -374,7 +374,7 @@ func (s) TestListenerResourceNotFoundError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := verifyError(ctx, watcher.errorCh, fmt.Sprintf("xds: resource %q of type %q has been removed", defaultTestServiceName, "ListenerResource"), nodeID); err != nil {
+	if err := verifyError(ctx, watcher.errorCh, fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", defaultTestServiceName, "ListenerResource"), nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -849,7 +849,7 @@ func (s) TestClusterResourceError(t *testing.T) {
 	defer watcher.close()
 
 	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
+	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: xds: resource NACKed: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
 
 	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
@@ -1162,7 +1162,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate:      &xdsresource.EndpointsUpdate{},
-						ResolutionNote: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q  port_value:%v}}}  load_balancing_weight:{}", "localhost", 8080)),
+						ResolutionNote: fmt.Errorf("[xDS node id: %v]: xds: resource NACKed: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q  port_value:%v}}}  load_balancing_weight:{}", "localhost", 8080)),
 					},
 				},
 			},

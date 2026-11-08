@@ -20,22 +20,33 @@ package xdsclient_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils/fakeserver"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
+
+type customDecodeError struct {
+	reason string
+}
+
+func (e *customDecodeError) Error() string {
+	return fmt.Sprintf("custom decode error: %s", e.reason)
+}
 
 // customTestResourceType is a fake resource type used for testing.
 var customTestResourceType = xdsclient.ResourceType{
@@ -63,6 +74,9 @@ func (customTestDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.Decode
 	name, content, found := strings.Cut(str, "|")
 	if !found {
 		return nil, fmt.Errorf("invalid format: expected 'name|content', got %q", str)
+	}
+	if reason, ok := strings.CutPrefix(content, "ERR:"); ok {
+		return &xdsclient.DecodeResult{Name: name}, &customDecodeError{reason: reason}
 	}
 
 	return &xdsclient.DecodeResult{
@@ -112,12 +126,12 @@ func (w *customTestWatcher) ResourceChanged(update xdsclient.ResourceData, onDon
 }
 
 func (w *customTestWatcher) ResourceError(err error, onDone func()) {
-	w.errCh <- fmt.Errorf("ResourceError: %v", err)
+	w.errCh <- fmt.Errorf("ResourceError: %w", err)
 	onDone()
 }
 
 func (w *customTestWatcher) AmbientError(err error, onDone func()) {
-	w.errCh <- fmt.Errorf("AmbientError: %v", err)
+	w.errCh <- fmt.Errorf("AmbientError: %w", err)
 	onDone()
 }
 
@@ -251,4 +265,174 @@ func (s) TestCustomResourceWatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Tests that errors reported to ResourceWatcher preserve sentinel errors
+// (ErrResourceNotFound, ErrConnection, ErrNACKed) and underlying error chains
+// for inspection via errors.Is, errors.As, and status.FromError.
+func (s) TestCustomResourceWatch_ErrorUnwrapping(t *testing.T) {
+	const authority = "my-authority"
+	resourceName := "xdstp://" + authority + "/" + customTestResourceType.TypeURL + "/my-resource"
+
+	t.Run("resource_not_found", func(t *testing.T) {
+		mgmtServer, cleanup, err := fakeserver.StartServer(nil)
+		if err != nil {
+			t.Fatalf("Failed to start fake xDS server: %v", err)
+		}
+		defer cleanup()
+
+		si := clients.ServerIdentifier{
+			ServerURI:  mgmtServer.Address,
+			Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+		}
+		configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+		client, err := xdsclient.New(xdsclient.Config{
+			Servers:            []xdsclient.ServerConfig{{ServerIdentifier: si}},
+			Node:               clients.Node{ID: uuid.New().String()},
+			TransportBuilder:   grpctransport.NewBuilder(configs),
+			ResourceTypes:      map[string]xdsclient.ResourceType{customTestResourceType.TypeURL: customTestResourceType},
+			Authorities:        map[string]xdsclient.Authority{authority: {}},
+			WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create xDS client: %v", err)
+		}
+		defer client.Close()
+
+		watcher := newCustomTestWatcher()
+		cancelWatch := client.WatchResource(customTestResourceType.TypeURL, resourceName, watcher)
+		defer cancelWatch()
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for resource not found error")
+		case gotErr := <-watcher.errCh:
+			if !errors.Is(gotErr, xdsclient.ErrResourceNotFound) {
+				t.Errorf("errors.Is(%v, xdsclient.ErrResourceNotFound) = false, want true", gotErr)
+			}
+		}
+	})
+
+	t.Run("nacked_custom_decoder_error", func(t *testing.T) {
+		mgmtServer, cleanup, err := fakeserver.StartServer(nil)
+		if err != nil {
+			t.Fatalf("Failed to start fake xDS server: %v", err)
+		}
+		defer cleanup()
+
+		si := clients.ServerIdentifier{
+			ServerURI:  mgmtServer.Address,
+			Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+		}
+		configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+		client, err := xdsclient.New(xdsclient.Config{
+			Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+			Node:             clients.Node{ID: uuid.New().String()},
+			TransportBuilder: grpctransport.NewBuilder(configs),
+			ResourceTypes:    map[string]xdsclient.ResourceType{customTestResourceType.TypeURL: customTestResourceType},
+			Authorities:      map[string]xdsclient.Authority{authority: {}},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create xDS client: %v", err)
+		}
+		defer client.Close()
+
+		watcher := newCustomTestWatcher()
+		cancelWatch := client.WatchResource(customTestResourceType.TypeURL, resourceName, watcher)
+		defer cancelWatch()
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
+		if _, err := mgmtServer.XDSRequestChan.Receive(ctx); err != nil {
+			t.Fatalf("Timeout waiting for DiscoveryRequest: %v", err)
+		}
+
+		badResource, err := anypb.New(&wrapperspb.StringValue{Value: resourceName + "|ERR:missing required field"})
+		if err != nil {
+			t.Fatalf("Failed to marshal resource: %v", err)
+		}
+		mgmtServer.XDSResponseChan <- &fakeserver.Response{
+			Resp: &v3discoverypb.DiscoveryResponse{
+				TypeUrl:     customTestResourceType.TypeURL,
+				VersionInfo: "1",
+				Resources:   []*anypb.Any{badResource},
+			},
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for NACK error")
+		case gotErr := <-watcher.errCh:
+			if !errors.Is(gotErr, xdsclient.ErrNACKed) {
+				t.Errorf("errors.Is(%v, xdsclient.ErrNACKed) = false, want true", gotErr)
+			}
+			var customErr *customDecodeError
+			if !errors.As(gotErr, &customErr) {
+				t.Fatalf("errors.As(%v, &customDecodeError) = false, want true", gotErr)
+			}
+			if customErr.reason != "missing required field" {
+				t.Errorf("customErr.reason = %q, want %q", customErr.reason, "missing required field")
+			}
+		}
+	})
+
+	t.Run("connection_error_with_grpc_status", func(t *testing.T) {
+		mgmtServer, cleanup, err := fakeserver.StartServer(nil)
+		if err != nil {
+			t.Fatalf("Failed to start fake xDS server: %v", err)
+		}
+		defer cleanup()
+
+		si := clients.ServerIdentifier{
+			ServerURI:  mgmtServer.Address,
+			Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+		}
+		configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+		client, err := xdsclient.New(xdsclient.Config{
+			Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+			Node:             clients.Node{ID: uuid.New().String()},
+			TransportBuilder: grpctransport.NewBuilder(configs),
+			ResourceTypes:    map[string]xdsclient.ResourceType{customTestResourceType.TypeURL: customTestResourceType},
+			Authorities:      map[string]xdsclient.Authority{authority: {}},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create xDS client: %v", err)
+		}
+		defer client.Close()
+
+		watcher := newCustomTestWatcher()
+		cancelWatch := client.WatchResource(customTestResourceType.TypeURL, resourceName, watcher)
+		defer cancelWatch()
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
+		if _, err := mgmtServer.XDSRequestChan.Receive(ctx); err != nil {
+			t.Fatalf("Timeout waiting for DiscoveryRequest: %v", err)
+		}
+
+		mgmtServer.XDSResponseChan <- &fakeserver.Response{
+			Err: status.Error(codes.Unavailable, "management server unavailable"),
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for connection error")
+		case gotErr := <-watcher.errCh:
+			if !errors.Is(gotErr, xdsclient.ErrConnection) {
+				t.Errorf("errors.Is(%v, xdsclient.ErrConnection) = false, want true", gotErr)
+			}
+			st, ok := status.FromError(gotErr)
+			if !ok {
+				t.Fatalf("status.FromError(%v) ok = false, want true", gotErr)
+			}
+			if st.Code() != codes.Unavailable || !strings.Contains(st.Message(), "management server unavailable") {
+				t.Errorf("status.FromError(%v) = (%v, %q), want (%v, substring %q)", gotErr, st.Code(), st.Message(), codes.Unavailable, "management server unavailable")
+			}
+		}
+	})
 }
