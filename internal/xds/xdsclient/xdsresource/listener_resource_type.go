@@ -125,15 +125,17 @@ type ListenerResourceData struct {
 
 // Equal returns true if other is equal to l.
 func (l *ListenerResourceData) Equal(other xdsclient.ResourceData) bool {
-	if other == nil {
+	if l == nil && other == nil {
+		return true
+	}
+	if (l == nil) != (other == nil) {
 		return false
 	}
-	return bytes.Equal(l.Bytes(), other.Bytes())
-}
-
-// Bytes returns the protobuf serialized bytes of the listener resource proto.
-func (l *ListenerResourceData) Bytes() []byte {
-	return l.Resource.Raw.GetValue()
+	o, ok := other.(*ListenerResourceData)
+	if !ok || o == nil {
+		return false
+	}
+	return bytes.Equal(l.Resource.Raw.GetValue(), o.Resource.Raw.GetValue())
 }
 
 // ListenerWatcher wraps the callbacks to be invoked for different

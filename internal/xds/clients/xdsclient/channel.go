@@ -275,7 +275,11 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 			name = xdsresource.ParseName(result.Name).String()
 		}
 		if err == nil {
-			ret[name] = dataAndErrTuple{Resource: result.Resource}
+			raw := r.GetValue()
+			if unwrapped, err := xdsresource.UnwrapResource(r); err == nil {
+				raw = unwrapped.GetValue()
+			}
+			ret[name] = dataAndErrTuple{Resource: result.Resource, Raw: raw}
 			continue
 		}
 		if name == "" {

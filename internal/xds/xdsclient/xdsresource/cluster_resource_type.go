@@ -79,15 +79,17 @@ type ClusterResourceData struct {
 
 // Equal returns true if other is equal to c.
 func (c *ClusterResourceData) Equal(other xdsclient.ResourceData) bool {
-	if other == nil {
+	if c == nil && other == nil {
+		return true
+	}
+	if (c == nil) != (other == nil) {
 		return false
 	}
-	return bytes.Equal(c.Bytes(), other.Bytes())
-}
-
-// Bytes returns the protobuf serialized bytes of the cluster resource proto.
-func (c *ClusterResourceData) Bytes() []byte {
-	return c.Resource.Raw.GetValue()
+	o, ok := other.(*ClusterResourceData)
+	if !ok || o == nil {
+		return false
+	}
+	return bytes.Equal(c.Resource.Raw.GetValue(), o.Resource.Raw.GetValue())
 }
 
 // ClusterWatcher wraps the callbacks to be invoked for different events

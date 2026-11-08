@@ -65,15 +65,17 @@ type EndpointsResourceData struct {
 
 // Equal returns true if other is equal to e.
 func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
-	if other == nil {
+	if e == nil && other == nil {
+		return true
+	}
+	if (e == nil) != (other == nil) {
 		return false
 	}
-	return bytes.Equal(e.Bytes(), other.Bytes())
-}
-
-// Bytes returns the protobuf serialized bytes of the listener resource proto.
-func (e *EndpointsResourceData) Bytes() []byte {
-	return e.Resource.Raw.GetValue()
+	o, ok := other.(*EndpointsResourceData)
+	if !ok || o == nil {
+		return false
+	}
+	return bytes.Equal(e.Resource.Raw.GetValue(), o.Resource.Raw.GetValue())
 }
 
 // EndpointsWatcher wraps the callbacks to be invoked for different
