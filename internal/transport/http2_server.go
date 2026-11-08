@@ -1013,7 +1013,7 @@ func (t *http2Server) streamContextErr(s *ServerStream) error {
 		return ErrConnClosing
 	default:
 	}
-	return s.contextErr()
+	return s.streamDoneErr()
 }
 
 // WriteHeader sends the header metadata md back to the client.
