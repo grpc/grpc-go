@@ -185,11 +185,14 @@ func (s) TestSetTrailerAfterClientCancellation(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	go func() {
-		<-handlerStarted
-		cancel()
+		select {
+		case <-handlerStarted:
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Canceled {
@@ -211,5 +214,62 @@ func (s) TestSetTrailerAfterClientCancellation(t *testing.T) {
 		case <-time.After(defaultTestTimeout):
 			t.Fatalf("Timed out waiting for the server handler to call %s()", test.name)
 		}
+	}
+}
+
+// TestSetHeaderAfterSendHeader verifies that sending headers prevents further
+// calls to SetHeader, including after the client cancels the RPC.
+func (s) TestSetHeaderAfterSendHeader(t *testing.T) {
+	for _, cancelRPC := range []bool{false, true} {
+		name := "active"
+		if cancelRPC {
+			name = "canceled"
+		}
+		t.Run(name, func(t *testing.T) {
+			headerSent := make(chan struct{})
+			headerErrCh := make(chan error, 1)
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					if err := grpc.SendHeader(ctx, metadata.Pairs("a", "b")); err != nil {
+						return nil, err
+					}
+					close(headerSent)
+					if cancelRPC {
+						<-ctx.Done()
+					}
+					headerErrCh <- grpc.SetHeader(ctx, metadata.Pairs("c", "d"))
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.Start(nil); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			wantCode := codes.OK
+			if cancelRPC {
+				wantCode = codes.Canceled
+				go func() {
+					select {
+					case <-headerSent:
+						cancel()
+					case <-ctx.Done():
+					}
+				}()
+			}
+			if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != wantCode {
+				t.Fatalf("ss.Client.EmptyCall() returned %v, want code %v", err, wantCode)
+			}
+			select {
+			case err := <-headerErrCh:
+				if status.Code(err) != codes.Internal {
+					t.Errorf("grpc.SetHeader() after grpc.SendHeader() returned %v, want code %v", err, codes.Internal)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timed out waiting for the server handler to call grpc.SetHeader()")
+			}
+		})
 	}
 }
