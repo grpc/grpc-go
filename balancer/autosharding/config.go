@@ -16,7 +16,6 @@
  *
  */
 
-// Package autosharding implements the autosharding load balancing policy.
 package autosharding
 
 import (
@@ -24,6 +23,7 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/grpc/internal/metadata"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -52,6 +52,12 @@ func parseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	}
 	if lbConfig.KeyHeaderName == "" {
 		return nil, fmt.Errorf("autosharding: keyHeaderName field is required")
+	}
+	// When parsing the JSON LB configuration, the LB policy must ensure that
+	// the key_header_name field contains a valid gRPC header name. If not, the
+	// configuration must be rejected - A119.
+	if err := metadata.ValidateKey(lbConfig.KeyHeaderName); err != nil {
+		return nil, fmt.Errorf("autosharding: invalid keyHeaderName %q: %v", lbConfig.KeyHeaderName, err)
 	}
 	return lbConfig, nil
 }

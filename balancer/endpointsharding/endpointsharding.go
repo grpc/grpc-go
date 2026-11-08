@@ -143,6 +143,9 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 	var retErr error
 	newEndpoints := resolver.NewEndpointMap[*endpointState]()
 	for _, endpoint := range rotateEndpoints(state.ResolverState.Endpoints) {
+		if len(endpoint.Addresses) == 0 {
+			continue
+		}
 		if _, ok := newEndpoints.Get(endpoint); ok {
 			// Skip duplicate endpoints.
 			continue

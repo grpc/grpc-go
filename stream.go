@@ -508,21 +508,35 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	if desc != unaryStreamDesc {
-		// Listen on cc and stream contexts to cleanup when the user closes the
-		// ClientConn or cancels the stream context.  In all other cases, an error
-		// should already be injected into the recv buffer by the transport, which
-		// the client will eventually receive, and then we will cancel the stream's
-		// context in clientStream.finish.
-		go func() {
-			select {
-			case <-cc.ctx.Done():
-				cs.finish(ErrClientConnClosing)
-			case <-ctx.Done():
-				cs.finish(toRPCErr(ctx.Err()))
-			}
-		}()
+		// Register callbacks on the cc and stream contexts to clean up when the
+		// user closes the ClientConn or cancels the stream context. In all other
+		// cases, an error should already be injected into the recv buffer by the
+		// transport, which the client will eventually receive, and then we will
+		// cancel the stream's context and stop these callbacks in
+		// clientStream.finish.
+		cs.registerCancellationHandlers()
 	}
 	return cs, nil
+}
+
+// registerCancellationHandlers registers callbacks to clean up the stream when the
+// RPC context expires or the ClientConn is closed.
+func (cs *clientStream) registerCancellationHandlers() {
+	// Hold mu so that a callback firing before registration completes (e.g.
+	// because its context is already done) cannot run finish() concurrently
+	// with the assignments below.
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	onCtxDone := func() {
+		if cs.cc.ctx.Err() != nil {
+			cs.finish(ErrClientConnClosing)
+			return
+		}
+		cs.finish(toRPCErr(cs.ctx.Err()))
+	}
+
+	cs.stopStreamWatcher = context.AfterFunc(cs.ctx, onCtxDone)
+	cs.stopConnWatcher = context.AfterFunc(cs.cc.ctx, onCtxDone)
 }
 
 // newAttemptLocked creates a new csAttempt without a transport or stream.
@@ -704,6 +718,9 @@ type clientStream struct {
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
+
+	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
+	stopConnWatcher   func() bool // stops the callback registered to run on ClientConn context expiration
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -1187,6 +1204,12 @@ func (cs *clientStream) finish(err error) {
 		return
 	}
 	cs.finished = true
+	if cs.stopStreamWatcher != nil {
+		cs.stopStreamWatcher()
+	}
+	if cs.stopConnWatcher != nil {
+		cs.stopConnWatcher()
+	}
 	cs.commitAttemptLocked()
 	attemptCreated := cs.attempt != nil
 	if attemptCreated {
@@ -1465,26 +1488,41 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 	as.parser = parser{r: s, bufferPool: ac.dopts.copts.BufferPool}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
-		// Listen on stream context to cleanup when the stream context is
-		// canceled.  Also listen for the addrConn's context in case the
-		// addrConn is closed or reconnects to a different address.  In all
-		// other cases, an error should already be injected into the recv
+		// Register a callback on the stream context to clean up when the stream
+		// context is canceled. Also register one on the addrConn's context in
+		// case the addrConn is closed or reconnects to a different address. In
+		// all other cases, an error should already be injected into the recv
 		// buffer by the transport, which the client will eventually receive,
-		// and then we will cancel the stream's context in
-		// addrConnStream.finish.
-		go func() {
-			ac.mu.Lock()
-			acCtx := ac.ctx
-			ac.mu.Unlock()
-			select {
-			case <-acCtx.Done():
-				as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
-			case <-ctx.Done():
-				as.finish(toRPCErr(ctx.Err()))
-			}
-		}()
+		// and then we will cancel the stream's context and stop these callbacks
+		// in addrConnStream.finish.
+		as.registerCancellationHandlers()
 	}
 	return &clientStreamWrapper{ClientStream: as, desc: desc}, nil
+}
+
+// registerCancellationHandlers registers callbacks to clean up the stream when the
+// RPC context expires or the SubConn is closed.
+func (as *addrConnStream) registerCancellationHandlers() {
+	as.ac.mu.Lock()
+	acCtx := as.ac.ctx
+	as.ac.mu.Unlock()
+
+	// Hold mu so that a callback firing before registration completes (e.g.
+	// because its context is already done) cannot run finish() concurrently
+	// with the assignments below.
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	onCtxDone := func() {
+		if acCtx.Err() != nil {
+			as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
+			return
+		}
+		as.finish(toRPCErr(as.ctx.Err()))
+	}
+
+	as.stopStreamWatcher = context.AfterFunc(as.ctx, onCtxDone)
+	as.stopConnWatcher = context.AfterFunc(acCtx, onCtxDone)
 }
 
 type addrConnStream struct {
@@ -1506,6 +1544,9 @@ type addrConnStream struct {
 	// mu guards finished and is held for the entire finish method.
 	mu     sync.Mutex
 	parser parser
+
+	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
+	stopConnWatcher   func() bool // stops the callback registered to run on SubConn context expiration
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -1648,6 +1689,13 @@ func (as *addrConnStream) finish(err error) {
 		return
 	}
 	as.finished = true
+	if as.stopStreamWatcher != nil {
+		as.stopStreamWatcher()
+	}
+	if as.stopConnWatcher != nil {
+		as.stopConnWatcher()
+	}
+
 	if err == io.EOF {
 		// Ending a stream with EOF indicates a success.
 		err = nil

@@ -66,9 +66,14 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	if !strings.HasSuffix(s, "s") {
 		return fmt.Errorf("malformed duration %q: missing seconds unit", s)
 	}
+	// Accept a single optional leading sign. Both the whole and fractional
+	// parts are parsed as unsigned below, so any further signs are rejected.
 	neg := false
-	if s[0] == '-' {
+	switch s[0] {
+	case '-':
 		neg = true
+		s = s[1:]
+	case '+':
 		s = s[1:]
 	}
 	ss := strings.SplitN(s[:len(s)-1], ".", 3)
@@ -80,25 +85,27 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	hasDigits := false
 	var sec, ns int64
 	if len(ss[0]) > 0 {
-		var err error
-		if sec, err = strconv.ParseInt(ss[0], 10, 64); err != nil {
+		u, err := strconv.ParseUint(ss[0], 10, 64)
+		if err != nil {
 			return fmt.Errorf("malformed duration %q: %v", s, err)
 		}
 		// Maximum seconds value per the durationpb spec.
 		const maxProtoSeconds = 315_576_000_000
-		if sec > maxProtoSeconds {
+		if u > maxProtoSeconds {
 			return fmt.Errorf("out of range: %q", s)
 		}
+		sec = int64(u)
 		hasDigits = true
 	}
 	if len(ss) == 2 && len(ss[1]) > 0 {
 		if len(ss[1]) > 9 {
 			return fmt.Errorf("malformed duration %q: too many digits after decimal", s)
 		}
-		var err error
-		if ns, err = strconv.ParseInt(ss[1], 10, 64); err != nil {
+		n, err := strconv.ParseUint(ss[1], 10, 64)
+		if err != nil {
 			return fmt.Errorf("malformed duration %q: %v", s, err)
 		}
+		ns = int64(n)
 		for i := 9; i > len(ss[1]); i-- {
 			ns *= 10
 		}

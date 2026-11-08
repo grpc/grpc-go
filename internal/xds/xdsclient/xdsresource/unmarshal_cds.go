@@ -55,7 +55,7 @@ const (
 	transportSocketName = "envoy.transport_sockets.tls"
 )
 
-func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (string, ClusterUpdate, error) {
+func unmarshalClusterResource(r *anypb.Any, bootstrapCfg *bootstrap.Config, serverCfg *bootstrap.ServerConfig) (string, ClusterUpdate, error) {
 	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
@@ -73,7 +73,7 @@ func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (
 	if cluster.GetName() == "" {
 		return "", ClusterUpdate{}, fmt.Errorf("empty resource name in Cluster resource")
 	}
-	cu, err := validateClusterAndConstructClusterUpdate(cluster, serverCfg)
+	cu, err := validateClusterAndConstructClusterUpdate(cluster, bootstrapCfg, serverCfg)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
@@ -90,7 +90,7 @@ const (
 	defaultLeastRequestChoiceCount = 2
 )
 
-func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serverCfg *bootstrap.ServerConfig) (ClusterUpdate, error) {
+func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, bootstrapCfg *bootstrap.Config, serverCfg *bootstrap.ServerConfig) (ClusterUpdate, error) {
 	telemetryLabels := make(map[string]string)
 	if fmd := cluster.GetMetadata().GetFilterMetadata(); fmd != nil {
 		if val, ok := fmd["com.google.csm.telemetry_labels"]; ok {
@@ -174,11 +174,15 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 		return ClusterUpdate{}, err
 	}
 
+	var lbPolicyInfo LBPolicyInfo
 	if cluster.GetLoadBalancingPolicy() != nil {
-		lbPolicy, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy(), 0)
+		opts := xdslbregistry.ConverterOptions{BootstrapConfig: bootstrapCfg, ServerConfig: serverCfg}
+		res, err := xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy(), 0, opts)
 		if err != nil {
 			return ClusterUpdate{}, fmt.Errorf("error converting LoadBalancingPolicy %v in response: %+v: %v", cluster.GetLoadBalancingPolicy(), cluster, err)
 		}
+		lbPolicy = res.LBConfig
+		lbPolicyInfo.GRPCServices = res.GRPCServices
 		// "It will be the responsibility of the XdsClient to validate the
 		// converted configuration. It will do this by having the gRPC LB policy
 		// registry parse the configuration." - A52
@@ -230,6 +234,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 		SecurityCfg:              sc,
 		MaxRequests:              circuitBreakersFromCluster(cluster),
 		LBPolicy:                 lbPolicy,
+		LBPolicyInfo:             lbPolicyInfo,
 		OutlierDetection:         od,
 		TelemetryLabels:          telemetryLabels,
 		LRSReportEndpointMetrics: lrsReportEndpointMetrics,

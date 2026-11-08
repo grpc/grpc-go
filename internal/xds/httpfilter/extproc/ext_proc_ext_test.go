@@ -6641,8 +6641,8 @@ func (s) TestFlowControl_PiggybackedWindowUpdates(t *testing.T) {
 	const defaultWindowSize = 100
 	overrideDefaultFlowControlWindow(t, defaultWindowSize)
 
-	downstreamPiggybackedReceived := make(chan struct{})
-	upstreamPiggybackedReceived := make(chan struct{})
+	downstreamPiggybackedReceived := grpcsync.NewEvent()
+	upstreamPiggybackedReceived := grpcsync.NewEvent()
 
 	mutatedResp := &testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: make([]byte, 15)}}
 	mutatedRespBytes, err := proto.Marshal(mutatedResp)
@@ -6671,10 +6671,10 @@ func (s) TestFlowControl_PiggybackedWindowUpdates(t *testing.T) {
 			// Check for piggybacked window updates on ProcessingRequests.
 			if update := req.GetClientWindowUpdate(); update != nil {
 				if update.GetWindowIncrementSidestreamToDownstream() >= wantRespInc {
-					close(downstreamPiggybackedReceived)
+					downstreamPiggybackedReceived.Fire()
 				}
 				if update.GetWindowIncrementSidestreamToUpstream() >= wantReqInc {
-					close(upstreamPiggybackedReceived)
+					upstreamPiggybackedReceived.Fire()
 				}
 			}
 
@@ -6751,36 +6751,36 @@ func (s) TestFlowControl_PiggybackedWindowUpdates(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send request 1 (mutated by extproc to 20k, forwarding to backend triggers
-	// upstream window update piggybacked on ResponseBody).
+	// Send request 1 (mutated by extproc to < defaultWindowSize/2, so its
+	// sidestream-to-upstream window increment stays pending for piggybacking).
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{
 		Payload: &testpb.Payload{Body: []byte("c1")},
 	}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
-	// Read response 1 (mutated by extproc to 15k, reading triggers downstream
-	// window update piggybacked on CloseSend).
+	// Read response 1 (mutated by extproc to < defaultWindowSize/2, so its
+	// sidestream-to-downstream window increment stays pending for piggybacking).
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("stream.Recv() failed: %v", err)
 	}
 
-	// Verify that upstream piggybacked window update is received.
-	select {
-	case <-upstreamPiggybackedReceived:
-	case <-time.After(defaultTestTimeout):
-		t.Fatalf("Timed out waiting for upstream piggybacked window update on processor stream")
-	}
-
-	// CloseSend sends EndOfStreamWithoutMessage to proc server, piggybacking the
-	// downstream window update.
+	// CloseSend sends EndOfStreamWithoutMessage to proc server, piggybacking
+	// pending window updates (including upstream if ResponseBody was dispatched
+	// before requestForwardingToDataplaneLoop updated pendingReqWindowUpdate).
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("stream.CloseSend() failed: %v", err)
 	}
 
-	// Verify that downstream piggybacked window update is received.
+	// Verify that both upstream and downstream piggybacked window updates are
+	// received.
 	select {
-	case <-downstreamPiggybackedReceived:
+	case <-upstreamPiggybackedReceived.Done():
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for upstream piggybacked window update on processor stream")
+	}
+	select {
+	case <-downstreamPiggybackedReceived.Done():
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("Timed out waiting for downstream piggybacked window update on processor stream")
 	}

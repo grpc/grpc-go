@@ -20,16 +20,20 @@ package cdsbalancer
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
@@ -69,10 +73,11 @@ type bb struct{}
 // Build creates a new CDS balancer with the ClientConn.
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
-		bOpts:          opts,
-		clusterConfigs: make(map[string]*xdsresource.ClusterResult),
-		leafConfigs:    make(map[string]*leafClusterConfig),
-		cc:             cc,
+		bOpts:           opts,
+		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
+		leafConfigs:     make(map[string]*leafClusterConfig),
+		grpcServicesMap: make(map[string]*grpcServiceCfg),
+		cc:              cc,
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
@@ -102,6 +107,13 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	return &cfg, nil
 }
 
+// grpcServiceCfg holds the parsed GrpcService configuration and a reference
+// counted gRPC ClientConn created from it.
+type grpcServiceCfg struct {
+	config *grpcservice.Config
+	cc     *grpcsync.RefCounted[*grpc.ClientConn]
+}
+
 // cdsBalancer implements a CDS based LB policy. It instantiates a
 // cluster_resolver balancer to further resolve the serviceName received from
 // CDS, into localities and endpoints. Implements the balancer.Balancer
@@ -114,6 +126,12 @@ type cdsBalancer struct {
 	cc     balancer.ClientConn   // ClientConn interface passed to child LB.
 	bOpts  balancer.BuildOptions // BuildOptions passed to child LB.
 	logger *grpclog.PrefixLogger // Prefix logger for all logging.
+
+	// grpcServicesMu guards access to grpcServicesMap, which is accessed both
+	// when handling xDS config updates and from the channel factory provided
+	// to child LB policies.
+	grpcServicesMu  sync.Mutex
+	grpcServicesMap map[string]*grpcServiceCfg
 
 	// All fields below are accessed only from methods implementing the
 	// balancer.Balancer interface. Since gRPC guarantees that these methods are
@@ -210,7 +228,66 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 	if clusterUpdate.Err != nil {
 		return clusterUpdate.Err
 	}
+
+	// TODO(gRFC A75): Skip updating gRPC services here, and setting the channel
+	// factory in updateChildConfig, for aggregate clusters once the remaining
+	// part of A75 is implemented.
+	b.updateGRPCServices(clusterUpdate.Config.Cluster.LBPolicyInfo.GRPCServices)
 	return b.handleClusterUpdate()
+}
+
+// updateGRPCServices updates the map of grpc services by adding new
+// configurations and removing any that are no longer present in the newly
+// received Cluster resource.
+func (b *cdsBalancer) updateGRPCServices(newServices map[string]*grpcservice.Config) {
+	b.grpcServicesMu.Lock()
+	defer b.grpcServicesMu.Unlock()
+
+	for k, cfg := range newServices {
+		if _, ok := b.grpcServicesMap[k]; !ok {
+			b.grpcServicesMap[k] = &grpcServiceCfg{config: cfg}
+		}
+	}
+	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
+	// removed grpcservice.Config instances once their ownership lifecycle is
+	// finalized.
+	for k := range b.grpcServicesMap {
+		if _, ok := newServices[k]; !ok {
+			delete(b.grpcServicesMap, k)
+		}
+	}
+}
+
+// channelFactory implements the "Channel Factory" as described in A119. It
+// dials the GrpcService corresponding to the given key and returns a
+// reference-counted ClientConn along with a cancel function to close it.
+func (b *cdsBalancer) channelFactory(key string) (grpc.ClientConnInterface, func(), error) {
+	b.grpcServicesMu.Lock()
+	defer b.grpcServicesMu.Unlock()
+
+	entry, ok := b.grpcServicesMap[key]
+	if !ok {
+		return nil, nil, fmt.Errorf("cds: no GrpcService found")
+	}
+	if entry.cc != nil {
+		entry.cc.Increment()
+	} else {
+		cc, err := entry.config.Dial()
+		if err != nil {
+			return nil, nil, fmt.Errorf("cds: failed to dial GrpcService: %v", err)
+		}
+		entry.cc = grpcsync.NewRefCounted(cc, func() {
+			cc.Close()
+			entry.cc = nil
+		})
+	}
+	rc := entry.cc
+	cancel := sync.OnceFunc(func() {
+		b.grpcServicesMu.Lock()
+		defer b.grpcServicesMu.Unlock()
+		rc.Decrement()
+	})
+	return rc.Value(), cancel, nil
 }
 
 // handleClusterUpdate handles a good XDSConfig update from the xDS resolver.
@@ -311,11 +388,18 @@ func (b *cdsBalancer) updateChildConfig() error {
 			endpoints[i].Addresses[j] = addr
 		}
 	}
+	resolverState := resolver.State{
+		Endpoints:  endpoints,
+		Attributes: b.attributes,
+	}
+	// Make the channel factory available to the child policies only when the
+	// LB policy configuration refers to GrpcServices. Since the LB policy is
+	// configured by the root cluster, so are the GrpcServices.
+	if len(clusterConfig.Cluster.LBPolicyInfo.GRPCServices) > 0 {
+		resolverState = grpc.SetClientConnProvider(resolverState, b.channelFactory)
+	}
 	if err := b.childLB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Endpoints:  endpoints,
-			Attributes: b.attributes,
-		},
+		ResolverState:  resolverState,
 		BalancerConfig: childCfg,
 	}); err != nil {
 		return fmt.Errorf("xds: failed to push config to child policy: %v", err)
@@ -429,6 +513,12 @@ func (b *cdsBalancer) Close() {
 	if b.unsubscribe != nil {
 		b.unsubscribe()
 	}
+	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
+	// grpcservice.Config instances in grpcServicesMap once their ownership
+	// lifecycle is finalized.
+	b.grpcServicesMu.Lock()
+	b.grpcServicesMap = nil
+	b.grpcServicesMu.Unlock()
 	b.logger.Infof("Shutdown")
 }
 

@@ -30,9 +30,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/balancergroup"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -83,8 +81,6 @@ func (b *bal) setErrorPickerForChild(childName string, err error) {
 }
 
 func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) error {
-	endpointsSplit := hierarchy.Group(s.ResolverState.Endpoints)
-
 	// Remove sub-balancers that are not in the new list from the aggregator and
 	// balancergroup.
 	for name := range b.children {
@@ -134,11 +130,7 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) er
 		}
 
 		if err := b.bg.UpdateClientConnState(childName, balancer.ClientConnState{
-			ResolverState: resolver.State{
-				Endpoints:     endpointsSplit[childName],
-				ServiceConfig: s.ResolverState.ServiceConfig,
-				Attributes:    s.ResolverState.Attributes,
-			},
+			ResolverState:  s.ResolverState,
 			BalancerConfig: lbCfg,
 		}); err != nil {
 			retErr = fmt.Errorf("failed to push new configuration %v to child %q: %v", childCfg.ChildPolicy.Config, childName, err)

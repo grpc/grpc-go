@@ -7513,3 +7513,142 @@ func (s) TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders(t *testing.T
 		})
 	}
 }
+
+// rpcEndStatsHandler signals done once the server-side RPC handler has called
+// WriteStatus (which invokes finishStream and sets s.state = streamDone) and
+// exited processRPC.
+type rpcEndStatsHandler struct {
+	done *grpcsync.Event
+}
+
+func (h *rpcEndStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+
+func (h *rpcEndStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
+	if _, ok := rs.(*stats.End); ok {
+		h.done.Fire()
+	}
+}
+
+func (h *rpcEndStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+func (h *rpcEndStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
+
+// readNextNonControlFrame reads the next HTTP/2 frame from st, skipping flow
+// control WINDOW_UPDATE frames and server-initiated (non-ACK) PING frames.
+func readNextNonControlFrame(st *serverTester) (http2.Frame, error) {
+	for {
+		f, err := st.readFrame()
+		if err != nil {
+			return nil, err
+		}
+		switch f := f.(type) {
+		case *http2.WindowUpdateFrame:
+			continue
+		case *http2.PingFrame:
+			if !f.IsAck() {
+				continue
+			}
+			return f, nil
+		default:
+			return f, nil
+		}
+	}
+}
+
+// Test verifies that a second DATA+END_STREAM frame sent on a stream that
+// has already transitioned to streamDone (while still in activeStreams due
+// to zero peer flow-control window) does not panic the server's HandleStreams
+// reader goroutine via a nil mem.Buffer Free() in recvBuffer.put().
+func (s) TestDataFrameAfterStreamDone(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer lis.Close()
+
+	sh := &rpcEndStatsHandler{done: grpcsync.NewEvent()}
+	srv := grpc.NewServer(grpc.StatsHandler(sh))
+	healthgrpc.RegisterHealthServer(srv, health.NewServer())
+	go srv.Serve(lis)
+	defer srv.Stop()
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial server: %v", err)
+	}
+	defer conn.Close()
+
+	st := newServerTesterFromConn(t, conn)
+	// Advertise SETTINGS_INITIAL_WINDOW_SIZE = 0 so the unary response DATA
+	// frame and trailing HEADERS (cleanupStream) remain buffered in
+	// loopyWriter, keeping Stream in t.activeStreams after finishStream sets
+	// s.state = streamDone.
+	st.greetWithSettings(http2.Setting{
+		ID:  http2.SettingInitialWindowSize,
+		Val: 0,
+	})
+
+	// Open Stream 1 with initial HEADERS (EndStream=false) to invoke the
+	// unary Health/Check handler on the server.
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.health.v1.Health/Check",
+			":scheme", "http",
+			":authority", "localhost",
+			"content-type", "application/grpc",
+			"te", "trailers",
+		),
+		EndStream:  false,
+		EndHeaders: true,
+	})
+
+	// Send an empty request message (a 5-byte gRPC Length-Prefixed-Message
+	// header: Compressed-Flag=0, Message-Length=0) with EndStream=true. The
+	// message lets the unary handler run and produce a response DATA frame;
+	// EndStream half-closes the client side, setting s.buf.err = io.EOF and
+	// moving the server stream from streamActive to streamReadDone.
+	st.writeData(1, true, []byte{0, 0, 0, 0, 0})
+
+	// Read the server's initial response HEADERS frame.
+	f, err := readNextNonControlFrame(st)
+	if err != nil {
+		t.Fatalf("Error reading response HEADERS frame from server: %v", err)
+	}
+	if f.Header().Type != http2.FrameHeaders {
+		t.Fatalf("Received frame %v; want response HEADERS frame", f)
+	}
+
+	// Wait for the server's unary handler to finish, call finishStream
+	// (transitioning s.state from streamReadDone to streamDone), and exit.
+	select {
+	case <-sh.done.Done():
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timed out waiting for server unary handler to finish stream")
+	}
+
+	// Send a second DATA frame with EndStream=true on the same stream now that
+	// its state is streamDone (while still present in t.activeStreams).
+	// This triggers a second s.write(recvMsg{err: io.EOF}) with a nil buffer
+	// into recvBuffer.put() when b.err is already non-nil.
+	st.writeData(1, true, nil)
+
+	// Send a PING frame after the second DATA frame and verify the server's
+	// HandleStreams reader goroutine did not panic and replies with PING ACK.
+	pingData := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
+	if err := st.fr.WritePing(false, pingData); err != nil {
+		t.Fatalf("Error writing PING frame: %v", err)
+	}
+	f, err = readNextNonControlFrame(st)
+	if err != nil {
+		t.Fatalf("Error reading PING ACK frame from server: %v", err)
+	}
+	if pf, ok := f.(*http2.PingFrame); !ok || !pf.IsAck() || pf.Data != pingData {
+		t.Fatalf("Received frame %v; want PING ACK with data %v", f, pingData)
+	}
+}

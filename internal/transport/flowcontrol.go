@@ -33,12 +33,8 @@ type writeQuota struct {
 	// replenish writes on it when quota goes positive again.
 	ch chan struct{}
 	// done is triggered in error case.
-	done <-chan struct{}
-	// replenish is called by loopyWriter to give quota back to.
-	// It is implemented as a field so that it can be updated
-	// by tests.
-	replenish func(n int)
-	quota     int32
+	done  <-chan struct{}
+	quota int32
 }
 
 // init allows a writeQuota to be initialized in-place, which is useful for
@@ -48,7 +44,6 @@ func (w *writeQuota) init(sz int32, done <-chan struct{}) {
 	w.quota = sz
 	w.ch = make(chan struct{}, 1)
 	w.done = done
-	w.replenish = w.realReplenish
 }
 
 func (w *writeQuota) get(sz int32) error {
@@ -66,7 +61,8 @@ func (w *writeQuota) get(sz int32) error {
 	}
 }
 
-func (w *writeQuota) realReplenish(n int) {
+// replenish is called by loopyWriter to give quota back to the stream.
+func (w *writeQuota) replenish(n int) {
 	sz := int32(n)
 	newQuota := atomic.AddInt32(&w.quota, sz)
 	previousQuota := newQuota - sz

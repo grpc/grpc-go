@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -39,7 +40,6 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
-	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
@@ -257,18 +257,6 @@ type clientFilter struct {
 
 func (*clientFilter) Close() {}
 
-// sharesChannel reports whether two GrpcService configs may share a channel
-// to the external processor server: the same target with the same channel
-// and call credential identities. Timeout and initial metadata are applied
-// per-RPC and do not affect sharing; call credentials do, because Dial
-// attaches them to the channel.
-func sharesChannel(a, b *grpcservice.Config) bool {
-	targetEqual := a.TargetURI == b.TargetURI
-	channelCredsEqual := a.ChannelCredentials.Equal(b.ChannelCredentials)
-	callCredsEqual := slices.EqualFunc(a.CallCredentials, b.CallCredentials, (*xdscreds.CallCreds).Equal)
-	return targetEqual && channelCredsEqual && callCredsEqual
-}
-
 // getProcChannel returns an existing refcounted client for a channel-sharing
 // compatible GrpcService config if present and its refcount is incremented
 // successfully.
@@ -276,7 +264,7 @@ func (cf *clientFilter) getProcChannel(server *grpcservice.Config) *grpcsync.Ref
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
-		return sharesChannel(e.server, server) && e.rc.TryIncrement()
+		return httpfilter.SharesChannel(e.server, server) && e.rc.TryIncrement()
 	}); i != -1 {
 		return cf.procChannels[i].rc
 	}
@@ -291,7 +279,7 @@ func (cf *clientFilter) storeProcChannel(entry *procChannelEntry) *grpcsync.RefC
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
-		return sharesChannel(e.server, entry.server) && e.rc.TryIncrement()
+		return httpfilter.SharesChannel(e.server, entry.server) && e.rc.TryIncrement()
 	}); i != -1 {
 		return cf.procChannels[i].rc
 	}
@@ -428,6 +416,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		metricsRecorder:        i.metricsRecorder,
 		target:                 i.target,
 		clientHeadersStartTime: timeNow(),
+		defaultWindowSize:      iextproc.DefaultFlowControlWindowSize,
 		// Construct request attributes once during stream initialization to capture
 		// the original, unmutated request metadata and RPC info. For streaming
 		// RPCs, where stream creation and message transmission are separable,
@@ -499,8 +488,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		downstreamToSidestreamPositiveUpdateCh: make(chan struct{}, 1),
 		upstreamToSidestreamPositiveUpdateCh:   make(chan struct{}, 1),
 	}
-	cs.downstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
-	cs.upstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
+	cs.downstreamToSidestreamWindow.Store(cs.defaultWindowSize)
+	cs.upstreamToSidestreamWindow.Store(cs.defaultWindowSize)
 
 	// When request header processing is "Send", defer creating the dataplane
 	// stream until the external processor responds, because gRPC transmits
@@ -558,6 +547,7 @@ type commonStream struct {
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
 	clientHeadersStartTime time.Time // holds the start time of client headers processing for metrics and relative timestamp calculations
+	defaultWindowSize      int64     // initial flow control window size captured at stream creation
 
 	// onFinish stores OnFinishCallOption callbacks to execute if calling the
 	// delegate (newStream) fails or if the RPC fails before delegating.
@@ -644,10 +634,10 @@ func (cs *commonStream) newProcessingRequest(isClientMessage bool) *v3procservic
 		}
 		if !cs.config.observabilityMode {
 			req.FlowControlInit = &v3procservicepb.ProcessingRequest_FlowControlInit{
-				InitialWindowDownstreamToSidestream: iextproc.DefaultFlowControlWindowSize,
-				InitialWindowUpstreamToSidestream:   iextproc.DefaultFlowControlWindowSize,
-				InitialWindowSidestreamToUpstream:   iextproc.DefaultFlowControlWindowSize,
-				InitialWindowSidestreamToDownstream: iextproc.DefaultFlowControlWindowSize,
+				InitialWindowDownstreamToSidestream: cs.defaultWindowSize,
+				InitialWindowUpstreamToSidestream:   cs.defaultWindowSize,
+				InitialWindowSidestreamToUpstream:   cs.defaultWindowSize,
+				InitialWindowSidestreamToDownstream: cs.defaultWindowSize,
 			}
 		}
 	}
@@ -1175,7 +1165,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 		// standalone processing request with window update and clear the pending
 		// update.
 		if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
-			if cs.pendingRespWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+			if cs.pendingRespWindowUpdate.Add(bodySize) >= cs.defaultWindowSize/2 {
 				if err := cs.sendClientWindowUpdate(); err != nil {
 					return err
 				}
@@ -1455,7 +1445,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			// standalone processing request with window update and clear the pending
 			// update.
 			if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
-				if cs.pendingReqWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+				if cs.pendingReqWindowUpdate.Add(bodySize) >= cs.defaultWindowSize/2 {
 					if err := cs.sendClientWindowUpdate(); err != nil {
 						return
 					}
@@ -1513,33 +1503,13 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 		}
 
 		if windowUpdate := resp.GetServerWindowUpdate(); windowUpdate != nil {
-			deltaDownstreamToSidestream := windowUpdate.GetWindowIncrementDownstreamToSidestream()
-			if deltaDownstreamToSidestream != 0 {
-				// Add the window update to the existing window.
-				newQuota := cs.downstreamToSidestreamWindow.Add(deltaDownstreamToSidestream)
-				previousQuota := newQuota - deltaDownstreamToSidestream
-				// If the window turned from negative to positive, send a signal to the
-				// `acquireDownstreamToSidestreamWindow` function to wake it up.
-				if previousQuota <= 0 && newQuota > 0 {
-					select {
-					case cs.downstreamToSidestreamPositiveUpdateCh <- struct{}{}:
-					default:
-					}
-				}
+			if err := applyServerWindowUpdate(&cs.downstreamToSidestreamWindow, cs.downstreamToSidestreamPositiveUpdateCh, windowUpdate.GetWindowIncrementDownstreamToSidestream()); err != nil {
+				cs.failProcStream(fmt.Errorf("external processor sent an invalid downstream-to-sidestream window update: %v", err))
+				return
 			}
-			deltaUpstreamToSidestream := windowUpdate.GetWindowIncrementUpstreamToSidestream()
-			if deltaUpstreamToSidestream != 0 {
-				// Add the window update to the existing window.
-				newQuota := cs.upstreamToSidestreamWindow.Add(deltaUpstreamToSidestream)
-				previousQuota := newQuota - deltaUpstreamToSidestream
-				// If the window turned from negative to positive, send a signal to the
-				// `acquireUpstreamToSidestreamWindow` function to wake it up.
-				if previousQuota <= 0 && newQuota > 0 {
-					select {
-					case cs.upstreamToSidestreamPositiveUpdateCh <- struct{}{}:
-					default:
-					}
-				}
+			if err := applyServerWindowUpdate(&cs.upstreamToSidestreamWindow, cs.upstreamToSidestreamPositiveUpdateCh, windowUpdate.GetWindowIncrementUpstreamToSidestream()); err != nil {
+				cs.failProcStream(fmt.Errorf("external processor sent an invalid upstream-to-sidestream window update: %v", err))
+				return
 			}
 		}
 
@@ -2054,6 +2024,44 @@ func (cs *clientStream) waitForTrailerProcessing(recvErr error) error {
 		return cs.streamError()
 	case <-cs.ctx.Done():
 		return cs.streamError()
+	}
+}
+
+// applyServerWindowUpdate adds a flow control window increment received from
+// the external processor to window, waking a blocked acquirer if the window
+// becomes positive. The increment may be negative: the ext_proc spec allows a
+// server to shrink the window, in which case senders block until later
+// updates bring it back above zero. The increment is server-controlled
+// though, so one that would wrap the int64 window in either direction is a
+// protocol error and returns one instead of corrupting the accounting. This
+// recv loop is the only writer that grows the window, so the compare-and-swap
+// only contends with a concurrent deduction in
+// acquire{Downstream,Upstream}ToSidestreamWindow.
+func applyServerWindowUpdate(window *atomic.Int64, positiveUpdateCh chan struct{}, delta int64) error {
+	if delta == 0 {
+		return nil
+	}
+	for {
+		previousQuota := window.Load()
+		if delta > 0 && previousQuota > math.MaxInt64-delta {
+			return fmt.Errorf("window increment %d overflows the current window %d", delta, previousQuota)
+		}
+		if delta < 0 && previousQuota < math.MinInt64-delta {
+			return fmt.Errorf("window increment %d underflows the current window %d", delta, previousQuota)
+		}
+		newQuota := previousQuota + delta
+		if !window.CompareAndSwap(previousQuota, newQuota) {
+			continue
+		}
+		// If the window turned from non-positive to positive, wake the acquirer
+		// blocked in acquire{Downstream,Upstream}ToSidestreamWindow.
+		if previousQuota <= 0 && newQuota > 0 {
+			select {
+			case positiveUpdateCh <- struct{}{}:
+			default:
+			}
+		}
+		return nil
 	}
 }
 

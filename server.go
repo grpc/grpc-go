@@ -185,16 +185,19 @@ type serverOptions struct {
 	streamWrapper         func(ServerStream) (ServerStream, error)
 }
 
-var defaultServerOptions = serverOptions{
-	maxConcurrentStreams:  math.MaxUint32,
-	maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
-	maxSendMessageSize:    defaultServerMaxSendMessageSize,
-	connectionTimeout:     120 * time.Second,
-	writeBufferSize:       defaultWriteBufSize,
-	sharedWriteBuffer:     true,
-	readBufferSize:        defaultReadBufSize,
-	bufferPool:            mem.DefaultBufferPool(),
+func defaultServerOptions() serverOptions {
+	return serverOptions{
+		maxConcurrentStreams:  math.MaxUint32,
+		maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
+		maxSendMessageSize:    defaultServerMaxSendMessageSize,
+		connectionTimeout:     120 * time.Second,
+		writeBufferSize:       defaultWriteBufSize,
+		sharedWriteBuffer:     true,
+		readBufferSize:        defaultReadBufSize,
+		bufferPool:            mem.DefaultBufferPool(),
+	}
 }
+
 var globalServerOptions []ServerOption
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
@@ -710,7 +713,7 @@ func (s *Server) initServerWorkers() {
 // NewServer creates a gRPC server which has no service registered and has not
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
-	opts := defaultServerOptions
+	opts := defaultServerOptions()
 	for _, o := range globalServerOptions {
 		o.apply(&opts)
 	}

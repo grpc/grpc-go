@@ -28,20 +28,24 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/autosharding"
 	"google.golang.org/grpc/balancer/leastrequest"
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/envconfig"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdslbregistry"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
+	v3autoshardingpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/autosharding/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
@@ -58,6 +62,7 @@ func init() {
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.least_request.v3.LeastRequest", convertLeastRequestProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/udpa.type.v1.TypedStruct", convertV1TypedStructToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/xds.type.v3.TypedStruct", convertV3TypedStructToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.autosharding.v3.Autosharding", convertAutoshardingProtoToServiceConfig)
 }
 
 const (
@@ -66,7 +71,7 @@ const (
 	defaultLeastRequestChoiceCount = 2
 )
 
-func convertRingHashProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+func convertRingHashProtoToServiceConfig(rawProto []byte, _ int, _ xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
 	rhProto := &v3ringhashpb.RingHash{}
 	if err := proto.Unmarshal(rawProto, rhProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -92,14 +97,14 @@ func convertRingHashProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessag
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", rhCfg, err)
 	}
-	return makeBalancerConfigJSON(ringhash.Name, rhCfgJSON), nil
+	return lbConfigResult(ringhash.Name, rhCfgJSON), nil
 }
 
 type pfConfig struct {
-	ShuffleAddressList bool `json:"shuffleAddressList"`
+	ShuffleAddressList bool `json:"shuffleAddressList,omitempty"`
 }
 
-func convertPickFirstProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+func convertPickFirstProtoToServiceConfig(rawProto []byte, _ int, _ xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
 	pfProto := &v3pickfirstpb.PickFirst{}
 	if err := proto.Unmarshal(rawProto, pfProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -110,38 +115,41 @@ func convertPickFirstProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessa
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", pfCfg, err)
 	}
-	return makeBalancerConfigJSON(pickfirst.Name, js), nil
+	return lbConfigResult(pickfirst.Name, js), nil
 }
 
-func convertRoundRobinProtoToServiceConfig([]byte, int) (json.RawMessage, error) {
-	return makeBalancerConfigJSON(roundrobin.Name, json.RawMessage("{}")), nil
+func convertRoundRobinProtoToServiceConfig([]byte, int, xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
+	return lbConfigResult(roundrobin.Name, json.RawMessage("{}")), nil
 }
 
 type wrrLocalityLBConfig struct {
 	ChildPolicy json.RawMessage `json:"childPolicy,omitempty"`
 }
 
-func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
+func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int, opts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
 	wrrlProto := &v3wrrlocalitypb.WrrLocality{}
 	if err := proto.Unmarshal(rawProto, wrrlProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	epJSON, err := xdslbregistry.ConvertToServiceConfig(wrrlProto.GetEndpointPickingPolicy(), depth+1)
+	epRes, err := xdslbregistry.ConvertToServiceConfig(wrrlProto.GetEndpointPickingPolicy(), depth+1, opts)
 	if err != nil {
 		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, wrrlProto)
 	}
 	wrrLCfg := wrrLocalityLBConfig{
-		ChildPolicy: epJSON,
+		ChildPolicy: epRes.LBConfig,
 	}
 
 	lbCfgJSON, err := json.Marshal(wrrLCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLCfg, err)
 	}
-	return makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON), nil
+	return &xdslbregistry.ConverterResult{
+		LBConfig:     fmt.Appendf(nil, `[{%q: %s}]`, wrrlocality.Name, lbCfgJSON),
+		GRPCServices: epRes.GRPCServices, // Propagate the GrpcServices found in the endpoint picking policy.
+	}, nil
 }
 
-func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, _ int, _ xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
 	cswrrProto := &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{}
 	if err := proto.Unmarshal(rawProto, cswrrProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -172,10 +180,10 @@ func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, _ int) (json
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBCfg, err)
 	}
-	return makeBalancerConfigJSON(weightedroundrobin.Name, lbCfgJSON), nil
+	return lbConfigResult(weightedroundrobin.Name, lbCfgJSON), nil
 }
 
-func convertLeastRequestProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+func convertLeastRequestProtoToServiceConfig(rawProto []byte, _ int, _ xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
 	lrProto := &v3leastrequestpb.LeastRequest{}
 	if err := proto.Unmarshal(rawProto, lrProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -192,10 +200,10 @@ func convertLeastRequestProtoToServiceConfig(rawProto []byte, _ int) (json.RawMe
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", lrCfg, err)
 	}
-	return makeBalancerConfigJSON(leastrequest.Name, js), nil
+	return lbConfigResult(leastrequest.Name, js), nil
 }
 
-func convertV1TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+func convertV1TypedStructToServiceConfig(rawProto []byte, _ int, _ xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
 	tsProto := &v1xdsudpatypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -203,7 +211,7 @@ func convertV1TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessag
 	return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 }
 
-func convertV3TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+func convertV3TypedStructToServiceConfig(rawProto []byte, _ int, _ xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
 	tsProto := &v3xdsxdstypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -212,12 +220,14 @@ func convertV3TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessag
 }
 
 // convertCustomPolicy attempts to prepare json configuration for a custom lb
-// proto, which specifies the gRPC balancer type and configuration. Returns the
-// converted json and an error which should cause caller to error if error
-// converting. If both json and error returned are nil, it means the gRPC
-// Balancer registry does not contain that balancer type, and the caller should
-// continue to the next policy.
-func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, error) {
+// proto, which specifies the gRPC balancer type and configuration.
+//
+// Returns a ConverterResult containing the converted JSON configuration for the
+// custom LB policy when conversion succeeds, or an error if conversion fails.
+//
+// Returns (nil, nil) if the balancer type is not found in the gRPC Balancer
+// registry and the caller should continue to the next policy.
+func convertCustomPolicy(typeURL string, s *structpb.Struct) (*xdslbregistry.ConverterResult, error) {
 	// The gRPC policy name will be the "type name" part of the value of the
 	// type_url field in the TypedStruct. We get this by using the part after
 	// the last / character. Can assume a valid type_url from the control plane.
@@ -235,7 +245,7 @@ func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, e
 
 	// The Struct contained in the TypedStruct will be returned as-is as the
 	// configuration JSON object.
-	return makeBalancerConfigJSON(name, rawJSON), nil
+	return lbConfigResult(name, rawJSON), nil
 }
 
 type wrrLBConfig struct {
@@ -247,6 +257,56 @@ type wrrLBConfig struct {
 	ErrorUtilizationPenalty float64                        `json:"errorUtilizationPenalty,omitempty"`
 }
 
-func makeBalancerConfigJSON(name string, value json.RawMessage) []byte {
-	return []byte(fmt.Sprintf(`[{%q: %s}]`, name, value))
+// lbConfigResult returns a ConverterResult containing only the JSON
+// configuration for the gRPC LB policy with the given name and configuration.
+func lbConfigResult(name string, value json.RawMessage) *xdslbregistry.ConverterResult {
+	return &xdslbregistry.ConverterResult{LBConfig: fmt.Appendf(nil, `[{%q: %s}]`, name, value)}
+}
+
+func convertAutoshardingProtoToServiceConfig(rawProto []byte, _ int, opts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
+	if !envconfig.XDSAutoshardingEnabled {
+		// As per the docstring on the Converter type, an unsupported policy
+		// must return (nil, nil).
+		return nil, nil
+	}
+
+	asProto := &v3autoshardingpb.Autosharding{}
+	if err := proto.Unmarshal(rawProto, asProto); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal autosharding LB config proto: %v", err)
+	}
+	gs := asProto.GetGrpcService()
+	if gs == nil {
+		return nil, fmt.Errorf("grpc_service field is required in autosharding LB config")
+	}
+	gsCfg, err := grpcservice.Parse(gs, opts.BootstrapConfig, opts.ServerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing grpc_service field in autosharding LB config: %v", err)
+	}
+
+	channelFactoryKey := gsCfg.Key()
+	lbCfg := &autosharding.LBConfig{
+		ChannelFactoryKey:  channelFactoryKey,
+		AutoShardingTarget: asProto.GetAutoshardingTarget(),
+		KeyHeaderName:      asProto.GetKeyHeaderName(),
+		EnableFallback:     asProto.GetEnableFallback(),
+	}
+	if timeout := asProto.GetInitialAssignmentTimeout(); timeout != nil {
+		if err := timeout.CheckValid(); err != nil {
+			return nil, fmt.Errorf("invalid initial_assignment_timeout field in autosharding LB config: %v", err)
+		}
+
+		dur := timeout.AsDuration()
+		if dur <= 0 {
+			return nil, fmt.Errorf("initial_assignment_timeout field in autosharding LB config must be strictly positive, got %v", dur)
+		}
+		lbCfg.InitialAssignmentTimeout = internalserviceconfig.Duration(dur)
+	}
+
+	lbCfgJSON, err := json.Marshal(lbCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", lbCfg, err)
+	}
+	res := lbConfigResult(autosharding.Name, lbCfgJSON)
+	res.GRPCServices = map[string]*grpcservice.Config{channelFactoryKey: gsCfg}
+	return res, nil
 }
