@@ -25,10 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/grpclog"
-	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/internal/backoff"
+	igrpclog "google.golang.org/grpc/internal/xds/clients/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients/internal/pretty"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
 
@@ -127,7 +126,7 @@ type adsStreamOpts struct {
 	backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto          *v3corepb.Node          // Node proto to identify the gRPC application.
 	watchExpiryTimeout time.Duration           // Resource watch expiry timeout.
-	logPrefix          string                  // Prefix to be used for log messages.
+	logger             *igrpclog.PrefixLogger  // Logger for the channel.
 }
 
 // newADSStreamImpl initializes a new adsStreamImpl instance using the given
@@ -148,8 +147,7 @@ func newADSStreamImpl(opts adsStreamOpts) *adsStreamImpl {
 		resourceTypeState: make(map[ResourceType]*resourceTypeState),
 	}
 
-	l := grpclog.Component("xds")
-	s.logger = igrpclog.NewPrefixLogger(l, opts.logPrefix+fmt.Sprintf("[ads-stream %p] ", s))
+	s.logger = opts.logger.WithPrefix(fmt.Sprintf("[ads-stream %p] ", s))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel

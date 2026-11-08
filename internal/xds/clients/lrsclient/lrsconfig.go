@@ -19,6 +19,7 @@
 package lrsclient
 
 import (
+	"log/slog"
 	"time"
 
 	"google.golang.org/grpc/internal/xds/clients"
@@ -42,4 +43,8 @@ type Config struct {
 	//
 	// If unset or non-positive, defaults to 1s.
 	MinLoadReportingInterval time.Duration
+
+	// Logger is the slog.Logger to be used by the LRSClient for logging. If nil,
+	// logs will be discarded.
+	Logger *slog.Logger
 }

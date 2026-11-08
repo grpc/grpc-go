@@ -19,7 +19,10 @@
 package xdsclient
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 
 	"google.golang.org/grpc/credentials/insecure"
@@ -125,4 +128,71 @@ func (s) TestXDSClient_Close(t *testing.T) {
 	c.Close()
 	// Calling close again should not panic.
 	c.Close()
+}
+
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (s) TestXDSClient_Logging(t *testing.T) {
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+
+	t.Run("custom_logger", func(t *testing.T) {
+		var buf syncBuffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo - 2}))
+		config := Config{
+			Node:             clients.Node{ID: "node-id"},
+			ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+			TransportBuilder: grpctransport.NewBuilder(configs),
+			Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+			Logger:           logger,
+		}
+		c, err := New(config)
+		if err != nil {
+			t.Fatalf("New(%+v) failed: %v", config, err)
+		}
+		c.Close()
+		// Registering a watch on a closed client logs a warning via c.logger.
+		c.WatchResource(xdsresource.V3ListenerURL, "listener-name", nil)
+
+		got := buf.String()
+		for _, want := range []string{
+			"[xds-client ",
+			`[authority \"\"] Closed`,
+			"Shutdown",
+			`Watch registered for type \"type.googleapis.com/envoy.config.listener.v3.Listener\", but client is closed`,
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("log output %q does not contain %q", got, want)
+			}
+		}
+	})
+
+	t.Run("nil_logger", func(t *testing.T) {
+		config := Config{
+			Node:             clients.Node{ID: "node-id"},
+			ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+			TransportBuilder: grpctransport.NewBuilder(configs),
+			Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+		}
+		c, err := New(config)
+		if err != nil {
+			t.Fatalf("New(%+v) failed: %v", config, err)
+		}
+		c.Close()
+		c.WatchResource(xdsresource.V3ListenerURL, "listener-name", nil)
+	})
 }
