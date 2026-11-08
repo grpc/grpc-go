@@ -61,7 +61,9 @@ var (
 )
 
 func init() {
-	xdsclientinternal.StreamBackoff = defaultExponentialBackoff
+	xdsclientinternal.SetStreamBackoffForTesting = func(cfg *Config, streamBackoff func(int) time.Duration) {
+		cfg.backoff = streamBackoff
+	}
 	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
 }
 
@@ -112,6 +114,9 @@ func New(config Config) (*XDSClient, error) {
 	if config.WatchExpiryTimeout == 0 {
 		config.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
+	if config.backoff == nil {
+		config.backoff = defaultExponentialBackoff
+	}
 	client, err := newClient(&config, name)
 	if err != nil {
 		return nil, err
@@ -133,7 +138,7 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 		authorities:        make(map[string]*authority),
 		config:             config,
 		watchExpiryTimeout: config.WatchExpiryTimeout,
-		backoff:            xdsclientinternal.StreamBackoff,
+		backoff:            config.backoff,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
 		transportBuilder:   config.TransportBuilder,
