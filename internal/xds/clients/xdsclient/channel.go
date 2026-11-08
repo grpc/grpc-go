@@ -245,7 +245,6 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 		Timestamp: timestamp,
 	}
 	opts := &DecodeOptions{
-		Config:       xc.clientConfig,
 		ServerConfig: xc.serverConfig,
 	}
 
