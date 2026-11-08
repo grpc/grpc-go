@@ -25,9 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"google.golang.org/grpc/grpclog"
-	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients"
+	igrpclog "google.golang.org/grpc/internal/xds/clients/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients/internal/syncutil"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/metrics"
@@ -123,7 +122,7 @@ type authorityBuildOptions struct {
 	name             string                       // Name of the authority
 	serializer       *syncutil.CallbackSerializer // Callback serializer for invoking watch callbacks
 	getChannelForADS xdsChannelForADS             // Function to acquire a reference to an xdsChannel
-	logPrefix        string                       // Prefix for logging
+	logger           *igrpclog.PrefixLogger       // Logger for the client
 	target           string                       // Target for the gRPC Channel that owns xDS Client/Authority
 	metricsReporter  clients.MetricsReporter      // Metrics reporter for the authority
 }
@@ -139,15 +138,13 @@ type authorityBuildOptions struct {
 // is registered, and more channels are created as needed by the fallback logic.
 func newAuthority(args authorityBuildOptions) *authority {
 	ctx, cancel := context.WithCancel(context.Background())
-	l := grpclog.Component("xds")
-	logPrefix := args.logPrefix + fmt.Sprintf("[authority %q] ", args.name)
 	ret := &authority{
 		name:                      args.name,
 		watcherCallbackSerializer: args.serializer,
 		getChannelForADS:          args.getChannelForADS,
 		xdsClientSerializer:       syncutil.NewCallbackSerializer(ctx),
 		xdsClientSerializerClose:  cancel,
-		logger:                    igrpclog.NewPrefixLogger(l, logPrefix),
+		logger:                    args.logger.WithPrefix(fmt.Sprintf("[authority %q] ", args.name)),
 		resources:                 make(map[ResourceType]map[string]*resourceState),
 		target:                    args.target,
 		metricsReporter:           args.metricsReporter,
@@ -183,7 +180,7 @@ func (a *authority) adsStreamFailure(serverConfig *ServerConfig, err error) {
 // Only executed in the context of a serializer callback.
 func (a *authority) handleADSStreamFailure(serverConfig *ServerConfig, err error) {
 	if a.logger.V(2) {
-		a.logger.Infof("Connection to server %s failed with error: %v", serverConfig, err)
+		a.logger.Infof("Connection to server %v failed with error: %v", serverConfig, err)
 	}
 
 	// We do not consider it an error if the ADS stream was closed after having
@@ -272,12 +269,12 @@ func (a *authority) serverIndexForConfig(sc *ServerConfig) int {
 // Only executed in the context of a serializer callback.
 func (a *authority) fallbackToServer(xc *xdsChannelWithConfig) bool {
 	if a.logger.V(2) {
-		a.logger.Infof("Attempting to initiate fallback to server %q", xc.serverConfig)
+		a.logger.Infof("Attempting to initiate fallback to server %v", xc.serverConfig)
 	}
 
 	if xc.channel != nil {
 		if a.logger.V(2) {
-			a.logger.Infof("Channel to the next server in the list %q already exists", xc.serverConfig)
+			a.logger.Infof("Channel to the next server in the list %v already exists", xc.serverConfig)
 		}
 		return false
 	}
@@ -590,12 +587,12 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *ServerConfig)
 	activeServerIdx := a.serverIndexForConfig(a.activeXDSChannel.serverConfig)
 	if activeServerIdx < serverIdx {
 		if a.logger.V(2) {
-			a.logger.Infof("Ignoring update from lower priority server [%d] %q", serverIdx, serverConfig)
+			a.logger.Infof("Ignoring update from lower priority server [%d] %v", serverIdx, serverConfig)
 		}
 		return false
 	}
 	if a.logger.V(2) {
-		a.logger.Infof("Received update from higher priority server [%d] %q", serverIdx, serverConfig)
+		a.logger.Infof("Received update from higher priority server [%d] %v", serverIdx, serverConfig)
 	}
 
 	// At this point, we are guaranteed that we have received a response from a
@@ -631,7 +628,7 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *ServerConfig)
 		// Release the reference to the channel.
 		if cfg.cleanup != nil {
 			if a.logger.V(2) {
-				a.logger.Infof("Closing lower priority server [%d] %q", i, cfg.serverConfig)
+				a.logger.Infof("Closing lower priority server [%d] %v", i, cfg.serverConfig)
 			}
 			cfg.cleanup()
 			cfg.cleanup = nil

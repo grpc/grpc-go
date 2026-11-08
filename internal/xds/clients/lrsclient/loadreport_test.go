@@ -19,8 +19,11 @@
 package lrsclient_test
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -727,4 +730,84 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer ssCancel()
 	loadStore1.Stop(ssCtx)
+}
+
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (s) TestLRSClient_Logging(t *testing.T) {
+	lrsServer, sCleanup, err := fakeserver.StartServer(nil)
+	if err != nil {
+		t.Fatalf("Failed to start fake LRS server: %v", err)
+	}
+	defer sCleanup()
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	si := clients.ServerIdentifier{
+		ServerURI:  lrsServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+
+	t.Run("custom_logger", func(t *testing.T) {
+		var buf syncBuffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo - 2}))
+		client, err := lrsclient.New(lrsclient.Config{
+			Node:             clients.Node{ID: uuid.New().String()},
+			TransportBuilder: grpctransport.NewBuilder(configs),
+			Logger:           logger,
+		})
+		if err != nil {
+			t.Fatalf("lrsclient.New() failed: %v", err)
+		}
+		ls, err := client.ReportLoad(si)
+		if err != nil {
+			t.Fatalf("client.ReportLoad(%v) failed: %v", si, err)
+		}
+		shortCtx, shortCancel := context.WithTimeout(context.Background(), time.Millisecond)
+		defer shortCancel()
+		ls.Stop(shortCtx)
+
+		got := buf.String()
+		for _, want := range []string{
+			"[lrs-client ",
+			"Creating a new lrs stream for server identifier",
+			"[lrs-stream ",
+			"Stopping LRS stream",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("log output %q does not contain %q", got, want)
+			}
+		}
+	})
+
+	t.Run("nil_logger", func(t *testing.T) {
+		client, err := lrsclient.New(lrsclient.Config{
+			Node:             clients.Node{ID: uuid.New().String()},
+			TransportBuilder: grpctransport.NewBuilder(configs),
+		})
+		if err != nil {
+			t.Fatalf("lrsclient.New() failed: %v", err)
+		}
+		ls, err := client.ReportLoad(si)
+		if err != nil {
+			t.Fatalf("client.ReportLoad(%v) failed: %v", si, err)
+		}
+		shortCtx, shortCancel := context.WithTimeout(context.Background(), time.Millisecond)
+		defer shortCancel()
+		ls.Stop(shortCtx)
+	})
 }

@@ -19,8 +19,10 @@
 package xdsclient
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"sync"
 	"testing"
@@ -30,6 +32,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -360,4 +363,32 @@ func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
 	if len(dialOpts) != 1 {
 		t.Errorf("Got %d dial options, want 1", len(dialOpts))
 	}
+}
+
+func (s) TestGrpclogHandler(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	c := &clientImpl{}
+	sLogger := slogLogger(prefixLogger(c))
+
+	if !sLogger.Enabled(ctx, slog.LevelInfo) {
+		t.Errorf("sLogger.Enabled(LevelInfo) = false, want true")
+	}
+	if !sLogger.Enabled(ctx, slog.LevelWarn) {
+		t.Errorf("sLogger.Enabled(LevelWarn) = false, want true")
+	}
+	if !sLogger.Enabled(ctx, slog.LevelError) {
+		t.Errorf("sLogger.Enabled(LevelError) = false, want true")
+	}
+	if sLogger.Enabled(ctx, slog.LevelInfo-2) {
+		t.Errorf("sLogger.Enabled(LevelInfo-2) = true, want false")
+	}
+
+	grpctest.ExpectWarning(`\[xds-client 0x[0-9a-f]+\] test warn 100%`)
+	grpctest.ExpectError(`\[xds-client 0x[0-9a-f]+\] test error %s`)
+
+	sLogger.Info("test info 50%")
+	sLogger.Warn("test warn 100%")
+	sLogger.Error("test error %s")
 }
