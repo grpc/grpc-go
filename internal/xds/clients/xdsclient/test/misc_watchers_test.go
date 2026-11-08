@@ -43,6 +43,8 @@ import (
 // testLDSWatcher is a test watcher that registers two watches corresponding to
 // the names passed in at creation time on a valid update.
 type testLDSWatcher struct {
+	xdsclient.UnimplementedResourceWatcher
+
 	client           *xdsclient.XDSClient
 	name1, name2     string
 	lw1, lw2         *listenerWatcher
@@ -465,7 +467,9 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 
 // erroringTransportBuilder is a transport builder which always returns a nil
 // transport along with an error.
-type erroringTransportBuilder struct{}
+type erroringTransportBuilder struct {
+	clients.UnimplementedTransportBuilder
+}
 
 func (*erroringTransportBuilder) Build(_ clients.ServerIdentifier) (clients.Transport, error) {
 	return nil, fmt.Errorf("failed to create transport")

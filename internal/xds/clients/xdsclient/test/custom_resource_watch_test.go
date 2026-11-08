@@ -45,7 +45,9 @@ var customTestResourceType = xdsclient.ResourceType{
 	Decoder:                    customTestDecoder{},
 }
 
-type customTestDecoder struct{}
+type customTestDecoder struct {
+	xdsclient.UnimplementedDecoder
+}
 
 func (customTestDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	any := resource.ToAny()
@@ -95,6 +97,8 @@ func (c *customTestResourceData) Bytes() []byte {
 
 // customTestWatcher is a watcher for the custom resource type.
 type customTestWatcher struct {
+	xdsclient.UnimplementedResourceWatcher
+
 	updateCh chan xdsclient.ResourceData
 	errCh    chan error
 }

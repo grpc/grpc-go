@@ -19,6 +19,7 @@ package lrsclient
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"sync"
 	"testing"
@@ -47,6 +48,12 @@ func verifyLoadStoreData(wantStoreData, gotStoreData []*loadData) error {
 		return fmt.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 	return nil
+}
+
+func TestConfigNonComparable(t *testing.T) {
+	if typ := reflect.TypeFor[Config](); typ.Comparable() {
+		t.Errorf("type %v is comparable, want non-comparable", typ)
+	}
 }
 
 // TestDrops spawns a bunch of goroutines which report drop data. After the

@@ -157,7 +157,9 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*listenerUpdate, err
 	return lu, nil
 }
 
-type listenerDecoder struct{}
+type listenerDecoder struct {
+	UnimplementedDecoder
+}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.

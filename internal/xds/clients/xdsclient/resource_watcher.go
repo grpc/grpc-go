@@ -30,6 +30,8 @@ package xdsclient
 // called, which can happen after the ResourceWatcher method has returned.
 // Failure to call done will prevent the xDS client from providing future
 // ResourceWatcher notifications.
+//
+// Implementations must embed UnimplementedResourceWatcher.
 type ResourceWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
 	ResourceChanged(resourceData ResourceData, done func())
@@ -45,4 +47,36 @@ type ResourceWatcher interface {
 	// purposes. The previous version of the resource should still be
 	// considered valid.
 	AmbientError(err error, done func())
+
+	mustEmbedUnimplementedResourceWatcher()
 }
+
+// UnimplementedResourceWatcher must be embedded to have forward compatible
+// implementations of ResourceWatcher.
+type UnimplementedResourceWatcher struct{}
+
+// ResourceChanged is a no-op implementation of
+// ResourceWatcher.ResourceChanged that invokes done if non-nil.
+func (UnimplementedResourceWatcher) ResourceChanged(_ ResourceData, done func()) {
+	if done != nil {
+		done()
+	}
+}
+
+// ResourceError is a no-op implementation of ResourceWatcher.ResourceError
+// that invokes done if non-nil.
+func (UnimplementedResourceWatcher) ResourceError(_ error, done func()) {
+	if done != nil {
+		done()
+	}
+}
+
+// AmbientError is a no-op implementation of ResourceWatcher.AmbientError that
+// invokes done if non-nil.
+func (UnimplementedResourceWatcher) AmbientError(_ error, done func()) {
+	if done != nil {
+		done()
+	}
+}
+
+func (UnimplementedResourceWatcher) mustEmbedUnimplementedResourceWatcher() {}

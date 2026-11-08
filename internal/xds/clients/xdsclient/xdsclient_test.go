@@ -19,6 +19,8 @@
 package xdsclient
 
 import (
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -125,4 +127,41 @@ func (s) TestXDSClient_Close(t *testing.T) {
 	c.Close()
 	// Calling close again should not panic.
 	c.Close()
+}
+
+func (s) TestNonComparableStructs(t *testing.T) {
+	types := []reflect.Type{
+		reflect.TypeFor[Config](),
+		reflect.TypeFor[Authority](),
+		reflect.TypeFor[DecodeOptions](),
+		reflect.TypeFor[DecodeResult](),
+	}
+	for _, typ := range types {
+		if typ.Comparable() {
+			t.Errorf("type %v is comparable, want non-comparable", typ)
+		}
+	}
+}
+
+func (s) TestUnimplementedDecoderAndWatcher(t *testing.T) {
+	var dec Decoder = UnimplementedDecoder{}
+	if _, err := dec.Decode(nil, DecodeOptions{}); err == nil {
+		t.Fatal("UnimplementedDecoder.Decode() succeeded, want error")
+	}
+	dec.mustEmbedUnimplementedDecoder()
+
+	var rw ResourceWatcher = UnimplementedResourceWatcher{}
+	var doneCalls int
+	done := func() { doneCalls++ }
+	rw.ResourceChanged(nil, done)
+	rw.ResourceError(errors.New("err"), done)
+	rw.AmbientError(errors.New("err"), done)
+	if doneCalls != 3 {
+		t.Fatalf("UnimplementedResourceWatcher invoked done %d times, want 3", doneCalls)
+	}
+	// Passing nil done should not panic.
+	rw.ResourceChanged(nil, nil)
+	rw.ResourceError(errors.New("err"), nil)
+	rw.AmbientError(errors.New("err"), nil)
+	rw.mustEmbedUnimplementedResourceWatcher()
 }

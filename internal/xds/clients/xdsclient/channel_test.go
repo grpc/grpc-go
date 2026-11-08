@@ -775,7 +775,9 @@ func (ta *testEventHandler) waitForResourceDoesNotExist(ctx context.Context) (Re
 	return typ, name, nil
 }
 
-type panicDecoder struct{}
+type panicDecoder struct {
+	UnimplementedDecoder
+}
 
 func (panicDecoder) Decode(*AnyProto, DecodeOptions) (*DecodeResult, error) {
 	panic("simulate panic")

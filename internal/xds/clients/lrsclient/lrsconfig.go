@@ -26,6 +26,8 @@ import (
 // LRS client's New function, no part of it may modified. A Config may be
 // reused; the lrsclient package will also not modify it.
 type Config struct {
+	_ [0]func() // Disallow struct comparison.
+
 	// Node is the identity of the client application reporting load to the
 	// LRS server.
 	Node clients.Node
