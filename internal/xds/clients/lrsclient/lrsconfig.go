@@ -42,4 +42,8 @@ type Config struct {
 	//
 	// If unset or non-positive, defaults to 1s.
 	MinLoadReportingInterval time.Duration
+
+	// backoff is the backoff function used to determine the backoff duration
+	// after LRS stream failures. Drawn from defaultExponentialBackoff if unset.
+	backoff func(int) time.Duration
 }

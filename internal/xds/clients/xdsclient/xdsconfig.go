@@ -83,6 +83,10 @@ type Config struct {
 	// seconds is used as specified here:
 	// envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol#knowing-when-a-requested-resource-does-not-exist
 	WatchExpiryTimeout time.Duration
+
+	// backoff is the backoff function used to determine the backoff duration
+	// after ADS stream failures. Drawn from defaultExponentialBackoff if unset.
+	backoff func(int) time.Duration
 }
 
 // ServerConfig contains configuration for an xDS management server.
