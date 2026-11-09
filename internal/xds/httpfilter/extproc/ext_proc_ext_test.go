@@ -5423,6 +5423,142 @@ func (s) TestFlowControl_DownstreamToSidestream_BypassUnblocks(t *testing.T) {
 	}
 }
 
+// TestFlowControl_DownstreamToSidestream_EndOfStreamUnblocks tests the scenario
+// where the external processor ends the request direction with end_of_stream
+// while a downstream send is blocked on window depletion. Verifies that the
+// blocked send unblocks, its message is discarded, and the RPC completes
+// normally.
+func (s) TestFlowControl_DownstreamToSidestream_EndOfStreamUnblocks(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
+	sendEndOfStream := make(chan struct{})
+
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive request header and respond with no mutations.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("expected request headers, got %v", req)
+		}
+		if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+			return err
+		}
+
+		// First large message
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestBody() == nil {
+			return fmt.Errorf("expected request body, got %v", req)
+		}
+
+		// Wait for signal to end the request direction by echoing the first
+		// message with end_of_stream set, without granting more window.
+		<-sendEndOfStream
+		if err := stream.Send(requestBodyResponseWithEOS(req.GetRequestBody().GetBody(), true)); err != nil {
+			return err
+		}
+		for {
+			if _, err := stream.Recv(); err != nil {
+				return nil
+			}
+		}
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{Body: in.GetPayload().GetBody()},
+				}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_NONE,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SKIP,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Send first message of size 120 bytes (overdrafts 100 window).
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 120)}}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+
+	// Send second message in background goroutine (must block).
+	sendDone := make(chan error, 1)
+	go func() {
+		sendDone <- stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("second-message")}})
+	}()
+
+	// Send should be blocked since the flow control window is negative.
+	select {
+	case <-sendDone:
+		t.Fatalf("Message sent unexpectedly when flow control window is negative")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// End the request direction.
+	close(sendEndOfStream)
+
+	// Verify second message unblocks and is discarded.
+	select {
+	case err := <-sendDone:
+		if err != nil {
+			t.Fatalf("stream.Send() failed after end_of_stream: %v", err)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for second message after end_of_stream")
+	}
+
+	// CloseSend and verify that only the first message reached the backend.
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+	resp, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if got, want := len(resp.GetPayload().GetBody()), 120; got != want {
+		t.Fatalf("Got response body of %d bytes, want %d", got, want)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want io.EOF", err)
+	}
+}
+
 // TestFlowControl_DownstreamToSidestream_StreamFailure tests the scenario where
 // the external processor stream encounters a failure while a downstream send is
 // blocked on flow control window depletion. Verifies that the blocked send
@@ -7361,6 +7497,100 @@ func (s) TestBidirectionalDraining_RequestDrainIgnoredAfterEOS(t *testing.T) {
 	}
 }
 
+// TestBidirectionalDraining_RequestDrainIgnoredWhenRequestBodyModeNone tests
+// the scenario where the external processor sends request_drain_requests while
+// the request body mode is NONE. It verifies that the filter ignores the drain
+// request and does not send a drain_complete message.
+func (s) TestBidirectionalDraining_RequestDrainIgnoredWhenRequestBodyModeNone(t *testing.T) {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive request headers.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("proc server got %v, want RequestHeaders", req)
+		}
+
+		// Respond to the request headers with RequestDrainRequests=true; the
+		// filter must ignore the drain request because request messages are not
+		// sent to the external processor.
+		resp := requestHeadersResponse(nil, nil)
+		resp.RequestDrainRequests = true
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+
+		// Verify the filter does not send a drain_complete message.
+		if msg, err := stream.Recv(); err != io.EOF {
+			return fmt.Errorf("proc server got %v (err: %v), want io.EOF", msg, err)
+		}
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			// Receive c1 (unprocessed by ExtProc since RequestBodyMode is NONE)
+			// and EOF from client, then send s1.
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if got, want := string(in.GetPayload().GetBody()), reqBodyC1; got != want {
+				return fmt.Errorf("backend server received unexpected request body %q, want %q", got, want)
+			}
+			if _, err := stream.Recv(); err != io.EOF {
+				return fmt.Errorf("backend server received unexpected error %v, want io.EOF", err)
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte(respBodyS1)},
+			})
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:    v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
+			ResponseBodyMode:   v3procfilterpb.ProcessingMode_NONE,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Receive s1 (unprocessed by ExtProc since ResponseBodyMode is NONE).
+	resp, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if got, want := string(resp.GetPayload().GetBody()), respBodyS1; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want io.EOF", err)
+	}
+}
+
 // TestBidirectionalDraining_ResponseDrainIgnoredAfterTrailers tests the scenario
 // where the external processor sends request_drain_responses after the filter
 // has already processed and sent response trailers. It verifies that the filter
@@ -7789,5 +8019,141 @@ func (s) TestBidirectionalDraining_EarlyRequestDrainWaitsForDrainComplete(t *tes
 		}
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for stream.Send() to complete")
+	}
+}
+
+// TestBidirectionalDraining_EndOfStreamDuringRequestDrain tests the scenario
+// where the external processor requests a request drain and then, instead of
+// sending drain_complete, echoes the last client message with end_of_stream
+// set while a client Send is blocked on the drain. Verifies that the blocked
+// message is discarded and the RPC completes normally.
+func (s) TestBidirectionalDraining_EndOfStreamDuringRequestDrain(t *testing.T) {
+	drainCompleteReceived := make(chan struct{})
+	sendEndOfStream := make(chan struct{})
+
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive c1 and initiate request drain.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestBody() == nil {
+			return fmt.Errorf("proc server got %v, want RequestBody", req)
+		}
+		if err := stream.Send(&v3procservicepb.ProcessingResponse{RequestDrainRequests: true}); err != nil {
+			return err
+		}
+
+		// Receive the filter's drain_complete.
+		drainReq, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if !drainReq.GetRequestBody().GetDrainComplete() {
+			return fmt.Errorf("proc server got %v, want RequestBody with DrainComplete=true", drainReq)
+		}
+		close(drainCompleteReceived)
+
+		// End the request direction by echoing c1 with end_of_stream set,
+		// instead of sending drain_complete.
+		<-sendEndOfStream
+		if err := stream.Send(requestBodyResponseWithEOS(req.GetRequestBody().GetBody(), true)); err != nil {
+			return err
+		}
+		for {
+			if _, err := stream.Recv(); err != nil {
+				return nil
+			}
+		}
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			// Receive c1 and the half-close; c2 is discarded by the filter.
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if got, want := string(in.GetPayload().GetBody()), reqBodyC1; got != want {
+				return fmt.Errorf("backend server received unexpected request body %q, want %q", got, want)
+			}
+			if _, err := stream.Recv(); err != io.EOF {
+				return fmt.Errorf("backend server received unexpected error %v, want io.EOF", err)
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte(respBodyS1)},
+			})
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
+			ResponseBodyMode:   v3procfilterpb.ProcessingMode_NONE,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Send c1, which triggers the request drain.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+	select {
+	case <-drainCompleteReceived:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for drain_complete on processor stream")
+	}
+
+	// c2 should be blocked because drain_complete has been sent by the filter,
+	// until the external processor ends the request direction.
+	sendDone := make(chan error, 1)
+	go func() {
+		sendDone <- stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC2)}})
+	}()
+	select {
+	case <-sendDone:
+		t.Fatal("stream.Send(c2) completed before the external processor ended the request direction")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// c2 is discarded once the external processor sends end_of_stream.
+	close(sendEndOfStream)
+	select {
+	case err := <-sendDone:
+		if err != nil {
+			t.Fatalf("stream.Send(c2) failed: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for stream.Send(c2) to complete")
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Receive s1 (unprocessed by ExtProc since ResponseBodyMode is NONE).
+	resp, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if got, want := string(resp.GetPayload().GetBody()), respBodyS1; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want io.EOF", err)
 	}
 }
