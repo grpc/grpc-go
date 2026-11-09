@@ -1131,7 +1131,7 @@ func (cs *clientStream) CloseSend() error {
 		err = s.CloseSend()
 		return err
 	}
-	// Discard the half close if the proc server responses with EOS before sendind
+	// Discard the half close if the proc server responses with EOS before sending
 	// to proc server.
 	if cs.discardRequests.Load() {
 		return nil
@@ -1500,14 +1500,6 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 				return
 			}
 
-			// If msgType is nil, it means no request body was sent to the proc
-			// server, but we received a request body message from it. Since no
-			// request body is sent, we cannot know the type of the request body
-			// message, and thus cannot unmarshal it.
-			if msgType == nil {
-				cs.failProcStream(fmt.Errorf("received request body message from proc server when no request body was sent"))
-				return
-			}
 			newMsg := msgType.New().Interface()
 			if err := proto.Unmarshal(streamedResp.GetBody(), newMsg); err != nil {
 				cs.failProcStream(err)
@@ -1654,23 +1646,7 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				cs.failProcStream(fmt.Errorf("external processor unexpectedly sent response body when response body processing is disabled"))
 				return
 			}
-			// If response headers have been sent and mutated response headers have
-			// not been received before receiving the response body message, fail the
-			// RPC.
-			if cs.responseHeaderSent.Load() && !cs.responseHeadersReady.HasFired() {
-				cs.failProcStream(fmt.Errorf("external processor sent response body before sending response headers"))
-				return
-			}
-
-			// If mutated response trailers have been received before receiving the
-			// response body message, fail the RPC.
-			if cs.config.processingModes.responseTrailerMode == modeSend && cs.responseTrailerReady.HasFired() {
-				cs.failProcStream(fmt.Errorf("external processor sent response body after response trailers were already processed"))
-				return
-			}
-
-			// If response body is received enev afetr response drain has been
-			// completed, fail the RPC.
+			// drain_complete is the last response-body message; nothing may follow it.
 			if cs.responseDrainComplete.HasFired() {
 				cs.failProcStream(fmt.Errorf("external processor sent response body after response drain completed"))
 				return
@@ -1688,9 +1664,24 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				cs.failProcStream(fmt.Errorf("external processor prematurely sent response drain complete"))
 				return
 			}
-			// drain_complete is the final response body response. Only forward it if it
-			// carries body data.
-			if !drainComplete || len(streamedResp.GetBody()) > 0 {
+
+			// A standalone drain_complete (no body) only acknowledges the filter's
+			// drain marker; it is not a server message, so it is exempt from header
+			// ordering. The marker can be sent before response headers exist (e.g.
+			// the drain was requested on the request-headers response), so its echo
+			// can arrive before them. Any body carrying data is a server message and,
+			// per gRFC A93, must come after response headers.
+			isStandaloneDrain := drainComplete && len(streamedResp.GetBody()) == 0
+			if !isStandaloneDrain && cs.config.processingModes.responseHeaderMode == modeSend && !cs.responseHeadersReady.HasFired() {
+				cs.failProcStream(fmt.Errorf("external processor sent response body before sending response headers"))
+				return
+			}
+			if cs.config.processingModes.responseTrailerMode == modeSend && cs.responseTrailerReady.HasFired() {
+				cs.failProcStream(fmt.Errorf("external processor sent response body after response trailers were already processed"))
+				return
+			}
+
+			if !isStandaloneDrain {
 				cs.mutatedRespBuffer.Put(streamedResp)
 			}
 			if drainComplete {

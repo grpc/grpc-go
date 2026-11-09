@@ -5441,7 +5441,7 @@ func (s) TestFlowControl_DownstreamToSidestream_EndOfStreamUnblocks(t *testing.T
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("proc server got %v, want RequestHeaders", req)
 		}
 		if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
 			return err
@@ -5453,7 +5453,7 @@ func (s) TestFlowControl_DownstreamToSidestream_EndOfStreamUnblocks(t *testing.T
 			return err
 		}
 		if req.GetRequestBody() == nil {
-			return fmt.Errorf("expected request body, got %v", req)
+			return fmt.Errorf("proc server got %v, want RequestBody", req)
 		}
 
 		// Wait for signal to end the request direction by echoing the first
@@ -7694,6 +7694,108 @@ func (s) TestBidirectionalDraining_ResponseDrainIgnoredAfterTrailers(t *testing.
 	}
 	if _, err := stream.Recv(); err != io.EOF {
 		t.Fatalf("stream.Recv() returned error: %v, want io.EOF", err)
+	}
+}
+
+// TestBidirectionalDraining_ResponseDrainIgnoredAfterTrailersOnly tests the
+// scenario where the external processor sends request_drain_responses in its
+// reply to a Trailers-Only response, i.e. after the response direction has
+// already ended on the ext_proc stream with response headers carrying
+// end_of_stream. It verifies that the filter ignores the drain request, does
+// not send a drain_complete message, and delivers the backend status with the
+// mutated trailers.
+func (s) TestBidirectionalDraining_ResponseDrainIgnoredAfterTrailersOnly(t *testing.T) {
+	const respHeaderModified = "resp-header-modified"
+
+	// The processor records in procErr whether the filter sent anything after
+	// the Trailers-Only response. The test waits for that verdict because a
+	// stray drain_complete may reach the processor after the RPC has completed.
+	var procErr error
+	procDone := make(chan struct{})
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(procDone)
+		// Receive the Trailers-Only response, sent as response headers with
+		// end_of_stream set.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if !req.GetResponseHeaders().GetEndOfStream() {
+			return fmt.Errorf("proc server got %v, want ResponseHeaders with EndOfStream=true", req)
+		}
+
+		// Reply with RequestDrainResponses=true; the filter must ignore the
+		// drain request because the response direction has already ended.
+		resp := responseHeadersResponse(map[string]string{respHeaderModified: "true"}, nil)
+		resp.RequestDrainResponses = true
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+
+		// Verify the filter does not send a drain_complete message.
+		if msg, err := stream.Recv(); err != io.EOF {
+			procErr = fmt.Errorf("proc server got %v (err: %v), want io.EOF", msg, err)
+			return procErr
+		}
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			// Wait for the client message, then fail to send a Trailers-Only
+			// response.
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+			return status.Error(codes.Aborted, "intentional backend failure")
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+
+	// Recv should return the backend's Aborted status.
+	if _, err := stream.Recv(); status.Code(err) != codes.Aborted {
+		t.Fatalf("stream.Recv() returned error: %v, want Aborted", err)
+	}
+	// Verify the mutated trailers.
+	if got := stream.Trailer().Get(respHeaderModified); len(got) != 1 || got[0] != "true" {
+		t.Fatalf("Client received %s = %v, want [true]", respHeaderModified, got)
+	}
+
+	// Wait for the external processor to verify that no drain_complete message
+	// was sent, even after the RPC completed.
+	select {
+	case <-procDone:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the external processor to finish")
+	}
+	if procErr != nil {
+		t.Fatalf("External processor failed: %v", procErr)
 	}
 }
 
