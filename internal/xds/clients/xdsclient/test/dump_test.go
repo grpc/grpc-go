@@ -58,7 +58,7 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 	}
 }
 
-func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse, client *xdsclient.XDSClient) error {
+func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse, client *xdsclient.Client) error {
 	var cmpOpts = cmp.Options{
 		protocmp.Transform(),
 		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
@@ -178,7 +178,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	}
 
 	// Register watches, dump resources and expect configs in requested state.
-	for _, xdsC := range []*xdsclient.XDSClient{client1, client2} {
+	for _, xdsC := range []*xdsclient.Client{client1, client2} {
 		for _, target := range ldsTargets {
 			xdsC.WatchResource(xdsresource.V3ListenerURL, target, noopListenerWatcher{})
 		}

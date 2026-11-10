@@ -51,7 +51,7 @@ func overrideStreamBackOff(t *testing.T, streamBackOff func(int) time.Duration) 
 }
 
 // Creates an xDS client with the given management server address, nodeID and backoff function.
-func createXDSClientWithBackoff(t *testing.T, mgmtServerAddress string, nodeID string, streamBackoff func(int) time.Duration) *xdsclient.XDSClient {
+func createXDSClientWithBackoff(t *testing.T, mgmtServerAddress string, nodeID string, streamBackoff func(int) time.Duration) *xdsclient.Client {
 	t.Helper()
 	overrideStreamBackOff(t, streamBackoff)
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
