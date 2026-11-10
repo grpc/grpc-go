@@ -974,11 +974,11 @@ type clientStream struct {
 	*commonStream
 
 	procStreamFailed      *grpcsync.Event // fired when external processor stream has closed and RPC should be failed
-	procStreamBypass      *grpcsync.Event // fired when the external processor stream should be bypassed or drained
+	procStreamBypass      *grpcsync.Event // fired when the external processor stream should be bypassed
 	procSendClosed        atomic.Bool     // ensures the external processor stream is half-closed at most once
-	requestDrainStarted   *grpcsync.Event // fired when client messages may no longer be sent to the external processor: it requested a drain, ended the request stream, or is bypassed
-	responseDrainStarted  *grpcsync.Event // fired when the external processor signals that server response should be bypassed or drained
-	requestDrainComplete  *grpcsync.Event // fired when the request direction is done: drain_complete or end_of_stream received, proc stream ended or bypassed
+	requestDrainStarted   *grpcsync.Event // fired when client messages may no longer be sent to the external processor i.e it requested a drain, ended the request stream, or is bypassed
+	responseDrainStarted  *grpcsync.Event // fired when the external processor requests a response drain (response body mode GRPC) or is bypassed; a drain stops response bodies and trailers from being sent to it, but not response headers
+	requestDrainComplete  *grpcsync.Event // fired when the request direction is done i.e drain_complete or end_of_stream received, proc stream ended or bypassed
 	responseDrainComplete *grpcsync.Event // fired when server-side drain complete response has been received
 	requestEOSSent        atomic.Bool
 	responseEOSSent       atomic.Bool // set when response trailers, or Trailers-Only response headers, are sent to the external processor
@@ -1665,14 +1665,12 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				return
 			}
 
-			// A standalone drain_complete (no body) only acknowledges the filter's
-			// drain marker; it is not a server message, so it is exempt from header
-			// ordering. The marker can be sent before response headers exist (e.g.
-			// the drain was requested on the request-headers response), so its echo
-			// can arrive before them. Any body carrying data is a server message and,
-			// per gRFC A93, must come after response headers.
-			isStandaloneDrain := drainComplete && len(streamedResp.GetBody()) == 0
-			if !isStandaloneDrain && cs.config.processingModes.responseHeaderMode == modeSend && !cs.responseHeadersReady.HasFired() {
+			// Per gRFC A93, response bodies must follow the response headers. The
+			// filter sends its drain marker only after the response headers, so
+			// any response body arriving before the external processor's headers
+			// reply, including a standalone drain_complete echo, violates that
+			// ordering.
+			if cs.config.processingModes.responseHeaderMode == modeSend && !cs.responseHeadersReady.HasFired() {
 				cs.failProcStream(fmt.Errorf("external processor sent response body before sending response headers"))
 				return
 			}
@@ -1681,6 +1679,10 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				return
 			}
 
+			// A standalone drain_complete (no body) only acknowledges the filter's
+			// drain marker. Forwarding it would inject a spurious empty message into
+			// the client stream.
+			isStandaloneDrain := drainComplete && len(streamedResp.GetBody()) == 0
 			if !isStandaloneDrain {
 				cs.mutatedRespBuffer.Put(streamedResp)
 			}
@@ -1827,7 +1829,8 @@ func (cs *clientStream) attachPendingWindowUpdates(req *v3procservicepb.Processi
 //     fires, it sends a drain_complete marker for that direction (unless the
 //     request body mode is not GRPC, EOS or trailers were already sent, or the
 //     external processor ended the request stream) and stops reading from the
-//     corresponding channel.
+//     corresponding channel. A response marker requested before the response
+//     headers are sent is deferred until right after them.
 //   - Half-close: When a nil sentinel arrives on controlSendCh, it half-closes
 //     the processor stream (CloseSend) and exits.
 //   - Bypass/Cancellation/Failure: It exits immediately if procStreamBypass or
@@ -1837,6 +1840,9 @@ func (cs *clientStream) sendToProcServerLoop() {
 	respDrainStarted := cs.responseDrainStarted.Done()
 	downstreamSendCh := cs.downstreamSendCh
 	upstreamSendCh := cs.upstreamSendCh
+	// Set when a response drain is requested before the response headers are
+	// sent. The response drain_complete marker is sent after sending the headers.
+	respDrainPending := false
 
 	sendReqDrainComplete := func() {
 		// Send no marker if request messages are not sent to the external processor
@@ -1890,7 +1896,10 @@ func (cs *clientStream) sendToProcServerLoop() {
 		// Once drain complete is sent, we will never send another message on this
 		// channel. So we can set respDrainStarted and upstreamSendCh to nil to stop
 		// listening on them. Same as above, this relies on upstreamSendCh being
-		// unbuffered and its senders selecting on responseDrainStarted.Done().
+		// unbuffered and its body and trailer senders selecting on
+		// responseDrainStarted.Done(). Its headers sender does not, but this
+		// only runs once the response headers have been sent, or if they are
+		// not sent to the external processor at all.
 		respDrainStarted = nil
 		upstreamSendCh = nil
 	}
@@ -1927,6 +1936,13 @@ func (cs *clientStream) sendToProcServerLoop() {
 					cs.failProcStream(err)
 				}
 			}
+			// Send the deferred response drain_complete marker right after the
+			// response headers. For Trailers-Only headers, sendRespDrainComplete
+			// sends no marker, because end_of_stream has already been sent.
+			if respDrainPending && req.GetResponseHeaders() != nil {
+				respDrainPending = false
+				sendRespDrainComplete()
+			}
 		case req := <-cs.controlSendCh:
 			if req == nil {
 				cs.procStream.CloseSend()
@@ -1942,7 +1958,21 @@ func (cs *clientStream) sendToProcServerLoop() {
 		case <-reqDrainStarted:
 			sendReqDrainComplete()
 		case <-respDrainStarted:
-			sendRespDrainComplete()
+			respDrainStarted = nil
+			// The drain_complete marker is a response body event, so it must follow
+			// the response headers. If they are yet to be sent, defer the marker
+			// until right after them, keeping upstreamSendCh open.
+			// initiateResponseHeaderProcessing blocks on upstreamSendCh until the
+			// headers are received here, and upstreamSendCh is only set to nil inside
+			// sendRespDrainComplete. No response body can be queued meanwhile,
+			// because responseForwardingToProcServerLoop only starts after the
+			// headers are handed off, and checks responseDrainStarted before every
+			// send.
+			if cs.config.processingModes.responseHeaderMode == modeSend && !cs.responseHeaderSent.Load() {
+				respDrainPending = true
+			} else {
+				sendRespDrainComplete()
+			}
 		case <-cs.procStreamBypass.Done():
 			return
 		case <-cs.procStreamFailed.Done():
@@ -2211,7 +2241,10 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 		}
 	}
 	cs.responseHeader = header
-	if cs.config.processingModes.responseHeaderMode != modeSend || cs.procStreamBypass.HasFired() || cs.responseDrainStarted.HasFired() {
+	// Response headers are sent even after request_drain_responses: a response
+	// drain covers only response bodies and trailers, and sendToProcServerLoop
+	// keeps upstreamSendCh open for the headers.
+	if cs.config.processingModes.responseHeaderMode != modeSend || cs.procStreamBypass.HasFired() {
 		// If header does not need to be sent to the external processor, unblock
 		// the functions waiting on header modifications.
 		cs.fireResponseHeadersReady()
@@ -2220,9 +2253,6 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 
 	select {
 	case cs.upstreamSendCh <- cs.responseHeaders(header):
-		return nil
-	case <-cs.responseDrainStarted.Done():
-		cs.fireResponseHeadersReady()
 		return nil
 	case <-cs.procStreamBypass.Done():
 		cs.fireResponseHeadersReady()
