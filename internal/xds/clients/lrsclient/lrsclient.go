@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clients"
 	clientsinternal "google.golang.org/grpc/internal/xds/clients/internal"
 	"google.golang.org/grpc/internal/xds/clients/internal/backoff"
+	lrsclientinternal "google.golang.org/grpc/internal/xds/clients/lrsclient/internal"
 )
 
 const (
@@ -42,6 +43,12 @@ const (
 var (
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
+
+func init() {
+	lrsclientinternal.SetStreamBackoffForTesting = func(cfg *Config, streamBackoff func(int) time.Duration) {
+		cfg.backoff = streamBackoff
+	}
+}
 
 // LRSClient is an LRS (Load Reporting Service) client.
 type LRSClient struct {
@@ -63,11 +70,14 @@ func New(config Config) (*LRSClient, error) {
 	if config.TransportBuilder == nil {
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
+	if config.backoff == nil {
+		config.backoff = defaultExponentialBackoff
+	}
 
 	c := &LRSClient{
 		transportBuilder: config.TransportBuilder,
 		node:             config.Node,
-		backoff:          defaultExponentialBackoff,
+		backoff:          config.backoff,
 		lrsStreams:       make(map[clients.ServerIdentifier]*streamImpl),
 		lrsRefs:          make(map[clients.ServerIdentifier]int),
 	}

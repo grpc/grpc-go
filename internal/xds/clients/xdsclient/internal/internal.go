@@ -18,12 +18,10 @@
 // Package internal contains functionality internal to the xdsclient package.
 package internal
 
-import "time"
-
 var (
-	// StreamBackoff is the stream backoff for xDS client. It can be overridden
-	// by tests to change the default backoff strategy.
-	StreamBackoff func(int) time.Duration
+	// SetStreamBackoffForTesting sets the stream backoff function on the given
+	// xdsclient.Config for testing purposes.
+	SetStreamBackoffForTesting any // func(*xdsclient.Config, func(int) time.Duration)
 
 	// ResourceWatchStateForTesting gets the watch state for the resource
 	// identified by the given resource type and resource name. Returns a

@@ -23,4 +23,8 @@ import "time"
 var (
 	// TimeNow is used to get the current time. It can be overridden in tests.
 	TimeNow func() time.Time
+
+	// SetStreamBackoffForTesting sets the stream backoff function on the given
+	// lrsclient.Config for testing purposes.
+	SetStreamBackoffForTesting any // func(*lrsclient.Config, func(int) time.Duration)
 )

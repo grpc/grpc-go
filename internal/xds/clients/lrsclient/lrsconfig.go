@@ -19,6 +19,8 @@
 package lrsclient
 
 import (
+	"time"
+
 	"google.golang.org/grpc/internal/xds/clients"
 )
 
@@ -32,4 +34,8 @@ type Config struct {
 
 	// TransportBuilder is used to connect to the LRS server.
 	TransportBuilder clients.TransportBuilder
+
+	// backoff is the backoff function used to determine the backoff duration
+	// after LRS stream failures. Drawn from defaultExponentialBackoff if unset.
+	backoff func(int) time.Duration
 }

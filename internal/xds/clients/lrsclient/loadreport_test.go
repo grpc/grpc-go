@@ -728,3 +728,85 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 	defer ssCancel()
 	loadStore1.Stop(ssCtx)
 }
+
+// TestReportLoad_BackoffAfterStreamFailure tests the case where the LRS server
+// returns an error on the LRS stream. It verifies that the LRS stream is
+// restarted after the per-client backoff configured on lrsclient.Config.
+func (s) TestReportLoad_BackoffAfterStreamFailure(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Create a management server that serves LRS.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+	backoffCh := make(chan struct{}, 1)
+	backoffCtx, backoffCancel := context.WithCancel(ctx)
+	defer backoffCancel()
+	streamBackoff := func(int) time.Duration {
+		select {
+		case backoffCh <- struct{}{}:
+		case <-backoffCtx.Done():
+		}
+		return 0
+	}
+
+	// Create an LRS client with a custom stream backoff on Config.
+	nodeID := uuid.New().String()
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	config := lrsclient.Config{
+		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+	}
+	lrsclientinternal.SetStreamBackoffForTesting.(func(*lrsclient.Config, func(int) time.Duration))(&config, streamBackoff)
+
+	client, err := lrsclient.New(config)
+	if err != nil {
+		t.Fatalf("lrsclient.New() failed: %v", err)
+	}
+
+	// Call the load reporting API, and ensure that an LRS stream is created.
+	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
+	loadStore, err := client.ReportLoad(serverIdentifier)
+	if err != nil {
+		t.Fatalf("client.ReportLoad() failed: %v", err)
+	}
+	defer func() {
+		backoffCancel()
+		ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+		defer ssCancel()
+		loadStore.Stop(ssCtx)
+	}()
+
+	lrsServer := mgmtServer.LRSServer
+	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
+	}
+	if _, err := lrsServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout when waiting for initial LRS request: %v", err)
+	}
+
+	// Return a stream error from the server.
+	lrsServer.LRSResponseChan <- &fakeserver.Response{
+		Err: status.Error(codes.Unavailable, "LRS stream error"),
+	}
+
+	// Verify that the stream is closed on the server.
+	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout when waiting for LRS stream to close: %v", err)
+	}
+
+	// Verify that the configured per-client backoff function is invoked.
+	select {
+	case <-backoffCh:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for LRS stream to backoff after stream failure")
+	}
+
+	// Verify that a new LRS stream is created and the initial request is sent again.
+	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout when waiting for LRS stream to be recreated: %v", err)
+	}
+	if _, err := lrsServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout when waiting for initial LRS request on new stream: %v", err)
+	}
+}
