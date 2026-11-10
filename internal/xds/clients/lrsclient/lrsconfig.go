@@ -19,6 +19,8 @@
 package lrsclient
 
 import (
+	"log/slog"
+
 	"google.golang.org/grpc/internal/xds/clients"
 )
 
@@ -32,4 +34,8 @@ type Config struct {
 
 	// TransportBuilder is used to connect to the LRS server.
 	TransportBuilder clients.TransportBuilder
+
+	// Logger is the slog.Logger to be used by the LRSClient for logging. If nil,
+	// logs will be discarded.
+	Logger *slog.Logger
 }

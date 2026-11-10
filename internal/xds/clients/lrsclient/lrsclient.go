@@ -28,10 +28,10 @@ import (
 	"sync"
 	"time"
 
-	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients"
 	clientsinternal "google.golang.org/grpc/internal/xds/clients/internal"
 	"google.golang.org/grpc/internal/xds/clients/internal/backoff"
+	igrpclog "google.golang.org/grpc/internal/xds/clients/internal/grpclog"
 )
 
 const (
@@ -71,7 +71,7 @@ func New(config Config) (*LRSClient, error) {
 		lrsStreams:       make(map[clients.ServerIdentifier]*streamImpl),
 		lrsRefs:          make(map[clients.ServerIdentifier]int),
 	}
-	c.logger = prefixLogger(c)
+	c.logger = prefixLogger(c, config.Logger)
 	return c, nil
 }
 
@@ -97,27 +97,27 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 	defer c.mu.Unlock()
 
 	if c.logger.V(2) {
-		c.logger.Infof("Received request for a reference to an lrs stream for server identifier %q", serverIdentifier)
+		c.logger.Infof("Received request for a reference to an lrs stream for server identifier %v", serverIdentifier)
 	}
 
 	// Use an existing stream, if one exists for this server identifier.
 	if s, ok := c.lrsStreams[serverIdentifier]; ok {
 		if c.logger.V(2) {
-			c.logger.Infof("Reusing an existing lrs stream for server identifier %q", serverIdentifier)
+			c.logger.Infof("Reusing an existing lrs stream for server identifier %v", serverIdentifier)
 		}
 		c.lrsRefs[serverIdentifier]++
 		return s, nil
 	}
 
 	if c.logger.V(2) {
-		c.logger.Infof("Creating a new lrs stream for server identifier %q", serverIdentifier)
+		c.logger.Infof("Creating a new lrs stream for server identifier %v", serverIdentifier)
 	}
 
 	// Create a new transport and create a new lrs stream, and add it to the
 	// map of lrs streams.
 	tr, err := c.transportBuilder.Build(serverIdentifier)
 	if err != nil {
-		return nil, fmt.Errorf("lrsclient: failed to create transport for server identifier %s: %v", serverIdentifier, err)
+		return nil, fmt.Errorf("lrsclient: failed to create transport for server identifier %v: %v", serverIdentifier, err)
 	}
 
 	nodeProto := clientsinternal.NodeProto(c.node)
@@ -126,7 +126,7 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		transport: tr,
 		backoff:   c.backoff,
 		nodeProto: nodeProto,
-		logPrefix: clientPrefix(c),
+		logger:    c.logger,
 	})
 
 	// Register a stop function that decrements the reference count, stops

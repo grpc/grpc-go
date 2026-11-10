@@ -21,14 +21,11 @@ package xdsclient
 import (
 	"fmt"
 
-	"google.golang.org/grpc/grpclog"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/xds/clients/internal/grpclog"
 )
 
-var logger = grpclog.Component("xds")
-
 func prefixLogger(p *XDSClient) *internalgrpclog.PrefixLogger {
-	return internalgrpclog.NewPrefixLogger(logger, clientPrefix(p))
+	return internalgrpclog.NewPrefixLogger(p.config.Logger, clientPrefix(p))
 }
 
 func clientPrefix(p *XDSClient) string {

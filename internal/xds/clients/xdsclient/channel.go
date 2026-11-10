@@ -24,12 +24,11 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
-	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/internal"
 	"google.golang.org/grpc/internal/xds/clients/internal/backoff"
+	igrpclog "google.golang.org/grpc/internal/xds/clients/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients/internal/syncutil"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
 )
@@ -70,7 +69,7 @@ type xdsChannelOpts struct {
 	eventHandler       xdsChannelEventHandler  // Callbacks for ADS stream events.
 	backoff            func(int) time.Duration // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
 	watchExpiryTimeout time.Duration           // Timeout for ADS resource watch expiry.
-	logPrefix          string                  // Prefix to use for logging.
+	logger             *igrpclog.PrefixLogger  // Logger for the client.
 }
 
 // newXDSChannel creates a new xdsChannel instance with the provided options.
@@ -96,9 +95,7 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		closed:       syncutil.NewEvent(),
 	}
 
-	l := grpclog.Component("xds")
-	logPrefix := opts.logPrefix + fmt.Sprintf("[xds-channel %p] ", xc)
-	xc.logger = igrpclog.NewPrefixLogger(l, logPrefix)
+	xc.logger = opts.logger.WithPrefix(fmt.Sprintf("[xds-channel %p] ", xc))
 
 	if opts.backoff == nil {
 		opts.backoff = backoff.DefaultExponential.Backoff
@@ -111,7 +108,7 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		backoff:            opts.backoff,
 		nodeProto:          np,
 		watchExpiryTimeout: opts.watchExpiryTimeout,
-		logPrefix:          logPrefix,
+		logger:             xc.logger,
 	})
 	if xc.logger.V(2) {
 		xc.logger.Infof("xdsChannel is created for ServerConfig %v", opts.serverConfig)

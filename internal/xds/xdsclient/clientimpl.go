@@ -139,6 +139,14 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 	if err != nil {
 		return nil, err
 	}
+	c := &clientImpl{
+		bootstrapConfig: config,
+		target:          target,
+		refCount:        1,
+	}
+	c.logger = prefixLogger(c)
+	sLogger := slogLogger(c.logger)
+	gConfig.Logger = sLogger
 	client, err := xdsclient.New(gConfig)
 	if err != nil {
 		return nil, err
@@ -146,19 +154,14 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 	lrsC, err := lrsclient.New(lrsclient.Config{
 		Node:             gConfig.Node,
 		TransportBuilder: gConfig.TransportBuilder,
+		Logger:           sLogger,
 	})
 	if err != nil {
 		return nil, err
 	}
-	c := &clientImpl{
-		XDSClient:       client,
-		xdsClientConfig: gConfig,
-		bootstrapConfig: config,
-		target:          target,
-		refCount:        1,
-		lrsClient:       lrsC,
-	}
-	c.logger = prefixLogger(c)
+	c.XDSClient = client
+	c.xdsClientConfig = gConfig
+	c.lrsClient = lrsC
 	return c, nil
 }
 

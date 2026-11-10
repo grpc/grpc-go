@@ -53,7 +53,7 @@ func (w *wrappingWatcher) ResourceError(err error, done func()) {
 func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
 	if c.done.HasFired() {
-		logger.Warningf("Watch registered for type %q, but client is closed", typeURL)
+		c.logger.Warningf("Watch registered for type %q, but client is closed", typeURL)
 		return func() {}
 	}
 
@@ -64,7 +64,7 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 
 	rType, ok := c.config.ResourceTypes[typeURL]
 	if !ok {
-		logger.Warningf("ResourceType implementation for resource type url %q is not found", rType.TypeURL)
+		c.logger.Warningf("ResourceType implementation for resource type url %q is not found", rType.TypeURL)
 		c.serializer.TrySchedule(func(context.Context) {
 			watcher.ResourceError(fmt.Errorf("no ResourceType implementation found for typeURL %q", rType.TypeURL), func() {})
 		})
@@ -74,7 +74,7 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 	n := xdsresource.ParseName(resourceName)
 	a := c.getAuthorityForResource(n)
 	if a == nil {
-		logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeName, resourceName, n.Authority)
+		c.logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeName, resourceName, n.Authority)
 		c.serializer.TrySchedule(func(context.Context) {
 			watcher.ResourceError(fmt.Errorf("authority %q not found in the config for resource %q", n.Authority, resourceName), func() {})
 		})
