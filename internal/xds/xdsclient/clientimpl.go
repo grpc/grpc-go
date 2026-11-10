@@ -91,7 +91,7 @@ var (
 	})
 )
 
-// clientImpl embed xdsclient.XDSClient and implement internal XDSClient
+// clientImpl embeds xdsclient.Client and implements the internal XDSClient
 // interface with ref counting so that it can be shared by the xds resolver and
 // balancer implementations, across multiple ClientConns and Servers.
 type clientImpl struct {
