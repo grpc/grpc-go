@@ -418,46 +418,91 @@ func (l *outStreamList) dequeue() *outStream {
 	return b
 }
 
-// controlBuffer is a way to pass information to loopy.
+// controlBuffer is a queue of control frames, used to pass information to
+// loopy.
 //
 // Information is passed as specific struct types called control frames. A
 // control frame not only represents data, messages or headers to be sent out
 // but can also be used to instruct loopy to update its internal state. It
 // shouldn't be confused with an HTTP2 frame, although some of the control
 // frames like dataFrame and headerFrame do go out on wire as HTTP2 frames.
+//
+// The goroutines that use a controlBuffer are referred to as follows:
+//
+//   - Producers queue control frames by calling put or executeAndPut. There
+//     can be any number of them: the goroutines sending RPC messages, the
+//     reader, the keepalive goroutine, etc.
+//   - The consumer dequeues control frames by calling get. There is only one:
+//     the goroutine running loopy.
+//   - The reader is the goroutine that reads HTTP2 frames from the
+//     connection. It is a producer, and it also calls throttle or
+//     throttleWithTimeout before reading each frame, to stop reading while
+//     too many transport response frames are queued (see
+//     maxQueuedTransportResponseFrames).
+//
+// Producers queue frames in list. The consumer doesn't dequeue them from list
+// one at a time, as it would then contend with the producers for mu on every
+// frame. Instead, it takes all the frames queued in list at once, by swapping
+// list with consumerList, and then dequeues them from consumerList without
+// holding mu.
 type controlBuffer struct {
-	wakeupCh chan struct{}   // Unblocks readers waiting for new items.
+	wakeupCh chan struct{}   // Wakes up the consumer waiting for frames.
 	done     <-chan struct{} // Closed when the transport is done.
 	side     side            // Side of the transport owning this buffer.
 
-	// consumerList holds a batch of control frames that the consumer (loopy)
-	// took from list in a single critical section. It is only accessed by the
-	// consumer goroutine, without holding mu.
+	// consumerList holds the frames that the consumer took from list and
+	// hasn't returned from get yet. Only the consumer accesses it, so it
+	// isn't guarded by mu.
 	consumerList itemList[cbItem]
 
-	// transportResponseFrames counts the number of queued items (in list and
-	// consumerList) that represent the response of an action initiated by the
-	// peer (as determined by cbItem.isTransportResponseFrame for this side).
-	// It is incremented by producers in the same critical section that
-	// enqueues the frame, and decremented by the consumer without holding mu.
-	// Incrementing in that critical section isn't required for correctness
-	// (see updateThrottleLocked); it only ensures that the count is never too
-	// low, since the consumer can't dequeue a frame before it is counted.
+	// transportResponseFrames is the number of queued frames, in list and
+	// consumerList, that count towards maxQueuedTransportResponseFrames (see
+	// cbItem.isTransportResponseFrame). It is an atomic counter, which mu
+	// doesn't guard: producers increment it when they queue such a frame, and
+	// the consumer decrements it when it dequeues one from consumerList.
 	transportResponseFrames atomic.Int64
 
-	// Mutex guards all the fields below.
-	mu              sync.Mutex
-	consumerWaiting bool             // True when readers are blocked waiting for new data.
-	list            itemList[cbItem] // List of queued control frames.
+	// mu guards consumerWaiting and list, and all writes to closed and
+	// trfChan. It is held in executeAndPut, in get when consumerList is
+	// empty, in finish, and in dequeueConsumerList when the count crosses
+	// the limit.
+	//
+	// Three things are done without holding mu, so that the consumer and the
+	// reader don't contend with producers on every frame. Each is safe for a
+	// different reason:
+	//
+	//   - The consumer dequeues from consumerList. Nothing else accesses
+	//     consumerList, and frames only move into it from list through the
+	//     swap in get, which holds mu.
+	//   - The consumer reads closed in get. If finish sets it right after,
+	//     that is the same as finish being called right after get returns.
+	//   - The consumer decrements transportResponseFrames, and the reader
+	//     loads trfChan in throttle. trfChan is derived from the count:
+	//     whoever moves the count across the limit then calls
+	//     updateThrottleLocked, which holds mu and sets trfChan to match the
+	//     count at that time. So trfChan can only disagree with the count
+	//     while such a call is pending. And a channel is closed whenever it
+	//     is removed from trfChan, so the reader can't be left waiting on a
+	//     stale one.
+	mu sync.Mutex
 
-	// mu guards writes to the following fields. They can be read atomically
-	// without holding mu.
+	// consumerWaiting is set by the consumer when it finds list empty and is
+	// about to block. It tells the next producer to wake up the consumer
+	// through wakeupCh.
+	consumerWaiting bool
+	// list holds the frames queued by producers that the consumer hasn't
+	// taken yet.
+	list itemList[cbItem]
 
-	// closed is set when the controlbuf is finished.
+	// The two fields below are only written with mu held. They are atomics
+	// so that they can be read without holding mu, as described above.
+
+	// closed is set by finish.
 	closed atomic.Bool
-	// trfChan is created when transportResponseFrames reaches
-	// maxQueuedTransportResponseFrames and is closed and nilled when
-	// transportResponseFrames drops below the threshold.
+	// trfChan is the channel that the reader waits on while it is throttled.
+	// It is set while transportResponseFrames is at or above the limit, and
+	// it is closed and cleared once the count drops below the limit, or the
+	// control buffer is finished (see updateThrottleLocked).
 	trfChan atomic.Pointer[chan struct{}]
 }
 
@@ -536,9 +581,11 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 		c.consumerWaiting = false
 	}
 	c.list.enqueue(it)
+	// The frame is counted before mu is released, i.e. before the consumer
+	// can take it, so the count never lags behind the queue.
 	if it.isTransportResponseFrame(c.side) &&
 		c.transportResponseFrames.Add(1) == int64(maxQueuedTransportResponseFrames) {
-		// We are adding the frame that puts us at the threshold.
+		// We are adding the frame that puts us at the limit.
 		c.updateThrottleLocked()
 	}
 	if wakeUp {
@@ -555,10 +602,10 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 // until one of the conditions is met: there is a frame to return or the
 // transport is closed.
 //
-// To reduce lock contention with producers, get takes all the queued frames
-// in a single critical section, and then returns them one at a time from
-// consumerList without holding the lock. get must only be called by a single
-// consumer goroutine (loopy).
+// get must only be called by the consumer. To reduce lock contention with
+// producers, it takes all the frames queued in list in a single critical
+// section, and then returns them one at a time from consumerList without
+// holding mu.
 func (c *controlBuffer) get(block bool) (any, error) {
 	if !c.consumerList.isEmpty() {
 		if c.closed.Load() {
@@ -602,13 +649,14 @@ func (c *controlBuffer) get(block bool) (any, error) {
 }
 
 // dequeueConsumerList removes and returns the first frame from consumerList,
-// which must not be empty. It must only be called by the consumer goroutine.
+// which must not be empty. It must only be called by the consumer.
 func (c *controlBuffer) dequeueConsumerList() cbItem {
 	it := c.consumerList.dequeue()
 	if it.isTransportResponseFrame(c.side) &&
 		c.transportResponseFrames.Add(-1) == int64(maxQueuedTransportResponseFrames)-1 {
-		// We are removing the frame that put us at the threshold. This is the
-		// only time the consumer takes the lock for throttling.
+		// We are removing the frame that put us at the limit. This is the
+		// only case in which the consumer acquires mu while going through
+		// consumerList.
 		c.mu.Lock()
 		c.updateThrottleLocked()
 		c.mu.Unlock()
@@ -621,11 +669,11 @@ func (c *controlBuffer) dequeueConsumerList() cbItem {
 // every change of transportResponseFrames that crosses
 // maxQueuedTransportResponseFrames.
 //
-// The count is decremented without holding mu, so by the time this runs, the
-// count may have crossed the threshold again. Acting on the current count,
-// rather than on the direction of the crossing that triggered the call, makes
-// this idempotent: calls are serialized by mu and the last one, which runs
-// after the last crossing, leaves trfChan in the correct state.
+// The consumer decrements the count without holding mu, so by the time this
+// runs, the count may have crossed the limit again. Acting on the current
+// count, rather than on the direction of the crossing that triggered the
+// call, makes this idempotent: calls are serialized by mu and the last one,
+// which runs after the last crossing, leaves trfChan in the correct state.
 //
 // Caller must hold c.mu.
 func (c *controlBuffer) updateThrottleLocked() {
@@ -796,6 +844,7 @@ func (l *loopyWriter) run() (err error) {
 			l.framer.writer.Flush()
 		}
 		l.cbuf.finish()
+		// finish doesn't touch consumerList, which only loopy may access.
 		l.cbuf.consumerList.dequeueAll(discardItem)
 	}()
 	for {
