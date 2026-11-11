@@ -1164,6 +1164,65 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 	}
 }
 
+// Tests that when the cluster resource is removed from the management server
+// after a previous good update, the cds LB policy closes its child policy (so
+// that connections to the backends of the removed cluster are not kept alive),
+// puts the channel in TRANSIENT_FAILURE, and fails RPCs with an Unavailable
+// error.
+func (s) TestClusterUpdate_ResourceRemoved_ChildPolicyClosed(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, _, _, childPolicyCloseEvent := registerWrappedPriorityPolicy(ctx, t)
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure default resources in the management server.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Remove the cluster resource from the management server, triggering a
+	// resource-not-found error.
+	clusterName := resources.Clusters[0].Name
+	resources.Clusters = nil
+	resources.SkipValidation = true
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the child policy is closed.
+	select {
+	case <-childPolicyCloseEvent.Done():
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for child policy to be closed")
+	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Ensure RPC fails with Unavailable status code and the error message is
+	// meaningful and contains the xDS node ID.
+	wantErr := fmt.Sprintf("resource %q of type %q has been removed", clusterName, "ClusterResource")
+	_, err := client.EmptyCall(ctx, &testpb.Empty{})
+	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Tests that closing the cds LB policy results in the the child policy being
 // closed.
 func (s) TestClose(t *testing.T) {
