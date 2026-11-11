@@ -51,9 +51,8 @@ type Decoder interface {
 	// Decode deserializes and validates an xDS resource as received from the
 	// xDS management server.
 	//
-	// The `resource` parameter may contain a value of the serialized wrapped
-	// resource (i.e. with the type URL
-	// `type.googleapis.com/envoy.service.discovery.v3.Resource`).
+	// The resource parameter may contain a serialized wrapped resource (with
+	// type URL `type.googleapis.com/envoy.service.discovery.v3.Resource`).
 	// Implementations are responsible for unwrapping the underlying resource if
 	// it is wrapped.
 	//
@@ -62,10 +61,23 @@ type Decoder interface {
 	Decode(resource *AnyProto, options DecodeOptions) (*DecodeResult, error)
 }
 
-// AnyProto contains the type URL and serialized proto data of an xDS resource.
+// AnyProto represents a serialized protobuf Any message (corresponding to
+// [google.golang.org/protobuf/types/known/anypb.Any]).
+//
+// This plain Go struct is used in place of anypb.Any to avoid exposing a direct
+// dependency on google.golang.org/protobuf on the xdsclient API surface while
+// keeping wire representation lightweight.
 type AnyProto struct {
+	// TypeURL is the URL identifying the type of serialized protobuf message.
+	// For example:
+	// "type.googleapis.com/envoy.config.listener.v3.Listener"
 	TypeURL string
-	Value   []byte
+
+	// Value contains the serialized protobuf message bytes.
+	//
+	// This slice must be treated as read-only. Callers and decoders must not
+	// modify the underlying bytes.
+	Value []byte
 }
 
 // DecodeOptions wraps the options required by ResourceType implementations for

@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"bytes"
+	"fmt"
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -40,6 +41,9 @@ type routeConfigResourceDecoder struct {
 }
 
 func (d *routeConfigResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	if resource == nil {
+		return nil, fmt.Errorf("nil resource")
+	}
 	var serverCfg *bootstrap.ServerConfig
 	if opts.ServerConfig != nil {
 		serverCfg = d.serverConfigs[*opts.ServerConfig]

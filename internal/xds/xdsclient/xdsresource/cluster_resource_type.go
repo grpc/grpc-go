@@ -41,6 +41,9 @@ type clusterResourceDecoder struct {
 }
 
 func (d *clusterResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	if resource == nil {
+		return nil, fmt.Errorf("nil resource")
+	}
 	serverCfg, ok := d.serverConfigs[*opts.ServerConfig]
 	if !ok {
 		return nil, fmt.Errorf("no server config found for {%+v}", opts.ServerConfig)

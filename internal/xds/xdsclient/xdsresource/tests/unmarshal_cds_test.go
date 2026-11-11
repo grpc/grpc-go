@@ -97,6 +97,7 @@ func wrrLocalityAny(t *testing.T, m proto.Message) *anypb.Any {
 }
 
 func toAnyProto(t *testing.T, m proto.Message) *xdsclient.AnyProto {
+	t.Helper()
 	a := testutils.MarshalAny(t, m)
 	return &xdsclient.AnyProto{
 		TypeURL: a.GetTypeUrl(),

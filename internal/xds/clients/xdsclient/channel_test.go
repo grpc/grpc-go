@@ -19,6 +19,7 @@
 package xdsclient
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -866,7 +867,7 @@ func (s) TestDecodeResponse_PassesAnyProto(t *testing.T) {
 	if got, want := decoder.captured.TypeURL, testTypeURL; got != want {
 		t.Errorf("captured.TypeURL = %q, want %q", got, want)
 	}
-	if got, want := string(decoder.captured.Value), testVal; got != want {
-		t.Errorf("captured.Value = %q, want %q", got, want)
+	if got, want := decoder.captured.Value, []byte(testVal); !bytes.Equal(got, want) {
+		t.Errorf("captured.Value = %s, want %s", got, want)
 	}
 }
