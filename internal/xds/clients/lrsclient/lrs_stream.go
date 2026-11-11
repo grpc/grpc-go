@@ -51,11 +51,12 @@ const perRPCVerbosityLevel = 9
 type streamImpl struct {
 	// The following fields are initialized when a stream instance is created
 	// and are read-only afterwards, and hence can be accessed without a mutex.
-	transport clients.Transport       // Transport to use for LRS stream.
-	backoff   func(int) time.Duration // Backoff for retries, after stream failures.
-	nodeProto *v3corepb.Node          // Identifies the gRPC application.
-	doneCh    chan struct{}           // To notify exit of LRS goroutine.
-	logger    *igrpclog.PrefixLogger
+	transport   clients.Transport       // Transport to use for LRS stream.
+	backoff     func(int) time.Duration // Backoff for retries, after stream failures.
+	minInterval time.Duration           // Lower bound on the load reporting interval.
+	nodeProto   *v3corepb.Node          // Identifies the gRPC application.
+	doneCh      chan struct{}           // To notify exit of LRS goroutine.
+	logger      *igrpclog.PrefixLogger
 
 	cancelStream context.CancelFunc // Cancel the stream. If nil, the stream is not active.
 	loadStore    *LoadStore         // LoadStore returned to user for pushing loads.
@@ -66,10 +67,11 @@ type streamImpl struct {
 
 // streamOpts holds the options for creating an lrsStream.
 type streamOpts struct {
-	transport clients.Transport       // xDS transport to create the stream on.
-	backoff   func(int) time.Duration // Backoff for retries, after stream failures.
-	nodeProto *v3corepb.Node          // Node proto to identify the gRPC application.
-	logPrefix string                  // Prefix to be used for log messages.
+	transport   clients.Transport       // xDS transport to create the stream on.
+	backoff     func(int) time.Duration // Backoff for retries, after stream failures.
+	minInterval time.Duration           // Lower bound on the load reporting interval.
+	nodeProto   *v3corepb.Node          // Node proto to identify the gRPC application.
+	logPrefix   string                  // Prefix to be used for log messages.
 }
 
 // newStreamImpl creates a new StreamImpl with the provided options.
@@ -82,6 +84,7 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 	lrs := &streamImpl{
 		transport:        opts.transport,
 		backoff:          opts.backoff,
+		minInterval:      opts.minInterval,
 		nodeProto:        opts.nodeProto,
 		cancelStream:     cancel,
 		doneCh:           make(chan struct{}),
@@ -222,10 +225,14 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
 	}
 	loadReportingInterval := interval.AsDuration()
-	if loadReportingInterval <= 0 {
-		// A valid Duration can be zero or negative, which can't be used as
-		// the period of a ticker.
-		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval %v, must be positive", loadReportingInterval)
+	if loadReportingInterval < lrs.minInterval {
+		// Clamp the interval to the configured minimum. This also handles zero
+		// and negative intervals, which are valid Durations but cannot be used
+		// as the period of a ticker.
+		if lrs.logger.V(2) {
+			lrs.logger.Infof("Received load_reporting_interval %v is less than the minimum, using %v instead", loadReportingInterval, lrs.minInterval)
+		}
+		loadReportingInterval = lrs.minInterval
 	}
 
 	clusters := resp.Clusters

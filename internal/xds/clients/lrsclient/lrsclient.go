@@ -37,6 +37,10 @@ import (
 const (
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
+
+	// defaultMinLoadReportingInterval is the default lower bound on the load
+	// reporting interval, used when the config does not specify one.
+	defaultMinLoadReportingInterval = time.Second
 )
 
 var (
@@ -48,6 +52,7 @@ type LRSClient struct {
 	transportBuilder clients.TransportBuilder
 	node             clients.Node
 	backoff          func(int) time.Duration // Backoff for LRS stream failures.
+	minInterval      time.Duration           // Lower bound on the load reporting interval.
 	logger           *igrpclog.PrefixLogger
 
 	// The LRSClient owns a bunch of streams to individual LRS servers.
@@ -64,10 +69,15 @@ func New(config Config) (*LRSClient, error) {
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
 
+	minInterval := config.MinLoadReportingInterval
+	if minInterval <= 0 {
+		minInterval = defaultMinLoadReportingInterval
+	}
 	c := &LRSClient{
 		transportBuilder: config.TransportBuilder,
 		node:             config.Node,
 		backoff:          defaultExponentialBackoff,
+		minInterval:      minInterval,
 		lrsStreams:       make(map[clients.ServerIdentifier]*streamImpl),
 		lrsRefs:          make(map[clients.ServerIdentifier]int),
 	}
@@ -123,10 +133,11 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 	nodeProto := clientsinternal.NodeProto(c.node)
 	nodeProto.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	lrs := newStreamImpl(streamOpts{
-		transport: tr,
-		backoff:   c.backoff,
-		nodeProto: nodeProto,
-		logPrefix: clientPrefix(c),
+		transport:   tr,
+		backoff:     c.backoff,
+		minInterval: c.minInterval,
+		nodeProto:   nodeProto,
+		logPrefix:   clientPrefix(c),
 	})
 
 	// Register a stop function that decrements the reference count, stops

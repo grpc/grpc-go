@@ -62,6 +62,11 @@ const (
 	testKey2                = "test-key2"
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
+
+	// The LRS client clamps the load reporting interval sent by the server to
+	// a minimum of 1s by default. Tests lower the minimum, to be able to use
+	// short load reporting intervals.
+	defaultTestMinLoadReportingInterval = time.Millisecond
 )
 
 var (
@@ -136,8 +141,9 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
-		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(configs),
+		Node:                     clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder:         grpctransport.NewBuilder(configs),
+		MinLoadReportingInterval: defaultTestMinLoadReportingInterval,
 	}
 	client, err := lrsclient.New(config)
 	if err != nil {
@@ -283,8 +289,9 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
-		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(configs),
+		Node:                     clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder:         grpctransport.NewBuilder(configs),
+		MinLoadReportingInterval: defaultTestMinLoadReportingInterval,
 	}
 	client, err := lrsclient.New(config)
 	if err != nil {
@@ -490,8 +497,9 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
-		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(configs),
+		Node:                     clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder:         grpctransport.NewBuilder(configs),
+		MinLoadReportingInterval: defaultTestMinLoadReportingInterval,
 	}
 	client, err := lrsclient.New(config)
 	if err != nil {
@@ -648,8 +656,9 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
-		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(configs),
+		Node:                     clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder:         grpctransport.NewBuilder(configs),
+		MinLoadReportingInterval: defaultTestMinLoadReportingInterval,
 	}
 	client, err := lrsclient.New(config)
 	if err != nil {
@@ -730,16 +739,45 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 	loadStore1.Stop(shortCtx)
 }
 
-// Tests that the LRS client rejects a response from the LRS server with a load
-// reporting interval that is not positive, by closing the stream and creating
-// a new one after backoff, instead of panicking.
-func (s) TestReportLoad_NonPositiveLoadReportingInterval(t *testing.T) {
+// Tests that the LRS client clamps the load reporting interval received from
+// the LRS server to the configured minimum, and to 1s when no minimum is
+// configured. This includes zero and negative intervals, which cannot be used
+// as the period of a ticker.
+func (s) TestReportLoad_LoadReportingIntervalClampedToMinimum(t *testing.T) {
 	tests := []struct {
-		name     string
+		name string
+		// minInterval is the minimum load reporting interval configured on the
+		// LRS client. Zero means unset.
+		minInterval time.Duration
+		// interval is the load reporting interval sent by the LRS server.
 		interval *durationpb.Duration
+		// wantInterval is the interval at which the client is expected to
+		// report load.
+		wantInterval time.Duration
 	}{
-		{name: "zero", interval: &durationpb.Duration{}},
-		{name: "negative", interval: &durationpb.Duration{Seconds: -1}},
+		{
+			name:         "zero",
+			minInterval:  100 * time.Millisecond,
+			interval:     &durationpb.Duration{},
+			wantInterval: 100 * time.Millisecond,
+		},
+		{
+			name:         "negative",
+			minInterval:  100 * time.Millisecond,
+			interval:     &durationpb.Duration{Seconds: -1},
+			wantInterval: 100 * time.Millisecond,
+		},
+		{
+			name:         "less_than_minimum",
+			minInterval:  100 * time.Millisecond,
+			interval:     durationpb.New(time.Millisecond),
+			wantInterval: 100 * time.Millisecond,
+		},
+		{
+			name:         "less_than_default_minimum",
+			interval:     durationpb.New(time.Millisecond),
+			wantInterval: time.Second,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -753,8 +791,9 @@ func (s) TestReportLoad_NonPositiveLoadReportingInterval(t *testing.T) {
 			// server.
 			configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 			client, err := lrsclient.New(lrsclient.Config{
-				Node:             clients.Node{ID: uuid.New().String()},
-				TransportBuilder: grpctransport.NewBuilder(configs),
+				Node:                     clients.Node{ID: uuid.New().String()},
+				TransportBuilder:         grpctransport.NewBuilder(configs),
+				MinLoadReportingInterval: test.minInterval,
 			})
 			if err != nil {
 				t.Fatalf("lrsclient.New() failed: %v", err)
@@ -780,8 +819,9 @@ func (s) TestReportLoad_NonPositiveLoadReportingInterval(t *testing.T) {
 				t.Fatalf("Timeout when waiting for initial LRS request: %v", err)
 			}
 
-			// Send a response with the invalid interval, and ensure that the
-			// client cancels the stream.
+			// Send a response with the interval under test, and ensure that
+			// the client keeps the stream open and sends a load report.
+			start := time.Now()
 			lrsServer.LRSResponseChan <- &fakeserver.Response{
 				Resp: &v3lrspb.LoadStatsResponse{
 					SendAllClusters:       true,
@@ -790,15 +830,17 @@ func (s) TestReportLoad_NonPositiveLoadReportingInterval(t *testing.T) {
 			}
 			req, err := lrsServer.LRSRequestChan.Receive(ctx)
 			if err != nil {
-				t.Fatalf("Timeout when waiting for the LRS stream to be canceled: %v", err)
+				t.Fatalf("Timeout when waiting for a load report: %v", err)
 			}
-			if err := req.(*fakeserver.Request).Err; status.Code(err) != codes.Canceled {
-				t.Fatalf("LRS stream ended with error %v, want code %v", err, codes.Canceled)
+			if err := req.(*fakeserver.Request).Err; err != nil {
+				t.Fatalf("LRS stream ended with error %v, want a load report", err)
 			}
 
-			// Ensure that the client creates a new stream after backoff.
-			if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
-				t.Fatalf("Timeout when waiting for a new LRS stream to be created: %v", err)
+			// Only a lower bound is verified, since the load report can be
+			// delayed arbitrarily, but can never be sent before the interval
+			// elapses. The interval starts after the response is sent.
+			if got := time.Since(start); got < test.wantInterval {
+				t.Fatalf("Load report received after %v, want at least %v", got, test.wantInterval)
 			}
 		})
 	}
