@@ -764,19 +764,23 @@ func (ocs *observabilityClientStream) Trailer() metadata.MD {
 	return nil
 }
 
+// CloseSend forwards the half-close to the external processor (if request body
+// processing is enabled) and to the dataplane stream. It always returns nil, as
+// required by the grpc.ClientStream contract; any failure is reported by
+// RecvMsg instead.
 func (ocs *observabilityClientStream) CloseSend() error {
-	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
-		return fatalErr
+	if _, ok := ocs.procStreamErr.Load().(error); ok {
+		return nil
 	}
 	startTime := timeNow()
 	if !ocs.procStreamBypass.Load() && ocs.config.processingModes.requestBodyMode == modeSend {
 		if err := ocs.sendToProcessor(ocs.halfClose()); err != nil {
-			return err
+			return nil
 		}
 	}
-	err := ocs.dataplaneStream.CloseSend()
+	ocs.dataplaneStream.CloseSend()
 	ocs.recordMetric(clientHalfCloseDurationMetric, timeSince(startTime).Seconds())
-	return ocs.streamError(err)
+	return nil
 }
 
 func (ocs *observabilityClientStream) Context() context.Context {
@@ -1085,6 +1089,10 @@ func (cs *clientStream) Trailer() metadata.MD {
 	}
 }
 
+// CloseSend forwards the half-close to the external processor, or directly to
+// the dataplane stream if the external processor is bypassed or request body
+// processing is disabled. It always returns nil, as required by the
+// grpc.ClientStream contract; any failure is reported by RecvMsg instead.
 func (cs *clientStream) CloseSend() error {
 	if cs.discardRequests.Load() {
 		return nil
@@ -1096,22 +1104,21 @@ func (cs *clientStream) CloseSend() error {
 
 	s, err := cs.bypassProcStreamForClientMsg()
 	if err != nil {
-		return err
+		return nil
 	}
 	if s != nil {
 		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
-		err = s.CloseSend()
-		return err
+		s.CloseSend()
+		return nil
 	}
 	// If external processor stream is active, client CloseSend is sent to the
 	// processor server as request message with `EndOfStreamWithoutMessage` set.
-	s, err = cs.sendClientReqToProcServer(cs.halfClose())
+	s, _ = cs.sendClientReqToProcServer(cs.halfClose())
 	if s != nil {
 		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
-		err = s.CloseSend()
-		return err
+		s.CloseSend()
 	}
-	return err
+	return nil
 }
 
 func (cs *clientStream) Context() context.Context {
