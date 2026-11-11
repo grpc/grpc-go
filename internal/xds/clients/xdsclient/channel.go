@@ -28,10 +28,12 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients"
-	"google.golang.org/grpc/internal/xds/clients/internal"
 	"google.golang.org/grpc/internal/xds/clients/internal/backoff"
 	"google.golang.org/grpc/internal/xds/clients/internal/syncutil"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/protobuf/proto"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -67,6 +69,7 @@ type xdsChannelOpts struct {
 	transport          clients.Transport       // Takes ownership of this transport.
 	serverConfig       *ServerConfig           // Configuration of the server to connect to.
 	clientConfig       *Config                 // Complete xDS client configuration, used to decode resources.
+	nodeProto          *v3corepb.Node          // Protobuf representation of clientConfig.Node.
 	eventHandler       xdsChannelEventHandler  // Callbacks for ADS stream events.
 	backoff            func(int) time.Duration // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
 	watchExpiryTimeout time.Duration           // Timeout for ADS resource watch expiry.
@@ -84,6 +87,8 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		return nil, errors.New("xdsclient: serverConfig is nil")
 	case opts.clientConfig == nil:
 		return nil, errors.New("xdsclient: clientConfig is nil")
+	case opts.nodeProto == nil:
+		return nil, errors.New("xdsclient: nodeProto is nil")
 	case opts.eventHandler == nil:
 		return nil, errors.New("xdsclient: eventHandler is nil")
 	}
@@ -103,10 +108,7 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 	if opts.backoff == nil {
 		opts.backoff = backoff.DefaultExponential.Backoff
 	}
-	np, err := internal.NodeProto(opts.clientConfig.Node)
-	if err != nil {
-		return nil, err
-	}
+	np := proto.Clone(opts.nodeProto).(*v3corepb.Node)
 	np.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	xc.ads = newADSStreamImpl(adsStreamOpts{
 		transport:          opts.transport,

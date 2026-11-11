@@ -28,6 +28,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients"
 	clientsinternal "google.golang.org/grpc/internal/xds/clients/internal"
@@ -46,7 +49,7 @@ var (
 // LRSClient is an LRS (Load Reporting Service) client.
 type LRSClient struct {
 	transportBuilder clients.TransportBuilder
-	node             clients.Node
+	nodeProto        *v3corepb.Node
 	backoff          func(int) time.Duration // Backoff for LRS stream failures.
 	logger           *igrpclog.PrefixLogger
 
@@ -63,13 +66,14 @@ func New(config Config) (*LRSClient, error) {
 	if config.TransportBuilder == nil {
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
-	if _, err := clientsinternal.NodeProto(config.Node); err != nil {
+	nodeProto, err := clientsinternal.NodeProto(config.Node)
+	if err != nil {
 		return nil, fmt.Errorf("lrsclient: %w", err)
 	}
 
 	c := &LRSClient{
 		transportBuilder: config.TransportBuilder,
-		node:             config.Node,
+		nodeProto:        nodeProto,
 		backoff:          defaultExponentialBackoff,
 		lrsStreams:       make(map[clients.ServerIdentifier]*streamImpl),
 		lrsRefs:          make(map[clients.ServerIdentifier]int),
@@ -123,10 +127,7 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		return nil, fmt.Errorf("lrsclient: failed to create transport for server identifier %s: %v", serverIdentifier, err)
 	}
 
-	nodeProto, err := clientsinternal.NodeProto(c.node)
-	if err != nil {
-		return nil, fmt.Errorf("lrsclient: failed to convert node: %w", err)
-	}
+	nodeProto := proto.Clone(c.nodeProto).(*v3corepb.Node)
 	nodeProto.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	lrs := newStreamImpl(streamOpts{
 		transport: tr,

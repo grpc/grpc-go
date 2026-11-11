@@ -806,3 +806,36 @@ func (s) TestLRSClient_New(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestLRSClient_NodeMetadataMutationAfterNew(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	nodeID := uuid.New().String()
+	metadata := map[string]any{"initialKey": "initialVal"}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	config := lrsclient.Config{
+		Node: clients.Node{
+			ID:               nodeID,
+			UserAgentName:    "user-agent",
+			UserAgentVersion: "0.0.0.0",
+			Metadata:         metadata,
+		},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+	}
+	client, err := lrsclient.New(config)
+	if err != nil {
+		t.Fatalf("lrsclient.New() failed: %v", err)
+	}
+
+	// Mutate metadata after New returns with an invalid value type.
+	metadata["invalid"] = make(chan int)
+
+	// ReportLoad should succeed using the stored nodeProto without re-converting.
+	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
+	loadStore, err := client.ReportLoad(serverIdentifier)
+	if err != nil {
+		t.Fatalf("client.ReportLoad() failed after mutating metadata: %v", err)
+	}
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer ssCancel()
+	defer loadStore.Stop(ssCtx)
+}
