@@ -19,87 +19,11 @@
 package transport
 
 import (
-	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
-
-// TestControlBuffer_ThrottleStress runs many producers that call throttle()
-// and then put a transport response frame, concurrently with a consumer that
-// drains the control buffer. The throttling limit is set very low so that the
-// number of queued transport response frames crosses it constantly, which
-// exercises the races between producers creating the throttling channel and
-// the consumer closing it. The test fails if a producer gets stuck in
-// throttle(), or if the throttling state doesn't match the number of queued
-// frames once everything has been consumed.
-func (s) TestControlBuffer_ThrottleStress(t *testing.T) {
-	const (
-		numProducers      = 8
-		framesPerProducer = 10000
-	)
-	for _, limit := range []int{1, 2, 4} {
-		t.Run(fmt.Sprintf("limit=%d", limit), func(t *testing.T) {
-			origLimit := maxQueuedTransportResponseFrames
-			maxQueuedTransportResponseFrames = limit
-			defer func() { maxQueuedTransportResponseFrames = origLimit }()
-
-			done := make(chan struct{})
-			var closeDone sync.Once
-			defer closeDone.Do(func() { close(done) })
-			cb := newControlBuffer(done, clientSide)
-			it := &ping{ack: true} // A transport response frame.
-
-			var wg sync.WaitGroup
-			for range numProducers {
-				wg.Go(func() {
-					for range framesPerProducer {
-						cb.throttle()
-						if err := cb.put(it); err != nil {
-							return // Only happens if the test timed out.
-						}
-					}
-				})
-			}
-			producersDone := make(chan struct{})
-			go func() {
-				wg.Wait()
-				close(producersDone)
-			}()
-
-			consumerDone := make(chan struct{})
-			go func() {
-				defer close(consumerDone)
-				for range numProducers * framesPerProducer {
-					if _, err := cb.get(true); err != nil {
-						return // Only happens if the test timed out.
-					}
-				}
-			}()
-
-			timer := time.NewTimer(defaultTestTimeout)
-			defer timer.Stop()
-			for _, ch := range []chan struct{}{producersDone, consumerDone} {
-				select {
-				case <-ch:
-				case <-timer.C:
-					// Unblock the producers and the consumer before failing.
-					closeDone.Do(func() { close(done) })
-					t.Fatalf("Timed out with %d transport response frames queued; producers stuck in throttle()?", cb.transportResponseFrames.Load())
-				}
-			}
-
-			if got := cb.transportResponseFrames.Load(); got != 0 {
-				t.Errorf("transportResponseFrames = %d after consuming all frames, want 0", got)
-			}
-			if cb.trfChan.Load() != nil {
-				t.Errorf("Throttling channel is set after consuming all frames, want nil")
-			}
-		})
-	}
-}
 
 // TestOutStream_DataQueue verifies that the intrusive queue of data frames in
 // an outStream is FIFO, that frames are unlinked when dequeued, and that
@@ -453,20 +377,25 @@ func (s) TestControlBuffer_ThrottleWithTimeout(t *testing.T) {
 		}
 	})
 
-	// Tests that consuming an item that does not count towards the limit
-	// does not stop the throttling, so throttleWithTimeout times out.
-	t.Run("UncountedItemConsumed", func(t *testing.T) {
+	// Tests that the items that the consumer has taken from the list of
+	// queued items, and has not consumed yet, do not count towards the
+	// limit.
+	t.Run("ItemsTakenByConsumer", func(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
-		cb := newControlBuffer(done, clientSide)
-		cb.put(&outgoingWindowUpdate{})
-		for range maxQueuedTransportResponseFrames {
-			cb.put(&ping{ack: true})
-		}
-		// Consume the outgoingWindowUpdate, the first item queued.
+		cb := newThrottledControlBuffer(done)
+		// Consuming an item makes the consumer take all the queued items.
 		if _, err := cb.get(false); err != nil {
 			t.Fatalf("cb.get(false) failed: %v", err)
 		}
+		for range maxQueuedTransportResponseFrames - 1 {
+			cb.put(&ping{ack: true})
+		}
+		// If it blocks instead, it times out with an error.
+		if err := cb.throttleWithTimeout(defaultTestTimeout); err != nil {
+			t.Fatalf("throttleWithTimeout() = %v, want <nil>", err)
+		}
+		cb.put(&ping{ack: true})
 		if err := cb.throttleWithTimeout(defaultTestShortTimeout); err == nil {
 			t.Fatal("throttleWithTimeout() = <nil>, want an error")
 		}

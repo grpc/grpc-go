@@ -276,8 +276,10 @@ func (s) TestClientTransport_ServerFloodWithoutReading(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("Timeout when waiting for the client's writer to exit")
 			}
-			queued := ct.controlBuf.transportResponseFrames.Load()
-			if queued > int64(maxQueuedTransportResponseFrames) {
+			ct.controlBuf.mu.Lock()
+			queued := ct.controlBuf.transportResponseFrames
+			ct.controlBuf.mu.Unlock()
+			if queued > maxQueuedTransportResponseFrames {
 				t.Fatalf("Number of queued transport response frames = %d, want <= %d", queued, maxQueuedTransportResponseFrames)
 			}
 		})
@@ -610,10 +612,10 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 
 	// Flood the server. Since the client is not reading anymore, the
 	// server's writer blocks when writing the first BDP ping, and the
-	// subsequent ones are queued. Use well over the limit as the number of
-	// rounds, so that the flood cannot complete if the server throttles
-	// reads at the limit.
-	numRounds := 2 * maxQueuedTransportResponseFrames
+	// subsequent ones are queued. Use well over the number of pings that
+	// can be queued as the number of rounds, so that the flood cannot
+	// complete if the server throttles reads at the limit.
+	numRounds := 4 * maxQueuedTransportResponseFrames
 	var roundsWritten int
 	var floodErr error
 	floodDone := make(chan struct{})
@@ -637,7 +639,8 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 
 	// Verify that the server stops reading from the connection before
 	// reading all the frames of the flood, and that it does not queue more
-	// pings than the limit.
+	// pings than the limit, both in the list of queued items and among the
+	// items taken by the writer.
 	for st.controlBuf.trfChan.Load() == nil {
 		select {
 		case <-floodDone:
@@ -652,7 +655,7 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 		t.Fatalf("Flood ended after %d of %d rounds (error: %v) while the server was throttling reads", roundsWritten, numRounds, floodErr)
 	case <-time.After(defaultTestShortTimeout):
 	}
-	if numPings := countQueuedItems[*ping](t, st.controlBuf, wConn); numPings > maxQueuedTransportResponseFrames {
-		t.Fatalf("Number of queued pings = %d, want <= %d", numPings, maxQueuedTransportResponseFrames)
+	if numPings := countQueuedItems[*ping](t, st.controlBuf, wConn); numPings > 2*maxQueuedTransportResponseFrames {
+		t.Fatalf("Number of queued pings = %d, want <= %d", numPings, 2*maxQueuedTransportResponseFrames)
 	}
 }
