@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -169,6 +170,41 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 	<-done
 	if numConns < 2 {
 		t.Fatalf("dial attempts: %v; want > 1", numConns)
+	}
+}
+
+// TestDialWithReturnConnectionErrorPreservesErrorChain verifies that a
+// blocking DialContext with WithReturnConnectionError keeps both the context
+// error and the underlying dial error discoverable via errors.Is, instead of
+// flattening them into a plain string.
+func (s) TestDialWithReturnConnectionErrorPreservesErrorChain(t *testing.T) {
+	sentinel := errors.New("synthetic dialer failure")
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	client, err := DialContext(ctx,
+		"passthrough:///does-not-matter:1234",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithReturnConnectionError(),
+		WithContextDialer(func(context.Context, string) (net.Conn, error) {
+			return nil, sentinel
+		}),
+		WithConnectParams(ConnectParams{
+			Backoff: backoff.Config{
+				BaseDelay:  10 * time.Millisecond,
+				Multiplier: 1,
+				MaxDelay:   10 * time.Millisecond,
+			},
+			MinConnectTimeout: 50 * time.Millisecond,
+		}))
+	if err == nil {
+		client.Close()
+		t.Fatalf("DialContext(_) succeeded; want connection error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("DialContext(_) = %v; want error wrapping %v", err, context.DeadlineExceeded)
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("DialContext(_) = %v; want error wrapping the dialer error", err)
 	}
 }
 
