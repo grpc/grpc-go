@@ -313,10 +313,8 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	md := metadata.MD{}
 	for _, h := range headers {
 		key := h.GetKey()
-		// Per gRFC A102, raw_value takes precedence over the legacy
-		// value field. A binary header value is base64-encoded
-		// whichever field carries it, matching gRPC-C++'s
-		// ParseXdsHeader.
+		// Per gRFC A102, raw_value takes precedence over the legacy value
+		// field.
 		val := h.GetValue()
 		if raw := h.GetRawValue(); len(raw) > 0 {
 			val = string(raw)
@@ -324,16 +322,16 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
 		}
-		if len(val) == 0 {
+		if val == "" {
 			return nil, fmt.Errorf("grpcservice: header key %q: either value or raw_value must be set", key)
 		}
 		if err := validateHeaderValue(key, val); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid value for header key %q: %v", key, err)
 		}
 		if strings.HasSuffix(key, "-bin") {
-			// A binary header value is base64-encoded. Decode it so
-			// the metadata holds raw bytes, matching what the
-			// transport layer encodes onto the wire.
+			// Per gRFC A102, binary header values are base64-encoded. Decode
+			// them, since metadata.MD holds the raw bytes of binary headers,
+			// and the transport base64-encodes them when sending.
 			b, err := decodeBinHeader(val)
 			if err != nil {
 				return nil, fmt.Errorf("grpcservice: invalid base64 value for binary header key %q: %v", key, err)
