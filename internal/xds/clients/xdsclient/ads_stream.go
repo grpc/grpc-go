@@ -63,10 +63,12 @@ type response struct {
 	resources []*anypb.Any
 }
 
-// dataAndErrTuple is a struct that holds a resource and an error. It is used to
-// return a resource and any associated error from a function.
+// dataAndErrTuple is a struct that holds a resource, its raw bytes, and an
+// error. It is used to return a resource and any associated error from a
+// function.
 type dataAndErrTuple struct {
 	Resource ResourceData
+	Raw      []byte
 	Err      error
 }
 

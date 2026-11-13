@@ -68,17 +68,19 @@ type RouteConfigResourceData struct {
 	Resource RouteConfigUpdate
 }
 
-// Equal returns true if other is equal to er.
+// Equal returns true if other is equal to r.
 func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
-	if other == nil {
+	if r == nil && other == nil {
+		return true
+	}
+	if (r == nil) != (other == nil) {
 		return false
 	}
-	return bytes.Equal(r.Bytes(), other.Bytes())
-}
-
-// Bytes returns the protobuf serialized bytes of the route config resource proto.
-func (r *RouteConfigResourceData) Bytes() []byte {
-	return r.Resource.Raw.GetValue()
+	o, ok := other.(*RouteConfigResourceData)
+	if !ok || o == nil {
+		return false
+	}
+	return bytes.Equal(r.Resource.Raw.GetValue(), o.Resource.Raw.GetValue())
 }
 
 // RouteConfigWatcher wraps the callbacks to be invoked for different
