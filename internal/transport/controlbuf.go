@@ -130,10 +130,15 @@ func (il *itemList[T]) resize(capacity int) {
 }
 
 // maxQueuedTransportResponseFrames is the maximum number of "transport
-// response" frames that we will buffer before preventing new reads from
-// occurring on the transport. See cbItem.isTransportResponseFrame for the
-// items that count towards this limit.
-var maxQueuedTransportResponseFrames = int(envconfig.ControlBufferThrottleLimit)
+// response" frames that we will buffer in the list of a controlBuffer before
+// preventing new reads from occurring on the transport. See
+// cbItem.isTransportResponseFrame for the items that count towards this
+// limit.
+//
+// It is half of the configured limit, since the frames that the consumer has
+// taken from the list and not processed yet, which can be as many, are not
+// counted.
+var maxQueuedTransportResponseFrames = max(1, int(envconfig.ControlBufferThrottleLimit)/2)
 
 type cbItem interface {
 	// isTransportResponseFrame reports whether the item counts against the
@@ -425,25 +430,35 @@ func (l *outStreamList) dequeue() *outStream {
 // but can also be used to instruct loopy to update its internal state. It
 // shouldn't be confused with an HTTP2 frame, although some of the control
 // frames like dataFrame and headerFrame do go out on wire as HTTP2 frames.
+//
+// Any number of goroutines, the producers, add control frames using put or
+// executeAndPut. A single goroutine, the consumer (loopy), removes them using
+// get.
 type controlBuffer struct {
 	wakeupCh chan struct{}   // Unblocks readers waiting for new items.
 	done     <-chan struct{} // Closed when the transport is done.
 	side     side            // Side of the transport owning this buffer.
 
-	// Mutex guards all the fields below, except trfChan which can be read
-	// atomically without holding mu.
+	// consumerList holds the control frames that the consumer took from list
+	// in a single critical section, and hasn't returned from get yet. It is
+	// only accessed by the consumer, without holding mu.
+	consumerList itemList[cbItem]
+
+	// Mutex guards all the fields below, except closed and trfChan which can
+	// be read atomically without holding mu.
 	mu              sync.Mutex
 	consumerWaiting bool             // True when readers are blocked waiting for new data.
-	closed          bool             // True when the controlbuf is finished.
+	closed          atomic.Bool      // True when the controlbuf is finished.
 	list            itemList[cbItem] // List of queued control frames.
 
-	// transportResponseFrames counts the number of queued items that
+	// transportResponseFrames counts the number of items queued in list that
 	// represent the response of an action initiated by the peer (as
-	// determined by cbItem.isTransportResponseFrame for this side).
+	// determined by cbItem.isTransportResponseFrame for this side). The
+	// items in consumerList are not counted.
 	// trfChan is created when transportResponseFrames >=
-	// maxQueuedTransportResponseFrames and is closed and nilled when
-	// transportResponseFrames drops below the threshold. Both fields are
-	// protected by mu.
+	// maxQueuedTransportResponseFrames and is closed and nilled when the
+	// consumer takes the items queued in list. Both fields are protected by
+	// mu.
 	transportResponseFrames int
 	trfChan                 atomic.Pointer[chan struct{}]
 }
@@ -505,7 +520,7 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.closed {
+	if c.closed.Load() {
 		return false, ErrConnClosing
 	}
 	if f != nil {
@@ -545,7 +560,23 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 // **and** there are no control frames in the control buffer, the call blocks
 // until one of the conditions is met: there is a frame to return or the
 // transport is closed.
+//
+// To reduce lock contention with producers, get takes all the queued frames
+// in a single critical section, and then returns them one at a time from
+// consumerList without holding the lock. get must only be called by the
+// consumer.
 func (c *controlBuffer) get(block bool) (any, error) {
+	if !c.consumerList.isEmpty() {
+		if c.closed.Load() {
+			return nil, ErrConnClosing
+		}
+		// closed is read without holding mu, so finish may set it right after
+		// the check above. Then this frame is returned, and the next call
+		// returns ErrConnClosing. This is benign: it is equivalent to finish
+		// being called right after get returns, which the slow path below
+		// doesn't prevent either.
+		return c.consumerList.dequeue(), nil
+	}
 	for {
 		c.mu.Lock()
 		frame, err := c.getOnceLocked()
@@ -573,49 +604,57 @@ func (c *controlBuffer) get(block bool) (any, error) {
 //
 // Caller must hold c.mu.
 func (c *controlBuffer) getOnceLocked() (any, error) {
-	if c.closed {
+	if c.closed.Load() {
 		return false, ErrConnClosing
 	}
 	if c.list.isEmpty() {
 		return nil, nil
 	}
-	h := c.list.dequeue()
-	if h.isTransportResponseFrame(c.side) {
-		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
-			// We are removing the frame that put us over the
-			// threshold; close and clear the throttling channel.
-			ch := c.trfChan.Swap(nil)
-			close(*ch)
-		}
-		c.transportResponseFrames--
+	// Take all the queued frames by swapping the two lists. consumerList is
+	// empty here. The frames taken no longer count towards the limit.
+	c.list, c.consumerList = c.consumerList, c.list
+	if c.transportResponseFrames >= maxQueuedTransportResponseFrames {
+		// We are removing the frames that put us over the threshold;
+		// close and clear the throttling channel.
+		ch := c.trfChan.Swap(nil)
+		close(*ch)
 	}
-	return h, nil
+	c.transportResponseFrames = 0
+	return c.consumerList.dequeue(), nil
+}
+
+// discardItem releases the resources held by a control frame that will not be
+// handled because the control buffer is finished.
+func discardItem(it cbItem) {
+	switch v := it.(type) {
+	case *clientHeaders:
+		v.onOrphaned(ErrConnClosing)
+	case *dataFrame:
+		if !v.processing {
+			v.data.Free()
+		}
+	}
 }
 
 // finish closes the control buffer, cleaning up any streams that have queued
 // header frames. Once this method returns, no more frames can be added to the
 // control buffer, and attempts to do so will return ErrConnClosing.
+//
+// finish may be called from any goroutine, so it doesn't touch consumerList;
+// the consumer must pass the frames left in consumerList to discardItem once
+// it stops calling get.
 func (c *controlBuffer) finish() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.closed {
+	if c.closed.Load() {
 		return
 	}
-	c.closed = true
+	c.closed.Store(true)
 	// There may be headers for streams in the control buffer.
 	// These streams need to be cleaned out since the transport
 	// is still not aware of these yet.
-	c.list.dequeueAll(func(it cbItem) {
-		switch v := it.(type) {
-		case *clientHeaders:
-			v.onOrphaned(ErrConnClosing)
-		case *dataFrame:
-			if !v.processing {
-				v.data.Free()
-			}
-		}
-	})
+	c.list.dequeueAll(discardItem)
 
 	// In case throttle() or throttleWithTimeout() is currently in flight,
 	// it needs to be unblocked. Otherwise, the transport may not close,
@@ -735,6 +774,8 @@ func (l *loopyWriter) run() (err error) {
 			l.framer.writer.Flush()
 		}
 		l.cbuf.finish()
+		// finish doesn't touch consumerList, which only loopy may access.
+		l.cbuf.consumerList.dequeueAll(discardItem)
 	}()
 	for {
 		it, err := l.cbuf.get(true)
