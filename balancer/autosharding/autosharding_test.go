@@ -52,6 +52,14 @@ const (
 	errorTolerance          = .05 // For tests that rely on statistical significance.
 )
 
+func init() {
+	// Ensure that the initial connect timer does not fire in tests, unless
+	// they explicitly override internal.AfterFunc to control it. Otherwise,
+	// the resulting connection attempt to a random endpoint would interfere
+	// with the expectations of tests that trigger connections via picks.
+	internal.InitialConnectDelay = time.Hour
+}
+
 // uccsTestEnv contains the environment setup for tests that verify the behavior
 // of the autosharding balancer when it processes an update from the name
 // resolver, i.e., UpdateClientConnState.
@@ -172,7 +180,7 @@ func waitForEvent(ctx context.Context, t *testing.T, e *grpcsync.Event, errMsg s
 // verifies that the balancer transitions to TransientFailure with an
 // appropriate error picker, closing any existing gRPC channel and autosharding
 // client. A subsequent valid update should create a new channel and client and
-// transition the channel back to Idle with a queueing picker.
+// transition the channel to Connecting with a queueing picker.
 func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -257,8 +265,8 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 				CC:                 tcc1,
 				AutoshardingTarget: "test-target",
 			})
-			if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-				t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+			if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+				t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 			}
 			if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 				t.Fatalf("WaitForPickerWithErr(ErrNoSubConnAvailable) failed: %v", err)
@@ -293,7 +301,7 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 
 			// A subsequent valid update with the same config should create a
 			// new gRPC channel and autosharding client, and transition back to
-			// Idle with a queueing picker (since the previous assignment was
+			// Connecting with a queueing picker (since the previous assignment was
 			// cleared).
 			err = b.UpdateClientConnState(balancer.ClientConnState{
 				ResolverState:  resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
@@ -307,8 +315,8 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 				CC:                 tcc1,
 				AutoshardingTarget: "test-target",
 			})
-			if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-				t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+			if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+				t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 			}
 			if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 				t.Fatalf("WaitForPickerWithErr(ErrNoSubConnAvailable) failed: %v", err)
@@ -341,7 +349,7 @@ func (s) TestResolverError(t *testing.T) {
 	}
 
 	// A valid resolver update should clear lastResolverErr and move the channel
-	// to Idle while waiting for an initial assignment.
+	// to Connecting while waiting for an initial assignment.
 	defaultTestCfg := &autosharding.LBConfig{
 		ChannelFactoryKey:  "test-factory-key",
 		AutoShardingTarget: "test-target",
@@ -353,8 +361,8 @@ func (s) TestResolverError(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 	}
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 	}
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatalf("WaitForPickerWithErr(ErrNoSubConnAvailable) failed: %v", err)
@@ -420,9 +428,9 @@ func (s) TestUpdateClientConnState_EmptyEndpointsClosesChildSubConns(t *testing.
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 	}
 
-	// Verify that the channel is in Idle and with a queueing picker.
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	// Verify that the channel is in Connecting and with a queueing picker.
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 	}
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatalf("WaitForPickerWithErr(%v) failed: %v", balancer.ErrNoSubConnAvailable, err)
@@ -526,8 +534,12 @@ func (s) TestUpdateClientConnState_IdenticalUpdate(t *testing.T) {
 
 // Tests that changing the locality in the resolver update (with "%s" in the
 // autosharding target) creates a new autosharding client with the updated
-// locality, but reuses the existing gRPC channel if the channel factory key is
-// unchanged.
+// locality. Even though the channel factory key is unchanged, a new gRPC
+// channel is requested from the channel factory for the new autosharding
+// client (the channel factory is expected to return a reference to the
+// existing channel in this case, but the one used in this test does not). The
+// previous autosharding client is closed, and it releases the previous gRPC
+// channel.
 func (s) TestUpdateClientConnState_AutoshardingTargetChange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -535,8 +547,8 @@ func (s) TestUpdateClientConnState_AutoshardingTargetChange(t *testing.T) {
 	env := setupBalancerWithInitialConfig(ctx, t)
 
 	// Changing locality (with "%s" in target) and keeping the channel
-	// factory key unchanged should reuse the gRPC channel, but create a new
-	// AutoshardingClient.
+	// factory key unchanged should create a new AutoshardingClient, with a
+	// gRPC channel requested from the channel factory using the same key.
 	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  locality.Set(env.baseState, "eu-west1"),
 		BalancerConfig: env.lbConfig,
@@ -545,24 +557,31 @@ func (s) TestUpdateClientConnState_AutoshardingTargetChange(t *testing.T) {
 	}
 
 	// Verify the options passed to the new autosharding client.
+	tcc2 := verifyTestClientConn(ctx, t, env.testClientConnCh, "key-1")
 	verifyTestAutoshardingClient(ctx, t, env.testAutoshardingClientCh, sharding.ClientOptions{
-		CC:                       env.tcc1,
+		CC:                       tcc2,
 		AutoshardingTarget:       "service-eu-west1-shard",
 		UUID:                     env.tac1.opts.UUID,
 		InitialAssignmentTimeout: 60 * time.Second,
 	})
 
-	// Verify that the previous autosharding client is closed.
+	// Verify that the previous autosharding client is closed, and that it
+	// releases the previous gRPC channel.
 	select {
 	case <-env.tac1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for previous autosharding client to be closed on locality change")
 	}
-
-	// Verify that the gRPC channel is not closed.
 	select {
 	case <-env.tcc1.closeCalled.Done():
-		t.Fatalf("Existing gRPC channel was unexpectedly closed on locality change")
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for previous gRPC channel to be released on locality change")
+	}
+
+	// Verify that the new gRPC channel is not released.
+	select {
+	case <-tcc2.closeCalled.Done():
+		t.Fatalf("New gRPC channel was unexpectedly released on locality change")
 	case <-time.After(defaultTestShortTimeout):
 	}
 }
@@ -704,9 +723,9 @@ func (s) TestEndpointFilteringAndDeduplication(t *testing.T) {
 		t.Fatalf("UpdateClientConnState() failed: %v", err)
 	}
 
-	// Verify that the channel is in Idle and with a queueing picker.
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	// Verify that the channel is in Connecting and with a queueing picker.
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 	}
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatalf("WaitForPickerWithErr(%v) failed: %v", balancer.ErrNoSubConnAvailable, err)
@@ -787,7 +806,8 @@ type autoshardingClientTestEnv struct {
 // setupBalancerWithTwoEndpoints builds an autosharding balancer, sends an
 // initial valid configuration with two endpoints ("host-a" at "10.0.0.1:8080"
 // and "host-b" at "10.0.0.2:8080"), waits for the autosharding client to be
-// created, and verifies that the channel starts in Idle with a queueing picker.
+// created, and verifies that the channel starts in Connecting with a queueing
+// picker.
 func setupBalancerWithTwoEndpoints(ctx context.Context, t *testing.T, enableFallback bool) *autoshardingClientTestEnv {
 	t.Helper()
 
@@ -820,8 +840,8 @@ func setupBalancerWithTwoEndpoints(ctx context.Context, t *testing.T, enableFall
 		t.Fatal("Timeout waiting for creation of autosharding client")
 	}
 
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 	}
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatalf("WaitForPickerWithErr(ErrNoSubConnAvailable) failed: %v", err)
@@ -841,7 +861,13 @@ func setupBalancerWithTwoEndpoints(ctx context.Context, t *testing.T, enableFall
 // (["", "m") -> host-a, ["m", inf) -> host-b) into env.tac, triggers SubConn
 // creation for both endpoints via picks, moves both SubConns to Ready, and
 // verifies that keys route to their assigned SubConns.
-func injectAssignmentAndConnectSubConns(ctx context.Context, t *testing.T, env *autoshardingClientTestEnv) (scA, scB *testutils.TestSubConn) {
+//
+// wantState is the connectivity state expected to be reported once the
+// assignment is processed, and before any SubConn is created. This is
+// CONNECTING if this is the first result from the autosharding client, since no
+// endpoint has moved out of IDLE yet. It is IDLE if TRANSIENT_FAILURE was
+// previously reported, since normal aggregation rules apply after that.
+func injectAssignmentAndConnectSubConns(ctx context.Context, t *testing.T, env *autoshardingClientTestEnv, wantState connectivity.State) (scA, scB *testutils.TestSubConn) {
 	t.Helper()
 
 	env.tac.onAssignmentUpdate(&sharding.Assignment{
@@ -852,8 +878,8 @@ func injectAssignmentAndConnectSubConns(ctx context.Context, t *testing.T, env *
 		},
 		Generation: 1,
 	})
-	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	if err := env.cc.WaitForConnectivityState(ctx, wantState); err != nil {
+		t.Fatalf("WaitForConnectivityState(%v) failed: %v", wantState, err)
 	}
 
 	// The first call to Pick must get queued and should result in a connection
@@ -947,7 +973,7 @@ func (s) TestAutoshardingClient_ValidAssignment(t *testing.T) {
 	defer cancel()
 
 	env := setupBalancerWithTwoEndpoints(ctx, t, false)
-	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Connecting)
 
 	// Inject another valid assignment that changes how keys are routed.
 	// ["", "z") -> host-a, ["z", inf) -> host-b.
@@ -987,8 +1013,9 @@ func (s) TestAutoshardingClient_Error_FallbackDisabled(t *testing.T) {
 	}
 
 	// A subsequent valid assignment should restore the balancer to a working
-	// state.
-	injectAssignmentAndConnectSubConns(ctx, t, env)
+	// state. Since TRANSIENT_FAILURE was reported, normal aggregation rules
+	// apply, and the channel moves to IDLE because all endpoints are IDLE.
+	injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Idle)
 }
 
 // verifyFallbackPoolPicks verifies that the balancer routes picks to both
@@ -1213,7 +1240,7 @@ func (s) TestAutoshardingClient_TargetChange_PreviousAssignmentInUse(t *testing.
 	defer cancel()
 
 	env := setupBalancerWithTwoEndpoints(ctx, t, false)
-	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Connecting)
 
 	// Change autosharding_target causing a new client (tac2) to be created.
 	env.lbConfig.AutoShardingTarget = "new-target"
@@ -1265,7 +1292,7 @@ func (s) TestAutoshardingClient_SliceWithFallbackDisabled(t *testing.T) {
 			defer cancel()
 
 			env := setupBalancerWithTwoEndpoints(ctx, t, enableFallback)
-			scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
+			scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Connecting)
 
 			// Inject an assignment where the first and last slices have no
 			// endpoints assigned by the sharding server (FallbackDisabled:
@@ -1311,7 +1338,7 @@ func (s) TestAutoshardingClient_ValidAssignment_PerSliceFallback(t *testing.T) {
 	defer cancel()
 
 	env := setupBalancerWithTwoEndpoints(ctx, t, true)
-	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Connecting)
 
 	// Move subconnB to TransientFailure and verify that the picker routes keys
 	// in the ["m", inf) slice to the fallback pool (scA).
@@ -1330,7 +1357,7 @@ func (s) TestDynamicEndpointUpdates(t *testing.T) {
 	defer cancel()
 
 	env := setupBalancerWithTwoEndpoints(ctx, t, false)
-	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Connecting)
 
 	epA := newTestEndpoint("10.0.0.1:8080", "host-a")
 	epB := newTestEndpoint("10.0.0.2:8080", "host-b")
@@ -1375,12 +1402,131 @@ func (s) TestDynamicEndpointUpdates(t *testing.T) {
 	}
 }
 
+// Tests that when the name resolver moves a hostname to a different set of
+// addresses, the state of the child associated with the old addresses is not
+// carried over to the endpoint that now owns the hostname. RPCs for the moved
+// hostname must stop being routed to the old SubConn, and must trigger a
+// connection attempt to the new addresses instead.
+func (s) TestHostnameMovedToDifferentAddresses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	env := setupBalancerWithTwoEndpoints(ctx, t, false)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Connecting)
+
+	// Move host-a from 10.0.0.1:8080 to 10.0.0.3:8080. The assignment still
+	// routes ["", "m") to host-a.
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
+			newTestEndpoint("10.0.0.3:8080", "host-a"),
+			newTestEndpoint("10.0.0.2:8080", "host-b"),
+		}),
+		BalancerConfig: env.lbConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState() failed: %v", err)
+	}
+
+	// The child for 10.0.0.1:8080 is removed, so its SubConn must be shut
+	// down.
+	select {
+	case sc := <-env.cc.ShutdownSubConnCh:
+		if sc != scA {
+			t.Fatalf("SubConn %v shut down, want %v", sc, scA)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the SubConn for the old address of host-a to be shut down")
+	}
+
+	// RPCs for host-a must not be routed to the old SubConn. The new endpoint
+	// starts out in IDLE, so the pick must be queued and must trigger a
+	// connection attempt to the new address. RPCs for host-b are unaffected.
+	if err := env.cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+		if res, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
+			return fmt.Errorf("Pick(\"a\") = (%v, %v), want error %v", res, err, balancer.ErrNoSubConnAvailable)
+		}
+		if res, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); err != nil || res.SubConn != scB {
+			return fmt.Errorf("Pick(\"m\") = (%v, %v), want SubConn %v", res, err, scB)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	scA2 := waitForSubConn(ctx, t, env.cc)
+	if got, want := scA2.Addresses[0].Addr, "10.0.0.3:8080"; got != want {
+		t.Fatalf("SubConn created with addr %q, want %q", got, want)
+	}
+	select {
+	case <-scA2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for SubConn.Connect()")
+	}
+	scA2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	scA2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scA2,
+		"m": scB,
+	})
+}
+
+// Tests that when the name resolver changes the hostname of an endpoint without
+// changing its addresses, the existing child (and its connection) is retained
+// and is used for the new hostname once the assignment refers to it.
+func (s) TestHostnameChangedForSameAddresses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	env := setupBalancerWithTwoEndpoints(ctx, t, false)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env, connectivity.Connecting)
+
+	// Rename host-a to host-c, keeping the address 10.0.0.1:8080.
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
+			newTestEndpoint("10.0.0.1:8080", "host-c"),
+			newTestEndpoint("10.0.0.2:8080", "host-b"),
+		}),
+		BalancerConfig: env.lbConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState() failed: %v", err)
+	}
+
+	// Inject an assignment that refers to the new hostname.
+	env.tac.onAssignmentUpdate(&sharding.Assignment{
+		EndpointNames: []string{"host-c", "host-b"},
+		Slices: []sharding.Slice{
+			{StartKey: []byte(""), Endpoints: []int{0}},
+			{StartKey: []byte("m"), Endpoints: []int{1}},
+		},
+		Generation: 2,
+	})
+
+	// RPCs for host-c must be routed to the existing SubConn for
+	// 10.0.0.1:8080, without the need for a new connection.
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scA,
+		"m": scB,
+	})
+
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case sc := <-env.cc.NewSubConnCh:
+		t.Fatalf("Unexpected SubConn %v created when only the hostname changed", sc)
+	case sc := <-env.cc.ShutdownSubConnCh:
+		t.Fatalf("Unexpected SubConn %v shut down when only the hostname changed", sc)
+	case <-sCtx.Done():
+	}
+}
+
 // Tests the connectivity state aggregation rules and automatic connection
-// triggering on IDLE endpoints when the aggregated state is CONNECTING or
-// TRANSIENT_FAILURE and no endpoint is currently in CONNECTING.
+// triggering on a random IDLE endpoint when the aggregated state is CONNECTING
+// or TRANSIENT_FAILURE and no endpoint is currently in CONNECTING.
 func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
+	// Make the random choice of IDLE endpoint deterministic by always picking
+	// the IDLE endpoint with the lowest index.
+	overrideRandIntN(t, func(int) int { return 0 })
 
 	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
 	cc := testutils.NewBalancerClientConn(t)
@@ -1423,9 +1569,10 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 		Generation: 1,
 	})
 
-	// All 4 endpoints are in IDLE, therefore aggregated state must be IDLE.
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	// All 4 endpoints are in IDLE, but since no endpoint has moved out of IDLE
+	// yet, the aggregated state must be CONNECTING.
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 	}
 	p := waitForPicker(ctx, t, cc)
 
@@ -1460,8 +1607,9 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	// Moving sc1 to TF should leave us with one endpoint in TF and three in IDLE.
 	// Because 1 endpoint is in TF and len(endpoints) > 1, aggregated state must
 	// be CONNECTING. And because no endpoint is in CONNECTING, the balancer
-	// must automatically trigger ExitIdle on the lowest-index IDLE endpoint
-	// (host-2, "10.0.0.2:8080").
+	// must automatically trigger ExitIdle on a random IDLE endpoint, which is
+	// the lowest-index IDLE endpoint (host-2, "10.0.0.2:8080") because of the
+	// override above.
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	sc2 := waitForSubConn(ctx, t, cc)
 	if got, want := sc2.Addresses[0].Addr, "10.0.0.2:8080"; got != want {
@@ -1484,8 +1632,8 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	// Moving sc2 to CONNECTING then TF should leave us with two endpoints in TF
 	// and two in IDLE, and this should result in the aggregated state being TF.
 	// And because no endpoint is in CONNECTING, the balancer automatically
-	// triggers ExitIdle on the lowest-index IDLE endpoint (host-3,
-	// "10.0.0.3:8080").
+	// triggers ExitIdle on a random IDLE endpoint, which is the lowest-index
+	// IDLE endpoint (host-3, "10.0.0.3:8080") because of the override above.
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
@@ -1635,7 +1783,11 @@ func (c *testAutoshardingClient) onAssignmentError(err error) {
 }
 
 func (c *testAutoshardingClient) close() {
-	c.closeCalled.Fire()
+	// Like the real autosharding client, release the gRPC channel (exactly
+	// once) when the client is closed.
+	if c.closeCalled.Fire() && c.opts.CCClose != nil {
+		c.opts.CCClose()
+	}
 }
 
 // overrideNewAutoshardingClientForTesting overrides the
