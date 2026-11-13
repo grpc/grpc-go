@@ -144,6 +144,62 @@ func (s) TestPicker_MissingKeyHeader(t *testing.T) {
 	}
 }
 
+// Tests that when the sharding key header has multiple values, the values are
+// joined with a "," character (with no whitespace) to form the sharding key.
+func (s) TestPicker_MultipleKeyHeaderValues(t *testing.T) {
+	em, subConns, _ := buildTestEndpoints([]testEndpointSpec{
+		{hostname: "hostA", state: connectivity.Ready},
+		{hostname: "hostB", state: connectivity.Ready},
+	})
+	assign := &sharding.Assignment{
+		EndpointNames: []string{"hostA", "hostB"},
+		Slices: []sharding.Slice{
+			// Slice 0 ["", "a,z"): assigned to hostA.
+			{StartKey: []byte(""), Endpoints: []int{0}},
+			// Slice 1 ["a,z", nil): assigned to hostB.
+			{StartKey: []byte("a,z"), Endpoints: []int{1}},
+		},
+		Generation: 1,
+	}
+	sm := buildSliceMap(em, assign)
+	p := newPicker(em, sm, &LBConfig{KeyHeaderName: testHeaderName})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tests := []struct {
+		name   string
+		values []string
+		wantSC balancer.SubConn
+	}{
+		{
+			// The key "a" falls in slice 0.
+			name:   "single-value",
+			values: []string{"a"},
+			wantSC: subConns[0],
+		},
+		{
+			// The key "a,z" falls in slice 1. Using only the first value ("a"),
+			// or joining the values with ", " ("a, z"), would select slice 0.
+			name:   "multiple-values",
+			values: []string{"a", "z"},
+			wantSC: subConns[1],
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := metadata.NewOutgoingContext(ctx, metadata.MD{testHeaderName: tc.values})
+			res, err := p.Pick(balancer.PickInfo{Ctx: ctx})
+			if err != nil {
+				t.Fatalf("Pick() failed: %v", err)
+			}
+			if res.SubConn != tc.wantSC {
+				t.Errorf("Pick() SubConn = %v, want %v", res.SubConn, tc.wantSC)
+			}
+		})
+	}
+}
+
 // Tests the picker behavior when no assignment has been received from the
 // sharding service and the initial assignment timeout has expired, verifying
 // that RPCs route to the fallback pool when fallback is enabled.

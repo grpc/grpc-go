@@ -21,6 +21,7 @@ package sharding_test
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -713,7 +714,8 @@ func (s) TestClient_InitialAssignmentTimeout(t *testing.T) {
 }
 
 // Tests that closing the client cancels the stream to the sharding service and
-// is idempotent, and that no error is reported, either for the stream
+// is idempotent, that the gRPC channel is released exactly once (after the
+// stream is cancelled), and that no error is reported, either for the stream
 // cancellation caused by the close, or by the initial assignment timer after
 // the close.
 func (s) TestClient_Close(t *testing.T) {
@@ -723,8 +725,10 @@ func (s) TestClient_Close(t *testing.T) {
 	// The server never sends an assignment, so OnAssignmentUpdate is not set.
 	srv := startTestShardingServer(t)
 	errCh := make(chan error, 1)
+	var ccCloseCount atomic.Int32
 	closeClient := sharding.NewClient(sharding.ClientOptions{
 		CC:                       srv.cc,
+		CCClose:                  func() { ccCloseCount.Add(1) },
 		AutoshardingTarget:       "test-target",
 		UUID:                     "test-uuid",
 		InitialAssignmentTimeout: initialAssignmentTimeout,
@@ -739,7 +743,16 @@ func (s) TestClient_Close(t *testing.T) {
 		LatestGeneration: 0,
 	})
 
+	if got := ccCloseCount.Load(); got != 0 {
+		t.Fatalf("CCClose invoked %d times before close, want 0", got)
+	}
 	closeClient()
+
+	// close() waits for the client's goroutine to exit, and releases the
+	// channel after that.
+	if got := ccCloseCount.Load(); got != 1 {
+		t.Fatalf("CCClose invoked %d times after close, want 1", got)
+	}
 
 	// Verify that the server sees the stream being cancelled.
 	select {
@@ -767,6 +780,9 @@ func (s) TestClient_Close(t *testing.T) {
 	case <-closeDoneCh:
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for the second call to close to return")
+	}
+	if got := ccCloseCount.Load(); got != 1 {
+		t.Fatalf("CCClose invoked %d times after second close, want 1", got)
 	}
 
 	// Wait past the initial assignment timeout, and verify that no error is

@@ -58,6 +58,7 @@ var (
 // ClientOptions contains the options for creating a new autosharding client.
 type ClientOptions struct {
 	CC                       grpc.ClientConnInterface // The gRPC channel to the sharding service.
+	CCClose                  func()                   // If non-nil, invoked once when the client is closed, to release CC.
 	AutoshardingTarget       string                   // The target for the autosharding service.
 	UUID                     string                   // The unique identifier for this client.
 	InitialAssignmentTimeout time.Duration            // The timeout for the initial assignment fetch.
@@ -69,7 +70,9 @@ type ClientOptions struct {
 // NewClient creates a new autosharding client that connects to the sharding
 // service using the provided options and fetches assignments. It returns a
 // function to close the client. The close function blocks until the client's
-// goroutine has exited, and no callbacks are invoked after it returns.
+// goroutine has exited, and no callbacks are invoked after it returns. The
+// client takes ownership of opts.CC, and invokes opts.CCClose (if non-nil) once
+// it is closed.
 //
 // OnAssignmentUpdate and OnAssignmentError are invoked serially, while an
 // internal lock is held. They must not block and must not call the close
@@ -77,6 +80,7 @@ type ClientOptions struct {
 func NewClient(opts ClientOptions) func() {
 	ac := &autoshardingClient{
 		cc:                 opts.CC,
+		ccClose:            opts.CCClose,
 		target:             opts.AutoshardingTarget,
 		uuid:               opts.UUID,
 		onAssignmentUpdate: opts.OnAssignmentUpdate,
@@ -130,6 +134,7 @@ type autoshardingClient struct {
 	// The following fields are initialized once and never modified, so they
 	// don't need to be protected by a mutex.
 	cc                 grpc.ClientConnInterface
+	ccClose            func()
 	target             string
 	uuid               string
 	onAssignmentUpdate func(*Assignment)
@@ -575,12 +580,14 @@ func (c *autoshardingClient) reportError(err error) {
 }
 
 // close closes the autosharding client, cancelling the context used for the
-// streaming RPC and waiting for the run goroutine to exit.
+// streaming RPC and waiting for the run goroutine to exit. It then releases
+// the gRPC channel by invoking ccClose (if non-nil), exactly once.
 //
 // It is guaranteed that no more callbacks will be invoked once this returns.
 func (c *autoshardingClient) close() {
 	c.mu.Lock()
-	if !c.closed {
+	firstClose := !c.closed
+	if firstClose {
 		c.closed = true
 		c.cancel()
 	}
@@ -591,6 +598,11 @@ func (c *autoshardingClient) close() {
 	c.mu.Unlock()
 
 	<-c.runnerDoneCh
+	// Release the channel only after the run goroutine has exited, to ensure
+	// that it is no longer in use.
+	if firstClose && c.ccClose != nil {
+		c.ccClose()
+	}
 	if c.logger.V(2) {
 		c.logger.Infof("Shutdown")
 	}

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"maps"
 	rand "math/rand/v2"
+	"strings"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/autosharding/internal"
@@ -175,7 +176,10 @@ func (p *picker) pickFromEndpointIndices(indices []int, info balancer.PickInfo) 
 }
 
 // extractKeyFromMetadata returns the sharding key stored under headerName in
-// the outgoing context metadata, or nil if the header is not present.
+// the outgoing context metadata, or nil if the header is not present. If the
+// header has multiple values, they are joined with a "," character (with no
+// whitespace), as is done for request_hash_header in the ring_hash LB policy
+// (gRFC A76).
 func extractKeyFromMetadata(ctx context.Context, headerName string) []byte {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
@@ -185,5 +189,5 @@ func extractKeyFromMetadata(ctx context.Context, headerName string) []byte {
 	if len(vals) == 0 {
 		return nil
 	}
-	return []byte(vals[0])
+	return []byte(strings.Join(vals, ","))
 }
