@@ -648,6 +648,7 @@ func (x *AssignmentAck) GetErrorMessage() string {
 type AssignmentMetadata struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The assignment's unique and monotonically-increasing version number.
+	// Only positive values are allowed.
 	Generation    int64 `protobuf:"varint,1,opt,name=generation,proto3" json:"generation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1003,10 +1004,10 @@ const file_proto_autosharding_v1_autosharding_proto_rawDesc = "" +
 	"generation\x18\x01 \x01(\x03B\x04\xe2A\x01\x02R\n" +
 	"generation\x12 \n" +
 	"\baccepted\x18\x02 \x01(\bB\x04\xe2A\x01\x02R\baccepted\x12)\n" +
-	"\rerror_message\x18\x03 \x01(\tB\x04\xe2A\x01\x01R\ferrorMessage\"4\n" +
-	"\x12AssignmentMetadata\x12\x1e\n" +
+	"\rerror_message\x18\x03 \x01(\tB\x04\xe2A\x01\x01R\ferrorMessage\":\n" +
+	"\x12AssignmentMetadata\x12$\n" +
 	"\n" +
-	"generation\x18\x01 \x01(\x03R\n" +
+	"generation\x18\x01 \x01(\x03B\x04\xe2A\x01\x02R\n" +
 	"generation\"\xb8\x01\n" +
 	"\x0fAssignmentChunk\x12Z\n" +
 	"\x11slice_assignments\x18\x01 \x03(\v2-.google.cloud.autosharding.v1.SliceAssignmentR\x10sliceAssignments\x12I\n" +
