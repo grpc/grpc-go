@@ -951,6 +951,15 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
+// headerFieldsCountFromMD returns the total number of key-value pairs in md.
+func headerFieldsCountFromMD(md metadata.MD) int {
+	n := 0
+	for _, vv := range md {
+		n += len(vv)
+	}
+	return n
+}
+
 func (t *http2Server) checkForHeaderListSize(hf []hpack.HeaderField) bool {
 	if t.maxSendHeaderListSize == nil {
 		return true
@@ -1057,9 +1066,14 @@ func (t *http2Server) writeHeader(s *ServerStream, md metadata.MD) error {
 }
 
 func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
-	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
-	// first and create a slice of that exact size.
-	headerFields := make([]hpack.HeaderField, 0, 2) // at least :status, content-type will be there if none else.
+	// Count the metadata header fields as well so the slice is not reallocated
+	// while they are appended below.
+	headerFieldCount := 2 // :status, content-type. Keep in sync with the appends below
+	headerFieldCount += headerFieldsCountFromMD(s.header)
+	if s.sendCompress != "" {
+		headerFieldCount++
+	}
+	headerFields := make([]hpack.HeaderField, 0, headerFieldCount)
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
 	if s.sendCompress != "" {
@@ -1102,27 +1116,48 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	if s.getState() == streamDone {
 		return nil
 	}
+	p := istatus.RawStatusProto(st)
+	hasStatusDetails := len(p.GetDetails()) > 0
 
-	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
-	// first and create a slice of that exact size.
-	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
-	if !s.updateHeaderSent() {                      // No headers have been sent.
-		if len(s.header) > 0 { // Send a separate header frame.
-			if err := t.writeHeaderLocked(s); err != nil {
-				return err
-			}
-		} else { // Send a trailer only response.
-			headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
-			headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
+	// If the headers have not been sent yet and there are user headers to
+	// send, send them in a separate header frame first. This can fail, so do
+	// it before mutating s.trailer or allocating headerFields.
+	headersAlreadySent := s.updateHeaderSent()
+	if !headersAlreadySent && len(s.header) > 0 {
+		if err := t.writeHeaderLocked(s); err != nil {
+			return err
 		}
+	}
+	// If headers were not already sent and the block above did not send them,
+	// s.header is empty and this is a trailers-only response, which also needs
+	// :status and content-type.
+	trailersOnly := !headersAlreadySent
+
+	// Count the metadata header fields as well so the slice is not reallocated
+	// while they are appended below.
+	headerFieldCount := 2 // grpc-status, grpc-message. Keep in sync with the appends below
+	if hasStatusDetails {
+		// Do not use the user's grpc-status-details-bin (if present) if we are
+		// even attempting to set our own.
+		delete(s.trailer, grpcStatusDetailsBinHeader)
+
+		// +1 for optional grpc-status-details-bin
+		headerFieldCount++
+	}
+	headerFieldCount += headerFieldsCountFromMD(s.trailer)
+	if trailersOnly {
+		// Trailers-only response gets :status and content-type as well.
+		headerFieldCount += 2
+	}
+	headerFields := make([]hpack.HeaderField, 0, headerFieldCount)
+	if trailersOnly {
+		headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
 	}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status", Value: strconv.Itoa(int(st.Code()))})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(st.Message())})
 
-	if p := istatus.RawStatusProto(st); len(p.GetDetails()) > 0 {
-		// Do not use the user's grpc-status-details-bin (if present) if we are
-		// even attempting to set our own.
-		delete(s.trailer, grpcStatusDetailsBinHeader)
+	if hasStatusDetails {
 		stBytes, err := proto.Marshal(p)
 		if err != nil {
 			// TODO: return error instead, when callers are able to handle it.
