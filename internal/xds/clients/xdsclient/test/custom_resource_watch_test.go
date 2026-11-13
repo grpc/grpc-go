@@ -48,12 +48,11 @@ var customTestResourceType = xdsclient.ResourceType{
 type customTestDecoder struct{}
 
 func (customTestDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	any := resource.ToAny()
-	if any.GetTypeUrl() != customTestResourceType.TypeURL {
-		return nil, fmt.Errorf("unexpected resource type: %q", any.GetTypeUrl())
+	if resource.TypeURL != customTestResourceType.TypeURL {
+		return nil, fmt.Errorf("unexpected resource type: %q", resource.TypeURL)
 	}
 	var val wrapperspb.StringValue
-	if err := proto.Unmarshal(any.GetValue(), &val); err != nil {
+	if err := proto.Unmarshal(resource.Value, &val); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
