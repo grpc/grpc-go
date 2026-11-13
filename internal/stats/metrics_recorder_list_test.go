@@ -233,17 +233,6 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 // TestMetricRecorderListPanic tests that the metrics recorder list panics if
 // received the wrong number of labels for a particular metric.
 func (s) TestMetricRecorderListPanic(t *testing.T) {
-	cleanup := internal.SnapshotMetricRegistryForTesting()
-	defer cleanup()
-
-	intCountHandle := estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:           "simple counter",
-		Description:    "sum of all emissions from tests",
-		Unit:           "int",
-		Labels:         []string{"int counter label"},
-		OptionalLabels: []string{"int counter optional label"},
-		Default:        false,
-	})
 	mrl := istats.NewMetricsRecorderList(nil)
 
 	want := `Received 1 labels in call to record metric "simple counter", but expected 2.`
