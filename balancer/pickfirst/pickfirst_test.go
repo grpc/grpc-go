@@ -374,3 +374,182 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", newTfErr, err)
 	}
 }
+
+// Test verifies that ResolveNow is called only once when all subconns have
+// failed in the first pass, and not called on each individual subconn failure.
+func (s) TestPickFirstLeaf_ResolveNow_AllSubConnsFailedInFirstPass(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	tfErr := fmt.Errorf("test err: connection refused")
+
+	// Simulate connection failure on the first SubConn (sc1). ResolveNow should
+	// not be requested since other addresses in the first pass have not been
+	// tried yet.
+	sc1 := <-cc.NewSubConnCh
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc1.")
+	}
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	// Ensure no ResolveNow call after sc1 failure.
+	select {
+	case <-cc.ResolveNowCh:
+		t.Fatal("ResolveNow called unexpectedly after first subconn failure.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Simulate connection failure on the second SubConn (sc2). ResolveNow should
+	// still not be requested as the first pass is still in progress.
+	sc2 := <-cc.NewSubConnCh
+	select {
+	case <-sc2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc2.")
+	}
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	// Ensure no ResolveNow call after sc2 failure.
+	select {
+	case <-cc.ResolveNowCh:
+		t.Fatal("ResolveNow called unexpectedly after second subconn failure.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Simulate connection failure on the third and final SubConn (sc3). Since all
+	// addresses have now failed in the first pass, ResolveNow must be triggered.
+	sc3 := <-cc.NewSubConnCh
+	select {
+	case <-sc3.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc3.")
+	}
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	// ResolveNow should now be called exactly once upon ending the first pass.
+	select {
+	case <-cc.ResolveNowCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for ResolveNow() to be called.")
+	}
+
+	// Ensure no extra ResolveNow call was queued.
+	select {
+	case <-cc.ResolveNowCh:
+		t.Fatal("Unexpected extra ResolveNow call.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+}
+
+// Test verifies that in steady-state retry mode (subsequent passes), ResolveNow
+// is called only after a complete round of failures across all subconns.
+func (s) TestPickFirstLeaf_ResolveNow_SubsequentPasses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	tfErr := fmt.Errorf("test err: connection refused")
+
+	// Fail all subconns (sc1 and sc2) during the initial Happy Eyeballs pass to
+	// transition pickfirst into steady-state retry mode (TRANSIENT_FAILURE).
+	sc1 := <-cc.NewSubConnCh
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc1.")
+	}
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	sc2 := <-cc.NewSubConnCh
+	select {
+	case <-sc2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc2.")
+	}
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	// Since all subconns failed in the first pass, ResolveNow must be called
+	// once to conclude the first pass.
+	select {
+	case <-cc.ResolveNowCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for ResolveNow() after 1st pass.")
+	}
+
+	// In subsequent passes, subconns transition to Idle when their backoff
+	// timers expire. Pickfirst instructs them to reconnect.
+	//
+	// Start the second pass: sc1 completes its backoff and fails again (1 of 2).
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc1.")
+	}
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	// Only 1 of 2 subconns has failed so far in the second pass. Verify that
+	// ResolveNow is not called prematurely before the entire round of subconns
+	// has been attempted.
+	select {
+	case <-cc.ResolveNowCh:
+		t.Fatal("ResolveNow called prematurely in 2nd pass.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// sc2 completes backoff and fails as well, completing the second pass (2 of 2).
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	select {
+	case <-sc2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc2.")
+	}
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	// A full round across all subconns in the second pass has now failed, so
+	// ResolveNow must be triggered once again.
+	select {
+	case <-cc.ResolveNowCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for ResolveNow() after 2nd pass.")
+	}
+}
