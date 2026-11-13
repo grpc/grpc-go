@@ -77,6 +77,7 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 		transport:          tr,
 		serverConfig:       &serverCfg,
 		clientConfig:       &clientConfig,
+		nodeProto:          &v3corepb.Node{Id: nodeID},
 		eventHandler:       newTestEventHandler(),
 		watchExpiryTimeout: watchExpiryTimeout,
 	})
@@ -150,11 +151,21 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 			wantErrStr: "clientConfig is nil",
 		},
 		{
+			name: "emptyNodeProto",
+			opts: xdsChannelOpts{
+				transport:    &fakeTransport{},
+				serverConfig: &ServerConfig{},
+				clientConfig: &Config{},
+			},
+			wantErrStr: "nodeProto is nil",
+		},
+		{
 			name: "emptyEventHandler",
 			opts: xdsChannelOpts{
 				transport:    &fakeTransport{},
 				serverConfig: &ServerConfig{},
 				clientConfig: &Config{},
+				nodeProto:    &v3corepb.Node{},
 			},
 			wantErrStr: "eventHandler is nil",
 		},

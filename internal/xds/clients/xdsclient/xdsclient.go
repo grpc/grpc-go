@@ -48,6 +48,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/proto"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
@@ -75,6 +76,7 @@ type XDSClient struct {
 	topLevelAuthority  *authority                   // The top-level authority, used only for old-style names without an authority.
 	authorities        map[string]*authority        // Map from authority names in config to authority struct.
 	config             *Config                      // Complete xDS client configuration.
+	nodeProto          *v3corepb.Node               // Protobuf representation of config.Node.
 	watchExpiryTimeout time.Duration                // Expiry timeout for ADS watch.
 	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
 	transportBuilder   clients.TransportBuilder     // Builder to create transports to xDS server.
@@ -109,10 +111,14 @@ func New(config Config) (*XDSClient, error) {
 	case config.Authorities == nil && config.Servers == nil:
 		return nil, errors.New("xdsclient: no servers or authorities specified")
 	}
+	nodeProto, err := clientsinternal.NodeProto(config.Node)
+	if err != nil {
+		return nil, fmt.Errorf("xdsclient: %w", err)
+	}
 	if config.WatchExpiryTimeout == 0 {
 		config.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
-	client, err := newClient(&config, name)
+	client, err := newClient(&config, nodeProto, name)
 	if err != nil {
 		return nil, err
 	}
@@ -125,13 +131,14 @@ func New(config Config) (*XDSClient, error) {
 }
 
 // newClient returns a new XDSClient with the given config.
-func newClient(config *Config, target string) (*XDSClient, error) {
+func newClient(config *Config, nodeProto *v3corepb.Node, target string) (*XDSClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &XDSClient{
 		target:             target,
 		done:               syncutil.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
+		nodeProto:          nodeProto,
 		watchExpiryTimeout: config.WatchExpiryTimeout,
 		backoff:            xdsclientinternal.StreamBackoff,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
@@ -299,6 +306,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 		transport:          tr,
 		serverConfig:       serverConfig,
 		clientConfig:       c.config,
+		nodeProto:          c.nodeProto,
 		eventHandler:       state,
 		backoff:            c.backoff,
 		watchExpiryTimeout: c.watchExpiryTimeout,
@@ -361,7 +369,7 @@ func (c *XDSClient) DumpResources() ([]byte, error) {
 		retCfg = append(retCfg, a.dumpResources()...)
 	}
 
-	nodeProto := clientsinternal.NodeProto(c.config.Node)
+	nodeProto := proto.Clone(c.nodeProto).(*v3corepb.Node)
 	nodeProto.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	resp := &v3statuspb.ClientStatusResponse{}
 	resp.Config = append(resp.Config, &v3statuspb.ClientConfig{

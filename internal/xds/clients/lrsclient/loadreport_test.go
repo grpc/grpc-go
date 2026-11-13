@@ -21,6 +21,7 @@ package lrsclient_test
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -872,4 +873,114 @@ func (s) TestReportLoad_LoadReportingIntervalClampedToMinimum(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s) TestLRSClient_New(t *testing.T) {
+	tb := grpctransport.NewBuilder(map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}})
+
+	tests := []struct {
+		name    string
+		config  lrsclient.Config
+		wantErr string
+	}{
+		{
+			name: "nil transport builder",
+			config: lrsclient.Config{
+				Node: clients.Node{ID: "node-id"},
+			},
+			wantErr: "transport builder is nil",
+		},
+		{
+			name: "invalid node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"invalid": make(chan int)},
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "failed to convert node metadata",
+		},
+		{
+			name: "valid node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"cluster": "test-cluster", "retries": 3.0},
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "",
+		},
+		{
+			name: "empty node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{},
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "",
+		},
+		{
+			name: "nil node metadata",
+			config: lrsclient.Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: nil,
+				},
+				TransportBuilder: tb,
+			},
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := lrsclient.New(tt.config)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("New(%+v) failed: %v", tt.config, err)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("New(%+v) returned error %v, want error %q", tt.config, err, tt.wantErr)
+				}
+			}
+		})
+	}
+}
+
+func (s) TestLRSClient_NodeMetadataMutationAfterNew(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	nodeID := uuid.New().String()
+	metadata := map[string]any{"initialKey": "initialVal"}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	config := lrsclient.Config{
+		Node: clients.Node{
+			ID:               nodeID,
+			UserAgentName:    "user-agent",
+			UserAgentVersion: "0.0.0.0",
+			Metadata:         metadata,
+		},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+	}
+	client, err := lrsclient.New(config)
+	if err != nil {
+		t.Fatalf("lrsclient.New() failed: %v", err)
+	}
+
+	// Mutate metadata after New returns with an invalid value type.
+	metadata["invalid"] = make(chan int)
+
+	// ReportLoad should succeed using the stored nodeProto without re-converting.
+	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
+	loadStore, err := client.ReportLoad(serverIdentifier)
+	if err != nil {
+		t.Fatalf("client.ReportLoad() failed after mutating metadata: %v", err)
+	}
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer ssCancel()
+	defer loadStore.Stop(ssCtx)
 }

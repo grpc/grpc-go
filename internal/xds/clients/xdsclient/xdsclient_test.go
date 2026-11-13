@@ -90,6 +90,32 @@ func (s) TestXDSClient_New(t *testing.T) {
 			},
 			wantErr: "",
 		},
+		{
+			name: "invalid node metadata",
+			config: Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"invalid": make(chan int)},
+				},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(configs),
+				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+			},
+			wantErr: "failed to convert node metadata",
+		},
+		{
+			name: "valid node metadata",
+			config: Config{
+				Node: clients.Node{
+					ID:       "node-id",
+					Metadata: map[string]any{"env": "prod", "version": 1.0},
+				},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(configs),
+				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+			},
+			wantErr: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -125,4 +151,31 @@ func (s) TestXDSClient_Close(t *testing.T) {
 	c.Close()
 	// Calling close again should not panic.
 	c.Close()
+}
+
+func (s) TestXDSClient_NodeMetadataMutationAfterNew(t *testing.T) {
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	metadata := map[string]any{"initialKey": "initialVal"}
+	config := Config{
+		Node: clients.Node{
+			ID:       "node-id",
+			Metadata: metadata,
+		},
+		ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+	}
+	c, err := New(config)
+	if err != nil {
+		t.Fatalf("New(%+v) failed: %v", config, err)
+	}
+	defer c.Close()
+
+	// Mutate metadata after New returns with an invalid value type.
+	metadata["invalid"] = make(chan int)
+
+	// DumpResources should succeed using the stored nodeProto without re-converting.
+	if _, err := c.DumpResources(); err != nil {
+		t.Fatalf("DumpResources() failed after mutating metadata: %v", err)
+	}
 }
