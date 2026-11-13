@@ -172,6 +172,21 @@ func (s *serverMetricsRecorder) ServerMetrics() *ServerMetrics {
 	return copyServerMetrics(s.state.Load())
 }
 
+// update atomically applies f to the current metrics, retrying if another
+// writer modified the state concurrently. Without this, two concurrent
+// setters can each load the same state, mutate their own copies, and have
+// the last store silently drop the other's update.
+func (s *serverMetricsRecorder) update(f func(*ServerMetrics)) {
+	for {
+		old := s.state.Load()
+		smCopy := copyServerMetrics(old)
+		f(smCopy)
+		if s.state.CompareAndSwap(old, smCopy) {
+			return
+		}
+	}
+}
+
 func copyMap(m map[string]float64) map[string]float64 {
 	ret := make(map[string]float64, len(m))
 	for k, v := range m {
@@ -201,17 +216,17 @@ func (s *serverMetricsRecorder) SetCPUUtilization(val float64) {
 		}
 		return
 	}
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.CPUUtilization = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.CPUUtilization = val
+	})
 }
 
 // DeleteCPUUtilization deletes the relevant server metric to prevent it from
 // being sent.
 func (s *serverMetricsRecorder) DeleteCPUUtilization() {
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.CPUUtilization = -1
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.CPUUtilization = -1
+	})
 }
 
 // SetMemoryUtilization records a measurement for the memory utilization metric.
@@ -222,17 +237,17 @@ func (s *serverMetricsRecorder) SetMemoryUtilization(val float64) {
 		}
 		return
 	}
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.MemUtilization = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.MemUtilization = val
+	})
 }
 
 // DeleteMemoryUtilization deletes the relevant server metric to prevent it
 // from being sent.
 func (s *serverMetricsRecorder) DeleteMemoryUtilization() {
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.MemUtilization = -1
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.MemUtilization = -1
+	})
 }
 
 // SetApplicationUtilization records a measurement for a generic utilization
@@ -244,17 +259,17 @@ func (s *serverMetricsRecorder) SetApplicationUtilization(val float64) {
 		}
 		return
 	}
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.AppUtilization = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.AppUtilization = val
+	})
 }
 
 // DeleteApplicationUtilization deletes the relevant server metric to prevent
 // it from being sent.
 func (s *serverMetricsRecorder) DeleteApplicationUtilization() {
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.AppUtilization = -1
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.AppUtilization = -1
+	})
 }
 
 // SetQPS records a measurement for the QPS metric.
@@ -265,16 +280,16 @@ func (s *serverMetricsRecorder) SetQPS(val float64) {
 		}
 		return
 	}
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.QPS = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.QPS = val
+	})
 }
 
 // DeleteQPS deletes the relevant server metric to prevent it from being sent.
 func (s *serverMetricsRecorder) DeleteQPS() {
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.QPS = -1
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.QPS = -1
+	})
 }
 
 // SetEPS records a measurement for the EPS metric.
@@ -285,16 +300,16 @@ func (s *serverMetricsRecorder) SetEPS(val float64) {
 		}
 		return
 	}
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.EPS = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.EPS = val
+	})
 }
 
 // DeleteEPS deletes the relevant server metric to prevent it from being sent.
 func (s *serverMetricsRecorder) DeleteEPS() {
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.EPS = -1
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.EPS = -1
+	})
 }
 
 // SetNamedUtilization records a measurement for a utilization metric uniquely
@@ -306,47 +321,47 @@ func (s *serverMetricsRecorder) SetNamedUtilization(name string, val float64) {
 		}
 		return
 	}
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.Utilization[name] = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.Utilization[name] = val
+	})
 }
 
 // DeleteNamedUtilization deletes any previously recorded measurement for a
 // utilization metric uniquely identifiable by name.
 func (s *serverMetricsRecorder) DeleteNamedUtilization(name string) {
-	smCopy := copyServerMetrics(s.state.Load())
-	delete(smCopy.Utilization, name)
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		delete(sm.Utilization, name)
+	})
 }
 
 // SetRequestCost records a measurement for a utilization metric uniquely
 // identifiable by name.
 func (s *serverMetricsRecorder) SetRequestCost(name string, val float64) {
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.RequestCost[name] = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.RequestCost[name] = val
+	})
 }
 
 // DeleteRequestCost deletes any previously recorded measurement for a
 // utilization metric uniquely identifiable by name.
 func (s *serverMetricsRecorder) DeleteRequestCost(name string) {
-	smCopy := copyServerMetrics(s.state.Load())
-	delete(smCopy.RequestCost, name)
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		delete(sm.RequestCost, name)
+	})
 }
 
 // SetNamedMetric records a measurement for a utilization metric uniquely
 // identifiable by name.
 func (s *serverMetricsRecorder) SetNamedMetric(name string, val float64) {
-	smCopy := copyServerMetrics(s.state.Load())
-	smCopy.NamedMetrics[name] = val
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		sm.NamedMetrics[name] = val
+	})
 }
 
 // DeleteNamedMetric deletes any previously recorded measurement for a
 // utilization metric uniquely identifiable by name.
 func (s *serverMetricsRecorder) DeleteNamedMetric(name string) {
-	smCopy := copyServerMetrics(s.state.Load())
-	delete(smCopy.NamedMetrics, name)
-	s.state.Store(smCopy)
+	s.update(func(sm *ServerMetrics) {
+		delete(sm.NamedMetrics, name)
+	})
 }
