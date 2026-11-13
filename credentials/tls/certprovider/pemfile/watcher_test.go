@@ -209,7 +209,7 @@ func createTmpDirWithFiles(t *testing.T, dirSuffix, certSrc, keySrc, rootSrc, sp
 
 // initializeProvider performs setup steps common to all tests (except the one
 // which uses symlinks).
-func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (string, certprovider.Provider, *testutils.Channel, func()) {
+func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool, onUpdate func(*certprovider.KeyMaterial)) (string, certprovider.Provider, *testutils.Channel, func()) {
 	t.Helper()
 
 	// Override the newDistributor to one which pushes on a channel that we
@@ -226,6 +226,7 @@ func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (st
 		KeyFile:         path.Join(dir, keyFile),
 		RootFile:        path.Join(dir, rootFile),
 		RefreshDuration: defaultTestRefreshDuration,
+		OnUpdate:        onUpdate,
 	}
 	if useSPIFFEBundle {
 		opts.SPIFFEBundleMapFile = path.Join(dir, spiffeBundleFile)
@@ -253,6 +254,24 @@ func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (st
 	}
 }
 
+// expectOnUpdates waits for n more invocations of the OnUpdate callback, and
+// then verifies that there are no further invocations for a short while.
+func expectOnUpdates(t *testing.T, ch *testutils.Channel, n int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for i := 0; i < n; i++ {
+		if _, err := ch.Receive(ctx); err != nil {
+			t.Fatalf("Timeout waiting for OnUpdate invocation %d of %d: %v", i+1, n, err)
+		}
+	}
+	sCtx, sCancel := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
+	defer sCancel()
+	if _, err := ch.Receive(sCtx); err == nil {
+		t.Fatal("OnUpdate invoked more times than expected")
+	}
+}
+
 // TestProvider_NoUpdate tests the case where a file watcher plugin is created
 // successfully, and the underlying files do not change. Verifies that the
 // plugin does not push new updates to the distributor in this case.
@@ -264,7 +283,8 @@ func (s) TestProvider_NoUpdate(t *testing.T) {
 			testName = testName + "_" + "withSPIFFEBundle"
 		}
 		t.Run(testName, func(t *testing.T) {
-			_, prov, distCh, cancel := initializeProvider(t, "no_update", useSPIFFEBundle)
+			onUpdateCh := testutils.NewChannelWithSize(10)
+			_, prov, distCh, cancel := initializeProvider(t, "no_update", useSPIFFEBundle, func(km *certprovider.KeyMaterial) { onUpdateCh.Send(km) })
 			defer cancel()
 
 			// Make sure the provider is healthy and returns key material.
@@ -274,12 +294,13 @@ func (s) TestProvider_NoUpdate(t *testing.T) {
 				t.Fatalf("provider.KeyMaterial() failed: %v", err)
 			}
 
-			// Files haven't change. Make sure no updates are pushed by the provider.
+			// Files haven't changed. Make sure no updates are pushed by the provider.
 			sCtx, sc := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
 			defer sc()
 			if _, err := distCh.Receive(sCtx); err == nil {
 				t.Fatal("New key material pushed to distributor when underlying files did not change")
 			}
+			expectOnUpdates(t, onUpdateCh, 2)
 		})
 	}
 }
@@ -295,7 +316,8 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 			testName = testName + "_" + "withSPIFFEBundle"
 		}
 		t.Run(testName, func(t *testing.T) {
-			dir, prov, distCh, cancel := initializeProvider(t, "update_success", useSPIFFEBundle)
+			onUpdateCh := testutils.NewChannelWithSize(10)
+			dir, prov, distCh, cancel := initializeProvider(t, "update_success", useSPIFFEBundle, func(km *certprovider.KeyMaterial) { onUpdateCh.Send(km) })
 			defer cancel()
 
 			// Make sure the provider is healthy and returns key material.
@@ -305,6 +327,7 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("provider.KeyMaterial() failed: %v", err)
 			}
+			expectOnUpdates(t, onUpdateCh, 2)
 
 			// Change only the root file.
 			if useSPIFFEBundle {
@@ -324,6 +347,7 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 			if err := compareKeyMaterial(km1, km2); err == nil {
 				t.Fatal("Expected provider to return new key material after update to underlying file")
 			}
+			expectOnUpdates(t, onUpdateCh, 1)
 
 			// Change only cert/key files.
 			createTmpFile(t, testdata.Path("x509/client2_cert.pem"), path.Join(dir, certFile))
@@ -340,6 +364,7 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 			if err := compareKeyMaterial(km2, km3); err == nil {
 				t.Fatal("Expected provider to return new key material after update to underlying file")
 			}
+			expectOnUpdates(t, onUpdateCh, 1)
 		})
 	}
 }
@@ -446,7 +471,8 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 // distributor. Then the update succeeds, and the test verifies that the key
 // material is updated.
 func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
-	dir, prov, distCh, cancel := initializeProvider(t, "update_failure", false)
+	onUpdateCh := testutils.NewChannelWithSize(10)
+	dir, prov, distCh, cancel := initializeProvider(t, "update_failure", false, func(km *certprovider.KeyMaterial) { onUpdateCh.Send(km) })
 	defer cancel()
 
 	// Make sure the provider is healthy and returns key material.
@@ -456,6 +482,7 @@ func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() failed: %v", err)
 	}
+	expectOnUpdates(t, onUpdateCh, 2)
 
 	// Update only the cert file. The key file is left unchanged. This should
 	// lead to these two files being not compatible with each other. This
@@ -479,6 +506,7 @@ func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
 	if err := compareKeyMaterial(km1, km2); err != nil {
 		t.Fatalf("Expected provider to not update key material: %v", err)
 	}
+	expectOnUpdates(t, onUpdateCh, 0)
 
 	// Update the key file to match the cert file.
 	createTmpFile(t, testdata.Path("x509/server1_key.pem"), path.Join(dir, keyFile))
@@ -494,6 +522,7 @@ func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
 	if err := compareKeyMaterial(km2, km3); err == nil {
 		t.Fatal("Expected provider to return new key material after update to underlying file")
 	}
+	expectOnUpdates(t, onUpdateCh, 1)
 }
 
 // TestProvider_UpdateFailure_ThenSuccess tests the case where updating cert/key
@@ -520,7 +549,8 @@ func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			dir, prov, distCh, cancel := initializeProvider(t, tc.name, true)
+			onUpdateCh := testutils.NewChannelWithSize(10)
+			dir, prov, distCh, cancel := initializeProvider(t, tc.name, true, func(km *certprovider.KeyMaterial) { onUpdateCh.Send(km) })
 			defer cancel()
 
 			// Make sure the provider is healthy and returns key material.
@@ -530,6 +560,7 @@ func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
 			if err != nil {
 				t.Fatalf("provider.KeyMaterial() failed: %v", err)
 			}
+			expectOnUpdates(t, onUpdateCh, 2)
 
 			// Update the file with a bad update
 			createTmpFile(t, testdata.Path(tc.badFile), path.Join(dir, spiffeBundleFile))
@@ -550,6 +581,7 @@ func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
 			if err := compareKeyMaterial(km1, km2); err != nil {
 				t.Fatalf("Expected provider to not update key material: %v", err)
 			}
+			expectOnUpdates(t, onUpdateCh, 0)
 		})
 	}
 }
@@ -559,7 +591,7 @@ func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
 // distributor. Then the update succeeds, and the test verifies that the key
 // material is updated.
 func (s) TestProvider_UpdateFailureSPIFFE_MissingFile(t *testing.T) {
-	dir, prov, distCh, cancel := initializeProvider(t, "Delete spiffe file being read", true)
+	dir, prov, distCh, cancel := initializeProvider(t, "Delete spiffe file being read", true, nil)
 	defer cancel()
 
 	// Make sure the provider is healthy and returns key material.
@@ -596,7 +628,7 @@ func (s) TestProvider_UpdateFailureSPIFFE_MissingFile(t *testing.T) {
 // distributor. Then the update succeeds, and the test verifies that the key
 // material is updated.
 func (s) TestProvider_UpdateFailureRoot_MissingFile(t *testing.T) {
-	dir, prov, distCh, cancel := initializeProvider(t, "Delete root file being read", false)
+	dir, prov, distCh, cancel := initializeProvider(t, "Delete root file being read", false, nil)
 	defer cancel()
 
 	// Make sure the provider is healthy and returns key material.
