@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/metadata"
@@ -1458,5 +1459,198 @@ func (s) TestXDSResolverHTTPFilters_EnabledInOverride(t *testing.T) {
 				t.Fatalf("Unexpected BasePath, got: %q, want: %q", got, want)
 			}
 		})
+	}
+}
+
+// failBuildInterceptorPath is the filter config path that causes
+// testHTTPFilterWithBuildError to fail to build its client interceptor.
+const failBuildInterceptorPath = "fail-build-interceptor"
+
+// testHTTPFilterWithBuildError is an HTTP filter used for testing purposes.
+//
+// It fails to build a client interceptor if the effective filter config (the
+// override if present, else the base config) has its path set to
+// failBuildInterceptorPath. Otherwise, it does not intercept RPCs.
+type testHTTPFilterWithBuildError struct {
+	typeURL string
+}
+
+func (fb *testHTTPFilterWithBuildError) TypeURLs() []string { return []string{fb.typeURL} }
+
+func (*testHTTPFilterWithBuildError) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+	return filterConfigFromProto(cfg)
+}
+
+func (*testHTTPFilterWithBuildError) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+	return filterConfigFromProto(override)
+}
+
+func (*testHTTPFilterWithBuildError) IsTerminal() bool { return false }
+
+func (fb *testHTTPFilterWithBuildError) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	return fb
+}
+
+func (*testHTTPFilterWithBuildError) Close() {}
+
+var _ httpfilter.ClientFilterBuilder = &testHTTPFilterWithBuildError{}
+
+func (*testHTTPFilterWithBuildError) BuildClientInterceptor(config, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
+	cfg, ok := config.(testFilterCfg)
+	if !ok {
+		return nil, fmt.Errorf("unexpected config type: %T", config)
+	}
+	if override != nil {
+		if cfg, ok = override.(testFilterCfg); !ok {
+			return nil, fmt.Errorf("unexpected override config type: %T", override)
+		}
+	}
+	if cfg.path == failBuildInterceptorPath {
+		return nil, fmt.Errorf("test filter failed to build interceptor")
+	}
+	return nil, nil
+}
+
+// Tests the case where the resolver fails to build a config selector because an
+// HTTP filter fails to build its client interceptor for a route, after the
+// clusters for earlier routes have already been processed. The test verifies
+// that the failed config selector does not release cluster references that it
+// never took, i.e. the reference counts of the clusters are left unchanged:
+//   - A cluster seen for the first time in the failed config selector is not
+//     leaked into the service config.
+//   - A cluster that is in use by RPCs is not removed from the service config
+//     when it is referenced again.
+func (s) TestXDSResolverHTTPFilters_BuildInterceptorError_ClusterRefsRestored(t *testing.T) {
+	fb := &testHTTPFilterWithBuildError{typeURL: t.Name()}
+	httpfilter.Register(fb)
+	defer httpfilter.UnregisterForTesting(fb.typeURL)
+
+	const (
+		clusterA   = "cluster-A"
+		clusterB   = "cluster-B"
+		filterName = "build-error-filter"
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// newListener returns a client listener resource with an inline route
+	// configuration containing the provided routes, and the test filter
+	// followed by the router filter.
+	newListener := func(routes ...*v3routepb.Route) []*v3listenerpb.Listener {
+		return []*v3listenerpb.Listener{{
+			Name: defaultTestServiceName,
+			ApiListener: &v3listenerpb.ApiListener{
+				ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+					RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+						RouteConfig: &v3routepb.RouteConfiguration{
+							Name: defaultTestRouteConfigName,
+							VirtualHosts: []*v3routepb.VirtualHost{{
+								Domains: []string{defaultTestServiceName},
+								Routes:  routes,
+							}},
+						},
+					},
+					HttpFilters: []*v3httppb.HttpFilter{
+						newHTTPFilter(t, filterName, fb.typeURL, "", ""),
+						e2e.RouterHTTPFilter,
+					},
+				}),
+			},
+		}}
+	}
+	// newRoute returns a route matching the provided prefix and sending RPCs
+	// to the provided cluster. If failBuild is true, the route contains a
+	// filter config override that causes the test filter to fail to build its
+	// interceptor.
+	newRoute := func(prefix, cluster string, failBuild bool) *v3routepb.Route {
+		r := &v3routepb.Route{
+			Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: prefix}},
+			Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+				ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: cluster},
+			}},
+		}
+		if failBuild {
+			r.TypedPerFilterConfig = map[string]*anypb.Any{
+				filterName: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+					TypeUrl: fb.typeURL,
+					Value: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							filterCfgPathFieldName: {Kind: &structpb.Value_StringValue{StringValue: failBuildInterceptorPath}},
+						},
+					},
+				}),
+			}
+		}
+		return r
+	}
+
+	clusters := []*v3clusterpb.Cluster{
+		e2e.DefaultCluster(clusterA, "endpoint-A", e2e.SecurityLevelNone),
+		e2e.DefaultCluster(clusterB, "endpoint-B", e2e.SecurityLevelNone),
+	}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint("endpoint-A", "localhost", []uint32{8080}),
+		e2e.DefaultEndpoint("endpoint-B", "localhost", []uint32{8081}),
+	}
+
+	// Route all RPCs to cluster A, and start an RPC on it.
+	configureResources(ctx, t, mgmtServer, nodeID, newListener(newRoute("/", clusterA, false)), nil, clusters, endpoints)
+	stateCh, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+	state, err := waitForServiceConfig(ctx, stateCh, wantServiceConfig(clusterA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := iresolver.GetConfigSelector(state).SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+
+	// Push a route configuration for which the test filter fails to build its
+	// interceptor on the last route. By then, the resolver has already
+	// processed cluster A (in use by the RPC above) and cluster B (seen for the
+	// first time) for the earlier routes. The resolver is expected to fail all
+	// RPCs.
+	configureResources(ctx, t, mgmtServer, nodeID, newListener(
+		newRoute("/service/", clusterA, false),
+		newRoute("/other/", clusterB, false),
+		newRoute("/", clusterA, true),
+	), nil, clusters, endpoints)
+	if _, err := waitForServiceConfig(ctx, stateCh, "{}"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for an error from the resolver")
+	case err := <-errCh:
+		if want := "test filter failed to build interceptor"; !strings.Contains(err.Error(), want) {
+			t.Fatalf("Got error from resolver %q, want error containing %q", err, want)
+		}
+	}
+
+	// Commit the RPC on cluster A.
+	commitRPC(res)
+
+	// Route all RPCs to cluster A again. The service config should contain
+	// only cluster A: cluster B is not referenced by any config selector or
+	// RPC, and cluster A is referenced by the new config selector.
+	configureResources(ctx, t, mgmtServer, nodeID, newListener(newRoute("/", clusterA, false)), nil, clusters, endpoints)
+	state, err = waitForServiceConfig(ctx, stateCh, wantServiceConfig(clusterA))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that RPCs are routed to cluster A.
+	res, err = iresolver.GetConfigSelector(state).SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+	defer commitRPC(res)
+	if got, want := clustermanager.PickedCluster(res.Context), "cluster:"+clusterA; got != want {
+		t.Fatalf("Picked cluster = %q, want %q", got, want)
 	}
 }
