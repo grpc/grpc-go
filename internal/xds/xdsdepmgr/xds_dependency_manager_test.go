@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -1262,6 +1263,321 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Tests the case where a leaf cluster is reachable via two paths in the same
+// aggregate cluster tree (a diamond), and the intermediate aggregate cluster is
+// also referenced directly by the route configuration:
+//
+//	route -> b-agg -> [a-leaf, c-agg]
+//	route -> c-agg -> [a-leaf]
+//
+// When walking b-agg's tree, a-leaf is visited first and then again via c-agg.
+// The second visit must reuse a-leaf's result instead of returning no leaf
+// clusters, otherwise c-agg is marked with a "no leaf clusters" error in that
+// tree. Since the roots are walked in random map order, that error could then
+// overwrite the correct entry for c-agg computed by its own tree.
+//
+// The test triggers several config recomputations by pushing DNS updates and
+// verifies that every config contains a valid config for both b-agg and c-agg.
+func (s) TestAggregateClusterDiamond_SharedLeafAndIntermediateRoot(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	dnsR := replaceDNSResolver(t)
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}}},
+	})
+
+	watcher := newTestWatcher()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const (
+		leafCluster = "a-leaf"
+		aggClusterB = "b-agg"
+		aggClusterC = "c-agg"
+	)
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes: []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+			RouteConfigName:      defaultTestRouteConfigName,
+			ListenerName:         defaultTestServiceName,
+			ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeWeightedCluster,
+			WeightedClusters:     map[string]int{aggClusterB: 50, aggClusterC: 50},
+		})},
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(aggClusterB, []string{leafCluster, aggClusterC}),
+			makeAggregateClusterResource(aggClusterC, []string{leafCluster}),
+			makeLogicalDNSClusterResource(leafCluster, "localhost", 8081),
+		},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+	// Stop the watcher before closing the dependency manager to avoid a
+	// deadlock on a blocked Update call.
+	defer watcher.close()
+
+	verifyConfigsAcrossDNSUpdates(ctx, t, watcher, dnsR, rootOrderIterations, func(cfg *xdsresource.XDSConfig) error {
+		if err := verifyLeafClusters(cfg, aggClusterB, []string{leafCluster}); err != nil {
+			return err
+		}
+		return verifyLeafClusters(cfg, aggClusterC, []string{leafCluster})
+	})
+}
+
+// verifyLeafClusters verifies that the aggregate cluster with the given name is
+// present in the XDSConfig without an error, and has the given leaf clusters.
+func verifyLeafClusters(cfg *xdsresource.XDSConfig, name string, wantLeaves []string) error {
+	res, ok := cfg.Clusters[name]
+	if !ok {
+		return fmt.Errorf("cluster %q missing from XDSConfig", name)
+	}
+	if res.Err != nil {
+		return fmt.Errorf("cluster %q has error: %v", name, res.Err)
+	}
+	if res.Config.AggregateConfig == nil {
+		return fmt.Errorf("cluster %q has no aggregate config", name)
+	}
+	if got := res.Config.AggregateConfig.LeafClusters; !cmp.Equal(got, wantLeaves) {
+		return fmt.Errorf("cluster %q has leaf clusters %v, want %v", name, got, wantLeaves)
+	}
+	return nil
+}
+
+// rootOrderIterations is the number of times tests walk the cluster graph to
+// catch results that depend on the random order in which root clusters are
+// walked.
+const rootOrderIterations = 10
+
+// verifyConfigsAcrossDNSUpdates receives iterations number of XDSConfig updates
+// from the watcher and runs verify on each of them. Before receiving each
+// update after the first, it pushes a new DNS update through dnsR to make the
+// dependency manager walk the cluster graph again. Since the root clusters are
+// walked in random map order, this catches results that depend on the order.
+func verifyConfigsAcrossDNSUpdates(ctx context.Context, t *testing.T, watcher *testWatcher, dnsR *manual.Resolver, iterations int, verify func(*xdsresource.XDSConfig) error) {
+	t.Helper()
+	for i := 0; i < iterations; i++ {
+		if i > 0 {
+			dnsR.UpdateState(resolver.State{
+				Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: fmt.Sprintf("127.0.0.1:%d", 8081+i)}}}},
+			})
+		}
+		var cfg *xdsresource.XDSConfig
+		select {
+		case cfg = <-watcher.updateCh:
+		case err := <-watcher.errorCh:
+			t.Fatalf("Received unexpected error from dependency manager: %v", err)
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for update from dependency manager (iteration %d)", i)
+		}
+		if err := verify(cfg); err != nil {
+			t.Fatalf("Iteration %d: %v", i, err)
+		}
+	}
+}
+
+// Tests the case where a leaf cluster is reachable via multiple paths in an
+// aggregate cluster tree:
+//
+//	route -> b-agg -> [a-leaf, c-agg]
+//	         c-agg -> [a-leaf, d-leaf]
+//
+// Verifies that the leaf clusters of the root are de-duplicated, with each leaf
+// cluster appearing at the earliest position in which it is seen.
+func (s) TestAggregateClusterDiamond_LeafClustersDeduped(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	watcher := newTestWatcher()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const (
+		leafClusterA = "a-leaf"
+		leafClusterD = "d-leaf"
+		aggClusterB  = "b-agg"
+		aggClusterC  = "c-agg"
+		edsServiceA  = "eds-service-a"
+		edsServiceD  = "eds-service-d"
+	)
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, aggClusterB)},
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(aggClusterB, []string{leafClusterA, aggClusterC}),
+			makeAggregateClusterResource(aggClusterC, []string{leafClusterA, leafClusterD}),
+			e2e.DefaultCluster(leafClusterA, edsServiceA, e2e.SecurityLevelNone),
+			e2e.DefaultCluster(leafClusterD, edsServiceD, e2e.SecurityLevelNone),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(edsServiceA, "localhost", []uint32{8080}),
+			e2e.DefaultEndpoint(edsServiceD, "localhost", []uint32{8081}),
+		},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+	// Stop the watcher before closing the dependency manager to avoid a
+	// deadlock on a blocked Update call.
+	defer watcher.close()
+
+	select {
+	case cfg := <-watcher.updateCh:
+		if err := verifyLeafClusters(cfg, aggClusterB, []string{leafClusterA, leafClusterD}); err != nil {
+			t.Fatal(err)
+		}
+	case err := <-watcher.errorCh:
+		t.Fatalf("Received unexpected error from dependency manager: %v", err)
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for update from dependency manager")
+	}
+}
+
+// Tests the case where a root cluster is also an intermediate cluster in the
+// tree of another root cluster that exceeds the max depth:
+//
+//	route -> agg-0 -> agg-1 -> ... -> agg-16 -> leaf
+//	route -> agg-10
+//
+// The tree of agg-0 exceeds the max depth, so agg-0 and all its descendants up
+// to agg-16 are marked with the max depth error in that tree. The tree of
+// agg-10 is within the limit. Verifies that agg-10's entry in the XDSConfig
+// always comes from its own tree.
+func (s) TestAggregateClusterMaxDepth_IntermediateRootUnaffected(t *testing.T) {
+	const (
+		numAggClusters = 17
+		leafCluster    = "leaf"
+		deepRoot       = "agg-0"
+		shallowRoot    = "agg-10"
+	)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	dnsR := replaceDNSResolver(t)
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}}},
+	})
+
+	watcher := newTestWatcher()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	clusters := make([]*v3clusterpb.Cluster, 0, numAggClusters+1)
+	for i := 0; i < numAggClusters-1; i++ {
+		clusters = append(clusters, makeAggregateClusterResource(fmt.Sprintf("agg-%d", i), []string{fmt.Sprintf("agg-%d", i+1)}))
+	}
+	clusters = append(clusters,
+		makeAggregateClusterResource(fmt.Sprintf("agg-%d", numAggClusters-1), []string{leafCluster}),
+		makeLogicalDNSClusterResource(leafCluster, "localhost", 8081),
+	)
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes: []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+			RouteConfigName:      defaultTestRouteConfigName,
+			ListenerName:         defaultTestServiceName,
+			ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeWeightedCluster,
+			WeightedClusters:     map[string]int{deepRoot: 50, shallowRoot: 50},
+		})},
+		Clusters:       clusters,
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+	// Stop the watcher before closing the dependency manager to avoid a
+	// deadlock on a blocked Update call.
+	defer watcher.close()
+
+	const wantErr = "aggregate cluster graph exceeds max depth"
+	verifyConfigsAcrossDNSUpdates(ctx, t, watcher, dnsR, rootOrderIterations, func(cfg *xdsresource.XDSConfig) error {
+		res, ok := cfg.Clusters[deepRoot]
+		if !ok {
+			return fmt.Errorf("cluster %q missing from XDSConfig", deepRoot)
+		}
+		if res.Err == nil || !strings.Contains(res.Err.Error(), wantErr) {
+			return fmt.Errorf("cluster %q has error %v, want error containing %q", deepRoot, res.Err, wantErr)
+		}
+		return verifyLeafClusters(cfg, shallowRoot, []string{leafCluster})
+	})
+}
+
+// Tests the case where the aggregate cluster graph contains a cycle, with both
+// clusters in the cycle being root clusters:
+//
+//	route -> agg-a -> [agg-b, leaf-1]
+//	route -> agg-b -> [agg-a, leaf-2]
+//
+// Walking from agg-a, agg-b's leaf clusters are [leaf-2] since agg-a is an
+// ancestor. Walking from agg-b, its leaf clusters are [leaf-1, leaf-2].
+// Verifies that each root cluster's entry in the XDSConfig always comes from
+// its own tree.
+func (s) TestAggregateClusterCycle_RootUsesOwnTree(t *testing.T) {
+	const (
+		aggClusterA  = "agg-a"
+		aggClusterB  = "agg-b"
+		leafCluster1 = "leaf-1"
+		leafCluster2 = "leaf-2"
+	)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	dnsR := replaceDNSResolver(t)
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}}},
+	})
+
+	watcher := newTestWatcher()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes: []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+			RouteConfigName:      defaultTestRouteConfigName,
+			ListenerName:         defaultTestServiceName,
+			ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeWeightedCluster,
+			WeightedClusters:     map[string]int{aggClusterA: 50, aggClusterB: 50},
+		})},
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(aggClusterA, []string{aggClusterB, leafCluster1}),
+			makeAggregateClusterResource(aggClusterB, []string{aggClusterA, leafCluster2}),
+			makeLogicalDNSClusterResource(leafCluster1, "localhost", 8081),
+			e2e.DefaultCluster(leafCluster2, defaultTestEDSServiceName, e2e.SecurityLevelNone),
+		},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEDSServiceName, "localhost", []uint32{8080})},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+	// Stop the watcher before closing the dependency manager to avoid a
+	// deadlock on a blocked Update call.
+	defer watcher.close()
+
+	verifyConfigsAcrossDNSUpdates(ctx, t, watcher, dnsR, rootOrderIterations, func(cfg *xdsresource.XDSConfig) error {
+		if err := verifyLeafClusters(cfg, aggClusterA, []string{leafCluster2, leafCluster1}); err != nil {
+			return err
+		}
+		return verifyLeafClusters(cfg, aggClusterB, []string{leafCluster1, leafCluster2})
+	})
 }
 
 // Tests the case where nested aggregate clusters exceed the max depth of 16.
