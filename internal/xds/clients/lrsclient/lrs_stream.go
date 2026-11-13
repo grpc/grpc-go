@@ -221,17 +221,18 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 	}
 
 	interval := resp.GetLoadReportingInterval()
-	if err := interval.CheckValid(); err != nil {
-		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
+	if err := interval.CheckValid(); err != nil && lrs.logger.V(2) {
+		// Unset and invalid intervals are not rejected. AsDuration converts
+		// them to the closest time.Duration (zero for unset), which is then
+		// clamped to the configured minimum below if required.
+		lrs.logger.Warningf("Received invalid load_reporting_interval: %v", err)
 	}
 	loadReportingInterval := interval.AsDuration()
 	if loadReportingInterval < lrs.minInterval {
 		// Clamp the interval to the configured minimum. This also handles zero
 		// and negative intervals, which are valid Durations but cannot be used
 		// as the period of a ticker.
-		if lrs.logger.V(2) {
-			lrs.logger.Infof("Received load_reporting_interval %v is less than the minimum, using %v instead", loadReportingInterval, lrs.minInterval)
-		}
+		lrs.logger.Warningf("Received load_reporting_interval %v is less than the minimum, using %v instead", loadReportingInterval, lrs.minInterval)
 		loadReportingInterval = lrs.minInterval
 	}
 

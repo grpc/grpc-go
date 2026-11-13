@@ -742,7 +742,8 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 // Tests that the LRS client clamps the load reporting interval received from
 // the LRS server to the configured minimum, and to 1s when no minimum is
 // configured. This includes zero and negative intervals, which cannot be used
-// as the period of a ticker.
+// as the period of a ticker, as well as unset intervals (treated as zero) and
+// invalid intervals (converted to the closest time.Duration).
 func (s) TestReportLoad_LoadReportingIntervalClampedToMinimum(t *testing.T) {
 	tests := []struct {
 		name string
@@ -777,6 +778,33 @@ func (s) TestReportLoad_LoadReportingIntervalClampedToMinimum(t *testing.T) {
 			name:         "less_than_default_minimum",
 			interval:     durationpb.New(time.Millisecond),
 			wantInterval: time.Second,
+		},
+		{
+			name:         "unset",
+			minInterval:  100 * time.Millisecond,
+			interval:     nil,
+			wantInterval: 100 * time.Millisecond,
+		},
+		{
+			name:         "unset_default_minimum",
+			interval:     nil,
+			wantInterval: time.Second,
+		},
+		{
+			// Seconds and nanos with mismatched signs is an invalid Duration.
+			// It is converted as is to -500ms, and then clamped.
+			name:         "invalid_less_than_minimum",
+			minInterval:  100 * time.Millisecond,
+			interval:     &durationpb.Duration{Seconds: -1, Nanos: 500000000},
+			wantInterval: 100 * time.Millisecond,
+		},
+		{
+			// Seconds and nanos with mismatched signs is an invalid Duration.
+			// It is converted as is to 500ms, which is above the minimum.
+			name:         "invalid_greater_than_minimum",
+			minInterval:  100 * time.Millisecond,
+			interval:     &durationpb.Duration{Seconds: 1, Nanos: -500000000},
+			wantInterval: 500 * time.Millisecond,
 		},
 	}
 	for _, test := range tests {

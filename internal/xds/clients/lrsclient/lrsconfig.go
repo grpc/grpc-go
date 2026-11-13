@@ -35,10 +35,10 @@ type Config struct {
 	// TransportBuilder is used to connect to the LRS server.
 	TransportBuilder clients.TransportBuilder
 
-	// MinLoadReportingInterval is the minimum interval at which load reports
-	// are sent to the LRS server. Intervals received from the LRS server that
-	// are smaller than this, including zero and negative values, are raised
-	// to it.
+	// MinLoadReportingInterval is the lower bound applied to the load
+	// reporting interval requested by the LRS server. Intervals received from
+	// the LRS server that are smaller than this, including zero and negative
+	// values, are raised to it.
 	//
 	// If unset or non-positive, defaults to 1s.
 	MinLoadReportingInterval time.Duration
