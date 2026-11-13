@@ -574,11 +574,8 @@ func (cs *commonStream) handleInitError(err error, newStream func(context.Contex
 	cs.procCancel()
 
 	if !errors.Is(err, io.EOF) && !cs.config.failureModeAllow {
-		cs.cleanupDataplane()
+		cs.cancel()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
-	}
-	if cs.dataplaneStream != nil {
-		return cs.dataplaneStream, nil
 	}
 	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
 	if cs.dataplaneStream, err = newStream(cs.ctx, opts...); err != nil {
@@ -909,18 +906,17 @@ func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.Proce
 	err := ocs.procStream.Send(req)
 	ocs.mu.Unlock()
 	if err != nil {
-		if err != io.EOF {
-			ocs.failObsProcStream(err)
-		}
 		select {
 		case <-ocs.procRecvDone:
 		case <-ocs.ctx.Done():
-			ocs.failObsProcStream(ocs.ctx.Err())
 		}
 		if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 			return fatalErr
 		}
-		return nil
+		if ocs.procStreamBypass.Load() {
+			return nil
+		}
+		return err
 	}
 	return nil
 }
