@@ -20,14 +20,25 @@ package grpc
 
 import (
 	"reflect"
+	"sync"
 
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
 
 // ClientConnProvider is a factory to create a ClientConnInterface for the given
 // key.
 //
-// Note: Callers must invoke cancel once they are done using cc.
+// Callers must invoke cancel once they are done using cc. The returned cc may
+// be shared with other callers that requested the same key, and cancel only
+// releases this caller's reference to it.
+//
+// When a ClientConnProvider is passed to WithClientConnProvider, gRPC ensures
+// that ClientConns are shared: it invokes the provided function at most once
+// for a given key while there are outstanding references to the ClientConn
+// returned for that key, and invokes the cancel function returned by it once
+// all references have been released. Hence, the key must uniquely identify
+// all the parameters used to create the ClientConn.
 //
 // # Experimental
 //
@@ -36,7 +47,8 @@ import (
 type ClientConnProvider func(key string) (cc ClientConnInterface, cancel func(), err error)
 
 // WithClientConnProvider returns a DialOption that makes the passed in
-// ClientConnProvider available to LB policies.
+// ClientConnProvider available to LB policies. See the documentation on
+// ClientConnProvider for how ClientConns returned by it are shared.
 //
 // # Experimental
 //
@@ -46,6 +58,73 @@ func WithClientConnProvider(ccp ClientConnProvider) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.clientConnProvider = ccp
 	})
+}
+
+// sharedClientConnProvider wraps a ClientConnProvider and ensures that callers
+// requesting the same key share a single ClientConn, which is reference
+// counted. The delegate provider is invoked to create a ClientConn for a key
+// only when there is no ClientConn with outstanding references for that key,
+// and the cancel function returned by it is invoked when the last reference is
+// released. Errors returned by the delegate provider are not cached.
+type sharedClientConnProvider struct {
+	// The ClientConnProvider being wrapped, to which the creation of new
+	// ClientConns is delegated.
+	delegate ClientConnProvider
+
+	// mu guards clientConns. It must not be held when decrementing the
+	// reference count of a ClientConn in clientConns, since the cleanup
+	// function that runs when the reference count drops to zero acquires mu.
+	mu sync.Mutex
+	// Map from key to the reference-counted ClientConn shared by all callers
+	// that requested that key.
+	clientConns map[string]*grpcsync.RefCounted[ClientConnInterface]
+}
+
+// newSharedClientConnProvider returns a ClientConnProvider that wraps the given
+// provider and shares ClientConns between callers requesting the same key.
+func newSharedClientConnProvider(delegate ClientConnProvider) ClientConnProvider {
+	s := &sharedClientConnProvider{
+		delegate:    delegate,
+		clientConns: make(map[string]*grpcsync.RefCounted[ClientConnInterface]),
+	}
+	return s.get
+}
+
+func (s *sharedClientConnProvider) get(key string) (ClientConnInterface, func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// TryIncrement fails if the reference count of the existing entry has
+	// already dropped to zero, but its cleanup function has not yet removed it
+	// from the map. In that case, a new ClientConn is created and replaces the
+	// existing entry.
+	rc, ok := s.clientConns[key]
+	if !ok || !rc.TryIncrement() {
+		cc, cancel, err := s.delegate(key)
+		if err != nil {
+			return nil, nil, err
+		}
+		var newRC *grpcsync.RefCounted[ClientConnInterface]
+		newRC = grpcsync.NewRefCounted(cc, func() {
+			s.mu.Lock()
+			// Remove the entry only if it has not already been replaced.
+			if s.clientConns[key] == newRC {
+				delete(s.clientConns, key)
+			}
+			s.mu.Unlock()
+
+			// Invoked without holding the lock, since closing the ClientConn
+			// could block.
+			if cancel != nil {
+				cancel()
+			}
+		})
+		rc = newRC
+		s.clientConns[key] = rc
+	}
+	// The returned cancel function decrements the reference count without
+	// holding mu (as required), and is idempotent.
+	return rc.Value(), sync.OnceFunc(rc.Decrement), nil
 }
 
 type clientConnProviderKey struct{}
