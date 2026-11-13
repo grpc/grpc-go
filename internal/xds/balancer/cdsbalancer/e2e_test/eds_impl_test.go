@@ -73,6 +73,11 @@ const (
 	defaultTestShortTimeout       = 10 * time.Millisecond
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 	defaultLoadReportingInterval  = 10 * time.Millisecond
+
+	// The LRS client clamps the load reporting interval sent by the server to
+	// a minimum of 1s by default. Tests lower the minimum, to be able to use
+	// short load reporting intervals.
+	defaultTestMinLoadReportingInterval = time.Millisecond
 )
 
 type s struct {

@@ -48,6 +48,8 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -78,6 +80,11 @@ import (
 const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 100 * time.Millisecond
+
+	// The LRS client clamps the load reporting interval sent by the server to
+	// a minimum of 1s by default. Tests lower the minimum, to be able to use
+	// short load reporting intervals.
+	defaultTestMinLoadReportingInterval = time.Millisecond
 )
 
 type s struct {
@@ -86,6 +93,34 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+// xdsResolverForLoadReporting returns an xDS resolver builder that uses an xDS
+// client created with the given bootstrap contents, which allows the LRS
+// server to request short load reporting intervals. The xDS client is closed
+// when the test ends.
+func xdsResolverForLoadReporting(t *testing.T, bootstrapContents []byte) resolver.Builder {
+	t.Helper()
+
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsClient, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name:                     t.Name(),
+		MinLoadReportingInterval: defaultTestMinLoadReportingInterval,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(xdsClose)
+
+	resolverBuilder, err := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))(xdsClient)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+	return resolverBuilder
 }
 
 // TestConfigUpdateWithSameLoadReportingServerConfig tests the scenario where
@@ -207,10 +242,7 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	resolverBuilder := xdsResolverForLoadReporting(t, bc)
 
 	// Start two server backends exposing the test service.
 	server1 := stubserver.StartTestService(t, nil)
@@ -377,10 +409,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	resolverBuilder := xdsResolverForLoadReporting(t, bc)
 
 	// Start a server backend exposing the test service.
 	f := &stubserver.StubServer{
@@ -570,10 +599,7 @@ func (s) TestDropByCategory(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	resolverBuilder := xdsResolverForLoadReporting(t, bc)
 
 	// Start a server backend exposing the test service.
 	f := &stubserver.StubServer{
@@ -824,10 +850,7 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	resolverBuilder := xdsResolverForLoadReporting(t, bc)
 
 	// Start a server backend exposing the test service.
 	server := stubserver.StartTestService(t, nil)
@@ -1530,10 +1553,7 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	resolverBuilder := xdsResolverForLoadReporting(t, bc)
 	smr := orca.NewServerMetricsRecorder()
 	smr.SetCPUUtilization(0.8)
 
