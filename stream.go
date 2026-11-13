@@ -149,12 +149,209 @@ type ClientStream interface {
 	RecvMsg(m any) error
 }
 
-// clientStreamWrapper wraps a ClientStream and handles SendMsg, CloseSend, and
-// RecvMsg parities based on the nature of stream.
+// clientStreamWrapper is the outermost wrapper around a ClientStream returned
+// to the application. It handles SendMsg, CloseSend, and RecvMsg parities based
+// on the nature of the stream (e.g., unary vs streaming), as well as executing
+// CallOption.after and OnFinishCallOption callbacks and ensuring the innermost
+// clientStream is finished when the stream terminates.
 type clientStreamWrapper struct {
+	// The delegate ClientStream that this wrapper forwards calls to.
 	ClientStream
+
+	cc              *ClientConn
 	desc            *StreamDesc
-	closeSendCalled atomic.Bool
+	closeSendCalled atomic.Bool // Indicates whether CloseSend has been called on the stream.
+
+	// mu guards the fields below. It must not be held while invoking
+	// callbacks or methods on other streams; see finish for details.
+	mu                sync.Mutex
+	opts              []CallOption  // Call options provided by the user and by xDS filters.
+	innermost         *clientStream // The innermost client stream, i.e., grpc.clientStream.
+	stopStreamWatcher func() bool   // Function to stop watching the stream's context.
+	stopConnWatcher   func() bool   // Function to stop watching the ClientConn's context.
+	finished          bool          // Indicates whether the stream has been finished.
+	finishErr         error         // Error with which the stream was finished.
+	// afterCallbacksDone is created when the stream is marked as finished, and
+	// is closed once the innermost stream has been finished and
+	// CallOption.after callbacks have completed. It is closed before
+	// OnFinishCallOption callbacks are run. It is nil until finished is set.
+	afterCallbacksDone chan struct{}
+}
+
+// errStreamFinished is returned by newStream when it is invoked after the
+// stream has already finished successfully. If the stream finished with an
+// error, that error is returned instead.
+var errStreamFinished = status.Error(codes.Canceled, "grpc: newStream called after the RPC has already finished")
+
+// setOpts updates the call options stored on the wrapper.
+//
+// If the wrapper has already finished (e.g., when an interceptor invokes
+// newStream asynchronously after the RPC was canceled), any newly added
+// OnFinishCallOption callbacks are executed immediately with the finish error,
+// and a non-nil error is returned. Callers must not proceed with creating a
+// stream in this case, since the RPC is already complete and creating a stream
+// would needlessly send the RPC to the next interceptor or the server.
+func (w *clientStreamWrapper) setOpts(opts []CallOption) error {
+	w.mu.Lock()
+	prevLen := len(w.opts)
+	w.opts = opts
+	finished := w.finished
+	finishErr := w.finishErr
+	w.mu.Unlock()
+
+	if !finished {
+		return nil
+	}
+	if len(opts) > prevLen {
+		runOnFinishCallOptions(finishErr, opts[prevLen:]...)
+	}
+	if finishErr == nil {
+		return errStreamFinished
+	}
+	return toRPCErr(finishErr)
+}
+
+// setInnermost records the innermost clientStream on the wrapper. If the
+// wrapper finished while the innermost stream was being created (i.e. after
+// setOpts returned), the innermost stream is finished immediately with the
+// wrapper's finish error.
+//
+// The innermost stream is finished without holding w.mu, since
+// clientStream.finish invokes stats handlers and binary loggers.
+func (w *clientStreamWrapper) setInnermost(cs *clientStream) {
+	w.mu.Lock()
+	w.innermost = cs
+	finished := w.finished
+	finishErr := w.finishErr
+	w.mu.Unlock()
+
+	// If finish() ran before w.innermost was set above, it would not have seen
+	// this stream, so it is our responsibility to finish it. Otherwise, finish()
+	// will see it when it runs.
+	if finished {
+		cs.finish(finishErr)
+	}
+}
+
+// registerCancellationHandlers registers callbacks to clean up the stream when
+// the RPC context expires or the ClientConn is closed.
+func (w *clientStreamWrapper) registerCancellationHandlers(ctx context.Context) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.finished {
+		return
+	}
+	onCtxDone := func() {
+		if w.cc.ctx.Err() != nil {
+			w.finish(ErrClientConnClosing)
+			return
+		}
+		w.finish(toRPCErr(ctx.Err()))
+	}
+	w.stopStreamWatcher = context.AfterFunc(ctx, onCtxDone)
+	w.stopConnWatcher = context.AfterFunc(w.cc.ctx, onCtxDone)
+}
+
+// finish marks the stream as finished, stops the context watchers, updates call
+// statistics, and invokes any after and OnFinishCallOption callbacks.
+//
+// w.mu is only held while marking the stream as finished and snapshotting the
+// state required for cleanup. It is released before running any callbacks
+// because they may block on, or call back into, this stream:
+//   - CallOption.after callbacks invoke methods on interceptor-provided streams
+//     that may block until an interceptor asynchronously invokes newStream,
+//     which in turn requires w.mu in setOpts and setInnermost.
+//   - OnFinishCallOption callbacks are user code that may call methods on the
+//     stream (e.g. Header), which may call finish again.
+//
+// Once finished is set, setOpts and setInnermost take care of running newly
+// added OnFinishCallOption callbacks and finishing a newly created innermost
+// stream, respectively. So, it is safe to operate on the snapshot without the
+// lock.
+//
+// If finish is called while another call is in progress (e.g. RecvMsg returns
+// an error while a cancellation handler is finishing the stream), it blocks
+// until the innermost stream is finished and the after callbacks have
+// completed. This guarantees that output parameters of CallOptions such as
+// Peer, Header and Trailer are populated by the time a stream method returns
+// a terminal error. It does not wait for OnFinishCallOption callbacks, so that
+// those callbacks may safely call stream methods that end up calling finish.
+func (w *clientStreamWrapper) finish(err error) {
+	if err == io.EOF {
+		err = nil
+	}
+
+	w.mu.Lock()
+	if w.finished {
+		afterCallbacksDone := w.afterCallbacksDone
+		w.mu.Unlock()
+		<-afterCallbacksDone
+		return
+	}
+	w.finished = true
+	w.finishErr = err
+	w.afterCallbacksDone = make(chan struct{})
+	stopStreamWatcher := w.stopStreamWatcher
+	stopConnWatcher := w.stopConnWatcher
+	innermost := w.innermost
+	opts := w.opts
+	w.mu.Unlock()
+
+	if stopStreamWatcher != nil {
+		stopStreamWatcher()
+	}
+	if stopConnWatcher != nil {
+		stopConnWatcher()
+	}
+
+	// Finish the innermost client stream if one exists.
+	if innermost != nil {
+		innermost.finish(err)
+	}
+
+	// Update call statistics for channelz and the idleness manager.
+	if w.cc != nil {
+		if channelz.IsOn() {
+			if err != nil {
+				w.cc.incrCallsFailed()
+			} else {
+				w.cc.incrCallsSucceeded()
+			}
+		}
+		w.cc.idlenessMgr.OnCallEnd()
+	}
+
+	// Invoke "after" CallOptions for the client stream if it exists. The
+	// embedded ClientStream is only written in newClientStream before the
+	// wrapper is returned and before cancellation handlers are registered, so
+	// it is safe to read without holding w.mu.
+	if w.ClientStream != nil {
+		for _, o := range opts {
+			o.after(w.ClientStream)
+		}
+	}
+	// Unblock concurrent callers of finish.
+	close(w.afterCallbacksDone)
+
+	runOnFinishCallOptions(err, opts...)
+}
+
+// Header returns the header metadata received from the server.
+func (w *clientStreamWrapper) Header() (metadata.MD, error) {
+	md, err := w.ClientStream.Header()
+	if err != nil && err != io.EOF {
+		// While clientStream.Header returns (nil, nil) when the stream was
+		// terminated without headers, xDS interceptors may return a non-nil
+		// error when header processing fails. In such cases, we need to finish
+		// the stream with the error, as the user may not call RecvMsg.
+		//
+		// io.EOF does not carry the RPC's status, which the user discovers by
+		// calling RecvMsg. So, the stream is not finished here; finishing with
+		// io.EOF would incorrectly report the RPC as successful.
+		w.finish(err)
+	}
+	return md, err
 }
 
 // CloseSend closes the send direction of the stream. The implementation ensures
@@ -168,45 +365,54 @@ func (w *clientStreamWrapper) CloseSend() error {
 }
 
 // SendMsg sends message m across the stream. For RPCs where client can call
-// SendMsg only once, i.e. only server-streaming RPCs, it converts io.EOF to nil
-// and immediately calls CloseSend to trigger any interceptor hooks.
+// SendMsg only once, i.e. unary and server-streaming RPCs, it converts io.EOF
+// to nil and immediately calls CloseSend to trigger any interceptor hooks.
 func (w *clientStreamWrapper) SendMsg(m any) error {
 	err := w.ClientStream.SendMsg(m)
-	// If the RPC is a client-streaming RPC, the client can send multiple
-	// messages. In this case, the client should handle any type of
-	// error,including io.EOF and call CloseSend once it is done sending messages.
+
+	// If the RPC is a client-streaming or bidi-streaming RPC, the client can
+	// send multiple messages. In this case, the client should handle any type
+	// of error, including io.EOF and call CloseSend once it is done sending
+	// messages.
+	//
+	// io.EOF indicates that the stream has ended without carrying the RPC's
+	// status, which the client discovers by calling RecvMsg. So, the stream is
+	// finished only for other errors, which are terminal.
 	if w.desc.ClientStreams {
+		if err != nil && err != io.EOF {
+			w.finish(err)
+		}
 		return err
 	}
 
 	if err == io.EOF {
-		// For non-client-streaming RPCs, we return nil instead of EOF on error
-		// because the generated code requires it. finish is not called; RecvMsg()
-		// will call it with the stream's status independently.
+		// For unary and server-streaming RPCs, we return nil instead of EOF on
+		// error because the generated code requires it. finish is not called;
+		// RecvMsg() will call it with the stream's status independently.
 		return nil
 	}
 	if err != nil {
+		w.finish(err)
 		return err
 	}
-	// In some scenarios (e.g., xDS), the same interceptors process both unary and
-	// streaming RPCs, relying on CloseSend to signal that no more messages are on
-	// the way. Although protobuf-generated stubs already invoke CloseSend for
-	// server-streaming RPCs, it is explicitly called here to ensure downstream
-	// interceptors are also notified when callers interact with the ClientStream
-	// API directly.
-	if err := w.CloseSend(); err != nil && err != io.EOF {
-		return err
-	}
-	return nil
 
+	// In some scenarios (e.g., xDS), the same interceptors process both unary
+	// and streaming RPCs, relying on CloseSend to signal that no more messages
+	// are on the way. Although protobuf-generated stubs already invoke
+	// CloseSend for server-streaming RPCs, it is explicitly called here to
+	// ensure downstream interceptors are also notified when callers interact
+	// with the ClientStream API directly.
+	w.CloseSend()
+	return nil
 }
 
-// RecvMsg receives message m from the stream. For non-server-streaming RPCs
-// (unary and client-streaming), it calls the underlying RecvMsg a second time
-// after receiving the first message to get the trailers.
+// RecvMsg receives message m from the stream. For unary and client-streaming
+// RPCs, it calls the underlying RecvMsg a second time after receiving the first
+// message to get the trailers.
 func (w *clientStreamWrapper) RecvMsg(m any) error {
 	err := w.ClientStream.RecvMsg(m)
 	if err != nil {
+		w.finish(err)
 		return err
 	}
 	if w.desc.ServerStreams {
@@ -216,11 +422,13 @@ func (w *clientStreamWrapper) RecvMsg(m any) error {
 	// ensure RPC has completed successfully.
 	err = w.ClientStream.RecvMsg(m)
 	if err == io.EOF {
+		w.finish(nil)
 		return nil
 	}
 	if err == nil {
-		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+		err = status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 	}
+	w.finish(err)
 	return err
 }
 
@@ -258,18 +466,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 var emptyMethodConfig = serviceconfig.MethodConfig{}
 
-// endOfClientStream performs cleanup actions required for both successful and
-// failed streams. This includes incrementing channelz stats and invoking all
-// registered OnFinish call options.
-func endOfClientStream(cc *ClientConn, err error, opts ...CallOption) {
-	if channelz.IsOn() {
-		if err != nil {
-			cc.incrCallsFailed()
-		} else {
-			cc.incrCallsSucceeded()
-		}
-	}
-
+func runOnFinishCallOptions(err error, opts ...CallOption) {
 	for _, o := range opts {
 		if o, ok := o.(OnFinishCallOption); ok {
 			o.OnFinish(err)
@@ -290,21 +487,18 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if channelz.IsOn() {
 		cc.incrCallsStarted()
 	}
-	defer func() {
-		if err != nil {
-			// Ensure cleanup when stream creation fails.
-			endOfClientStream(cc, err, opts...)
-		}
-	}()
 
 	// Start tracking the RPC for idleness purposes. This is where a stream is
 	// created for both streaming and unary RPCs, and hence is a good place to
 	// track active RPC count.
 	cc.idlenessMgr.OnCallBegin()
 
-	// Add a calloption, to decrement the active call count, that gets executed
-	// when the RPC completes.
-	opts = append([]CallOption{OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() })}, opts...)
+	w := &clientStreamWrapper{desc: desc, cc: cc, opts: opts}
+	defer func() {
+		if err != nil {
+			w.finish(err)
+		}
+	}()
 
 	if md, added, ok := metadataFromOutgoingContextRaw(ctx); ok {
 		// validate md
@@ -329,7 +523,15 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 	mc := &emptyMethodConfig
 	newStream := func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, nameResolutionDelayed, opts...)
+		if err := w.setOpts(opts); err != nil {
+			return nil, err
+		}
+		cs, err := newClientStreamWithParams(ctx, desc, cc, method, mc, nameResolutionDelayed, opts...)
+		if err != nil {
+			return nil, err
+		}
+		w.setInnermost(cs)
+		return cs, nil
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method, Authority: cc.authority}
@@ -351,19 +553,25 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		mc = &rpcConfig.MethodConfig
 
-		if rpcConfig.Interceptor != nil {
-			rpcInfo.Context = nil
+		rpcInfo.Context = nil
+
+		// Chain the interceptors and ensure that any call options added by
+		// these are captured by clientStreamWrapper.
+		for idx := len(rpcConfig.Interceptors) - 1; idx >= 0; idx-- {
 			ns := newStream
-			if interceptor, ok := rpcConfig.Interceptor.(clientInterceptor); ok {
-				newStream = func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
-					cs, err := interceptor.NewStream(ctx, rpcInfo, ns, opts...)
-					if err != nil {
-						return nil, toRPCErr(err)
-					}
-					return cs, nil
+			interceptor, ok := rpcConfig.Interceptors[idx].(clientInterceptor)
+			if !ok {
+				return nil, status.Errorf(codes.Internal, "invalid client interceptor type %T", rpcConfig.Interceptors[idx])
+			}
+			newStream = func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
+				if err := w.setOpts(opts); err != nil {
+					return nil, err
 				}
-			} else {
-				return nil, status.Errorf(codes.Internal, "invalid client interceptor type %T", rpcConfig.Interceptor)
+				cs, err := interceptor.NewStream(ctx, rpcInfo, ns, opts...)
+				if err != nil {
+					return nil, toRPCErr(err)
+				}
+				return cs, nil
 			}
 		}
 	}
@@ -372,10 +580,24 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if err != nil {
 		return nil, err
 	}
-	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
+	w.ClientStream = cs
+
+	if desc != unaryStreamDesc {
+		// Register callbacks on the cc and stream contexts to clean up when the
+		// user closes the ClientConn or cancels the stream context. In all other
+		// cases, an error should already be injected into the recv buffer by the
+		// transport, which the client will eventually receive, and then we will
+		// stop these callbacks in clientStreamWrapper.finish.
+		//
+		// The timeout from the method config, if any, is not watched here. It is
+		// enforced by the innermost clientStream, and the resulting error is
+		// propagated back through the interceptors to the application.
+		w.registerCancellationHandlers(ctx)
+	}
+	return w, nil
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, nameResolutionDelayed bool, opts ...CallOption) (_ *clientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
@@ -527,6 +749,9 @@ func (cs *clientStream) registerCancellationHandlers() {
 	// with the assignments below.
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
+	if cs.finished {
+		return
+	}
 	onCtxDone := func() {
 		if cs.cc.ctx.Err() != nil {
 			cs.finish(ErrClientConnClosing)
@@ -694,15 +919,12 @@ type clientStream struct {
 	compressorV0 Compressor
 	compressorV1 encoding.Compressor
 
-	cancel context.CancelFunc // cancels all attempts
-
 	methodConfig *MethodConfig
 
-	ctx context.Context // the application's context, wrapped by stats/tracing
-
-	retryThrottler *retryThrottler // The throttler active when the RPC began.
-
-	binlogs []binarylog.MethodLogger
+	ctx            context.Context    // the application's context, wrapped by stats/tracing
+	cancel         context.CancelFunc // always called when stream finishes
+	retryThrottler *retryThrottler    // The throttler active when the RPC began.
+	binlogs        []binarylog.MethodLogger
 
 	mu                      sync.Mutex
 	numRetries              int // exclusive of transparent retry attempt(s)
@@ -719,8 +941,8 @@ type clientStream struct {
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
 
-	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
-	stopConnWatcher   func() bool // stops the callback registered to run on ClientConn context expiration
+	stopStreamWatcher func() bool // stops the stream context cancellation watcher
+	stopConnWatcher   func() bool // stops the ClientConn context cancellation watcher
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -1214,12 +1436,6 @@ func (cs *clientStream) finish(err error) {
 	attemptCreated := cs.attempt != nil
 	if attemptCreated {
 		cs.attempt.finish(err)
-		// after functions all rely upon having a stream.
-		if cs.attempt.transportStream != nil {
-			for _, o := range cs.opts {
-				o.after(cs.callInfo, cs.attempt)
-			}
-		}
 	}
 
 	cs.mu.Unlock()
@@ -1249,13 +1465,6 @@ func (cs *clientStream) finish(err error) {
 	}
 	if err == nil {
 		cs.retryThrottler.successfulRPC()
-	}
-	// If no attempt was ever created, stream creation has failed, and the
-	// cleanup is left to newClientStream, whose deferred cleanup invokes
-	// endOfClientStream if the call fails. Invoking it here as well would
-	// run the cleanup twice for the same call.
-	if attemptCreated {
-		endOfClientStream(cs.cc, err, cs.opts...)
 	}
 	cs.cancel()
 }

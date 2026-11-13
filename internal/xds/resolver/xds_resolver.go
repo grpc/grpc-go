@@ -430,27 +430,23 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
-		interceptors := []httpfilter.ClientInterceptor{}
 		// TODO: Carve out the common logic between the ClusterSpecifierPlugin
 		// and WeightedClusters.
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
-			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+			interceptors, err := r.newInterceptors(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 			if err != nil {
-				// Clean up any interceptors that were successfully built
-				// for the current route before this error occurred. Note
-				// that this is not handled by the call to cs.stop() in the
-				// deferred function.
-				for _, i := range interceptors {
-					i.Close()
-				}
 				return nil, err
 			}
 			routeCluster := &routeCluster{
-				name:        clusterName,
-				interceptor: interceptor,
+				name:         clusterName,
+				interceptors: interceptors,
 			}
-			rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
+			rc := grpcsync.NewRefCounted(routeCluster, func() {
+				for _, i := range interceptors {
+					i.Close()
+				}
+			})
 			cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 			clusters.Add(rc, 1)
 			ci := r.addOrGetActiveClusterInfo(clusterName, "")
@@ -459,22 +455,19 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+				interceptors, err := r.newInterceptors(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 				if err != nil {
-					// Clean up any interceptors that were successfully built
-					// for the current route before this error occurred. Note
-					// that this is not handled by the call to cs.stop() in the
-					// deferred function.
-					for _, i := range interceptors {
-						i.Close()
-					}
 					return nil, err
 				}
 				routeCluster := &routeCluster{
-					name:        clusterName,
-					interceptor: interceptor,
+					name:         clusterName,
+					interceptors: interceptors,
 				}
-				rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
+				rc := grpcsync.NewRefCounted(routeCluster, func() {
+					for _, i := range interceptors {
+						i.Close()
+					}
+				})
 				cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 				clusters.Add(rc, int64(wc.Weight))
 				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
@@ -608,13 +601,14 @@ func (r *xdsResolver) onResourceError(err error) {
 	r.curConfigSelector = cs
 }
 
-// newInterceptor builds a chain of client interceptors for the given filters
+// newInterceptors builds a slice of client interceptors for the given filters
 // and override configuration. The cluster override has the highest priority,
 // followed by the route override, and finally the virtual host override.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (_ httpfilter.ClientInterceptor, err error) {
-	interceptors := make([]httpfilter.ClientInterceptor, 0, len(filters))
+func (r *xdsResolver) newInterceptors(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (_ []httpfilter.ClientInterceptor, err error) {
+	interceptors := make([]httpfilter.ClientInterceptor, 0, len(filters)+1)
+	interceptors = append(interceptors, onCommitInterceptor{})
 	defer func() {
 		// Clean up any interceptors that were successfully built before the
 		// error occurred, to avoid leaking resources.
@@ -665,27 +659,18 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 	}
 
-	return &interceptorList{interceptors: interceptors}, nil
+	return interceptors, nil
 }
 
-// interceptorList is a client interceptor that contains a list of client
-// interceptors to execute in order.
-type interceptorList struct {
-	interceptors []httpfilter.ClientInterceptor
-}
+// onCommitInterceptor is a client interceptor that invokes the onCommit
+// callback from the context when the RPC is committed or finished. This is
+// always the first interceptor in the chain.
+type onCommitInterceptor struct{}
 
-func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (onCommitInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	onCommit := onCommittedFuncFromContext(ctx)
 	if onCommit == nil {
 		return nil, fmt.Errorf("xds: onCommit callback not found in context")
-	}
-
-	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
-		ns := newStream
-		i := il.interceptors[idx]
-		newStream = func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-			return i.NewStream(ctx, ri, ns, opts...)
-		}
 	}
 
 	newOpts := slices.Clone(opts)
@@ -701,11 +686,7 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 	}, nil
 }
 
-func (il *interceptorList) Close() {
-	for _, i := range il.interceptors {
-		i.Close()
-	}
-}
+func (onCommitInterceptor) Close() {}
 
 // wrappedClientStream wraps a grpc.ClientStream and invokes a callback when the
 // RPC is committed. This is used to manage reference counts for clusters and
