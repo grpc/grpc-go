@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/resolver"
@@ -188,8 +189,11 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
-	return &clientFilter{}
+func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	return &clientFilter{
+		metricsRecorder: opts.MetricsRecorder,
+		target:          opts.Target,
+	}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
@@ -203,6 +207,11 @@ type externalServiceEntry struct {
 }
 
 type clientFilter struct {
+	// metricsRecorder is used to record client-side ext_authz metrics.
+	metricsRecorder estats.MetricsRecorder
+	// target is the target URI of the channel, used as a metric label.
+	target string
+
 	// mu protects externalServices.
 	mu sync.Mutex
 	// externalServices holds refcounted clients to external authorization
@@ -313,21 +322,25 @@ func (cf *clientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (
 	}
 
 	return &clientInterceptor{
-		config:      c,
-		authzClient: rc,
+		config:          c,
+		authzClient:     rc,
+		metricsRecorder: cf.metricsRecorder,
+		target:          cf.target,
 	}, nil
 }
 
 type clientInterceptor struct {
-	config      config
-	authzClient *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
+	config          config
+	authzClient     *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
+	metricsRecorder estats.MetricsRecorder
+	target          string
 }
 
 func (i *clientInterceptor) Close() {
 	i.authzClient.Decrement()
 }
 
-// randUint32N is overridden for tests.
+// randUint32N is overridden in tests.
 var randUint32N = rand.Uint32N
 
 // isExtAuthzEnabled checks if external authorization is enabled for this RPC.
@@ -386,20 +399,34 @@ func (i *clientInterceptor) sendCheckRequest(ctx context.Context, method string,
 }
 
 // handleFailure handles an error encountered during external authorization
-// based on the failure_mode_allow configuration:
-//   - If failure_mode_allow is false, an error with statusOnError is returned.
-//   - If failure_mode_allow is true, ctx is returned with the failure mode
-//     header appended to its outgoing metadata (if configured) and a nil error.
+// based on the failure_mode_allow configuration. It always increments the
+// failed_rpcs metric, and:
+//   - If failure_mode_allow is false, the denied_rpcs metric is also
+//     incremented, and an error with statusOnError is returned.
+//   - If failure_mode_allow is true, the allowed_rpcs metric is also
+//     incremented, and ctx is returned with the failure mode header appended
+//     to its outgoing metadata (if configured) and a nil error.
 func (i *clientInterceptor) handleFailure(ctx context.Context, err error) (context.Context, error) {
+	// Per gRFC A92, count the RPC as failed whether the ext_authz call-out
+	// itself failed or its response contained invalid or disallowed header
+	// mutations.
+	extAuthzClientFailedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 	if !i.config.failureModeAllow {
+		extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		return nil, status.Errorf(i.config.statusOnError, "extauthz: %v", err)
 	}
+
+	// Per gRFC A92, an RPC allowed due to failure_mode_allow is also counted as
+	// allowed, so that the other metrics reflect how traffic is handled
+	// independently of failures.
+	extAuthzClientAllowedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 	if i.config.failureModeAllowHeaderAdd {
 		// Since outgoingMD is a copy of the metadata in ctx, a new context is
 		// needed for the x-envoy-auth-failure-mode-allowed header added by
 		// handleFailure, if any, to be sent.
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-envoy-auth-failure-mode-allowed", "true")
 	}
+
 	return ctx, nil
 }
 
@@ -439,9 +466,12 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// - If deny_at_disable is true, the RPC is denied with status_on_error.
 	// - Otherwise, external authorization is bypassed and the RPC proceeds.
 	if !i.isExtAuthzEnabled() {
+		extAuthzClientFilterDisabledRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		if i.config.denyAtDisable {
+			extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 			return nil, status.Error(i.config.statusOnError, "extauthz: RPC denied due to the filter being disabled")
 		}
+		extAuthzClientAllowedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		return newStream(ctx, opts...)
 	}
 
@@ -451,6 +481,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// TryIncrement returns false, the underlying authz client is closed, so
 	// we fail the RPC with an Unavailable status.
 	if !i.authzClient.TryIncrement() {
+		// The authz client is closed only once no interceptor or in-flight RPC
+		// holds a reference to it. No metric is recorded here because Check RPC
+		// is never attempted, so this is neither an ext_authz call-out failure
+		// nor a header mutation failure.
 		return nil, status.Error(codes.Unavailable, "extauthz: authz client is closed")
 	}
 	defer i.authzClient.Decrement()
@@ -494,6 +528,7 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 		// from denied_response.status. If denied_response is omitted by the
 		// authorization server despite a non-OK decision, we default to
 		// PERMISSION_DENIED as the standard authorization rejection status.
+		extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		return nil, status.Error(codes.PermissionDenied, msg)
 	}
 
@@ -515,6 +550,8 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 			return newStream(ctx, opts...)
 		}
 	}
+
+	extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 
 	// Compute the status to return to the caller based on the status returned
 	// by the external authorization server.
@@ -553,6 +590,11 @@ func (i *clientInterceptor) handleOkResponse(ctx context.Context, resp *v3authpb
 		ctx = metadata.NewOutgoingContext(ctx, mutatedMD)
 		responseHeadersToAdd = respHeaders
 	}
+
+	// The external authorization server allowed the RPC, with or without an
+	// ok_response. This is recorded before creating the data plane stream,
+	// since failing to create it does not change the authorization decision.
+	extAuthzClientAllowedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 
 	// Create the underlying gRPC stream.
 	stream, err := newStream(ctx, opts...)
