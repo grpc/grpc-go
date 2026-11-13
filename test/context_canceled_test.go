@@ -162,3 +162,114 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 		t.Fatalf("Close failed with %v, want nil", err)
 	}
 }
+
+// TestSetTrailerAfterClientCancellation verifies that grpc.SetTrailer and
+// grpc.SetHeader report the context error of the RPC, and not an Internal
+// "SendHeader called multiple times" error, when the server handler calls them
+// after the client has cancelled the RPC.
+func (s) TestSetTrailerAfterClientCancellation(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	trailerErrCh := make(chan error, 1)
+	headerErrCh := make(chan error, 1)
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			close(handlerStarted)
+			<-ctx.Done()
+			headerErrCh <- grpc.SetHeader(ctx, metadata.Pairs("a", "b"))
+			trailerErrCh <- grpc.SetTrailer(ctx, metadata.Pairs("c", "d"))
+			return nil, status.Error(codes.Canceled, "RPC cancelled by the client")
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	go func() {
+		select {
+		case <-handlerStarted:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Canceled {
+		t.Fatalf("ss.Client.EmptyCall() returned %v, want error with code %v", err, codes.Canceled)
+	}
+
+	for _, test := range []struct {
+		name  string
+		errCh chan error
+	}{
+		{name: "grpc.SetHeader", errCh: headerErrCh},
+		{name: "grpc.SetTrailer", errCh: trailerErrCh},
+	} {
+		select {
+		case err := <-test.errCh:
+			if got, want := status.Code(err), codes.Canceled; got != want {
+				t.Errorf("%s() after the client cancelled the RPC returned %v with code %v, want code %v", test.name, err, got, want)
+			}
+		case <-time.After(defaultTestTimeout):
+			t.Fatalf("Timed out waiting for the server handler to call %s()", test.name)
+		}
+	}
+}
+
+// TestSetHeaderAfterSendHeader verifies that sending headers prevents further
+// calls to SetHeader, including after the client cancels the RPC.
+func (s) TestSetHeaderAfterSendHeader(t *testing.T) {
+	for _, cancelRPC := range []bool{false, true} {
+		name := "active"
+		if cancelRPC {
+			name = "canceled"
+		}
+		t.Run(name, func(t *testing.T) {
+			headerSent := make(chan struct{})
+			headerErrCh := make(chan error, 1)
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					if err := grpc.SendHeader(ctx, metadata.Pairs("a", "b")); err != nil {
+						return nil, err
+					}
+					close(headerSent)
+					if cancelRPC {
+						<-ctx.Done()
+					}
+					headerErrCh <- grpc.SetHeader(ctx, metadata.Pairs("c", "d"))
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.Start(nil); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			wantCode := codes.OK
+			if cancelRPC {
+				wantCode = codes.Canceled
+				go func() {
+					select {
+					case <-headerSent:
+						cancel()
+					case <-ctx.Done():
+					}
+				}()
+			}
+			if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != wantCode {
+				t.Fatalf("ss.Client.EmptyCall() returned %v, want code %v", err, wantCode)
+			}
+			select {
+			case err := <-headerErrCh:
+				if status.Code(err) != codes.Internal {
+					t.Errorf("grpc.SetHeader() after grpc.SendHeader() returned %v, want code %v", err, codes.Internal)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timed out waiting for the server handler to call grpc.SetHeader()")
+			}
+		})
+	}
+}
