@@ -465,7 +465,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// headers to the external processor server.
 		if i.config.processingModes.requestHeaderMode == modeSend {
 			if err = ocs.sendToProcessor(ocs.requestHeaders(outgoingMD, added)); err != nil {
-				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %w", err), newStream, opts...)
+				return nil, err
 			}
 		}
 

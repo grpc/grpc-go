@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/serviceconfig"
@@ -45,6 +46,17 @@ type funcConfigSelector struct {
 func (f funcConfigSelector) SelectConfig(i iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	return f.f(i)
 }
+
+type doubleNewStreamInterceptor struct{}
+
+func (doubleNewStreamInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	if _, err := newStream(ctx, opts...); err != nil {
+		return nil, err
+	}
+	return newStream(ctx, opts...)
+}
+
+func (doubleNewStreamInterceptor) Close() {}
 
 func (s) TestConfigSelector(t *testing.T) {
 	gotContextChan := testutils.NewChannelWithSize(1)
@@ -128,6 +140,13 @@ func (s) TestConfigSelector(t *testing.T) {
 		},
 		wantMD:      nil,
 		wantTimeout: shorterTimeout,
+	}, {
+		name: "interceptor calling newStream twice",
+		md:   testMD,
+		config: &iresolver.RPCConfig{
+			Interceptor: doubleNewStreamInterceptor{},
+		},
+		wantErr: status.Errorf(codes.Internal, "newStream called more than once for a single RPC"),
 	}}
 
 	for _, tc := range testCases {
