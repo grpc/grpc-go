@@ -659,6 +659,9 @@ type ConnectOptions struct {
 	BufferPool mem.BufferPool
 	// StaticWindowSize controls whether dynamic window sizing is enabled.
 	StaticWindowSize bool
+	// HPACKNeverIndexMetadataKeys is the set of lower-case metadata keys that
+	// are never indexed in HPACK.
+	HPACKNeverIndexMetadataKeys map[string]struct{}
 }
 
 // WriteOptions provides additional hints and information for message
