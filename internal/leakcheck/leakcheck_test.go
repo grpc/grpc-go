@@ -171,3 +171,35 @@ func TestLeakChecker_PassesOnCleanup(t *testing.T) {
 		t.Errorf("Expected no leaks, but got errors: %v", tl.errors)
 	}
 }
+
+func TestPoison(t *testing.T) {
+	for _, size := range []int{0, 1, 2, 3, 7, 8, 9, 1000} {
+		b := make([]byte, size)
+		poison(b)
+		for i, v := range b {
+			if v != poisonByte {
+				t.Fatalf("poison() of buffer with size %d left byte %#x at index %d, want %#x", size, v, i, poisonByte)
+			}
+		}
+	}
+}
+
+// Tests that buffers fetched using GetUninitialized from the tracking buffer
+// pool are poisoned up to their capacity.
+func TestTrackingBufferPool_GetUninitialized(t *testing.T) {
+	SetTrackingBufferPool(t)
+	defer CheckTrackingBufferPool()
+
+	const bufferSize = 100
+	buf := globalPool.GetUninitialized(bufferSize)
+	defer globalPool.Put(buf)
+
+	if got := len(*buf); got != bufferSize {
+		t.Errorf("GetUninitialized(%d) returned buffer of length %d", bufferSize, got)
+	}
+	for i, v := range (*buf)[:cap(*buf)] {
+		if v != poisonByte {
+			t.Fatalf("GetUninitialized(%d) returned buffer with byte %#x at index %d, want %#x", bufferSize, v, i, poisonByte)
+		}
+	}
+}

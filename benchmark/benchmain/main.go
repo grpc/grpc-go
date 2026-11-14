@@ -69,6 +69,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
@@ -167,6 +168,17 @@ func (p swappableBufferPool) Get(length int) *[]byte {
 		pool = p.BufferPool
 	}
 	return pool.Get(length)
+}
+
+// GetUninitialized implements imem.UninitializedBufferPool by forwarding the
+// call to the wrapped pool, so that benchmarks exercise uninitialized buffers.
+func (p swappableBufferPool) GetUninitialized(length int) *[]byte {
+	if useNopBufferPool.Load() {
+		return mem.NopBufferPool{}.Get(length)
+	}
+	// The decision to skip initialization was already made by the caller, so
+	// the env var is not checked again.
+	return imem.GetUninitializedUngated(p.BufferPool, length)
 }
 
 func (p swappableBufferPool) Put(i *[]byte) {

@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/encoding"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
@@ -71,12 +72,27 @@ func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 		data = append(data, mem.SliceBuffer(buf))
 	} else {
 		pool := mem.DefaultBufferPool()
-		buf := pool.Get(size)
-		if _, err := marshalOptions.MarshalAppend((*buf)[:0], vv); err != nil {
+		// The buffer doesn't need to be initialized since only the bytes
+		// written by MarshalAppend are exposed.
+		buf := imem.GetUninitialized(pool, size)
+		out, err := marshalOptions.MarshalAppend((*buf)[:0], vv)
+		if err != nil {
 			pool.Put(buf)
 			return nil, err
 		}
-		data = append(data, mem.NewBuffer(buf, pool))
+		if len(out) > cap(*buf) {
+			// The marshaled message didn't fit in the pooled buffer, so
+			// MarshalAppend allocated a new one. This is unexpected since
+			// the buffer was sized using proto.Size.
+			pool.Put(buf)
+			data = append(data, mem.SliceBuffer(out))
+		} else {
+			// out shares its backing array with the pooled buffer. Expose
+			// only the bytes that were written; the remaining bytes may
+			// contain data from previous users of the buffer.
+			*buf = (*buf)[:len(out)]
+			data = append(data, mem.NewBuffer(buf, pool))
+		}
 	}
 
 	return data, nil

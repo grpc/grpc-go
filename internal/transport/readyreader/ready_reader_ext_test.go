@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport/readyreader"
 	"google.golang.org/grpc/mem"
@@ -56,7 +57,7 @@ func (s) TestReadyReader_NonRawConn(t *testing.T) {
 	reader, writer := net.Pipe()
 	go writer.Write(data)
 
-	pool := mem.DefaultBufferPool()
+	pool := defaultBufferPool()
 	readyReader := readyreader.New(reader)
 
 	bufHandle, n, err := readyReader.ReadOnReady(1024, pool)
@@ -99,7 +100,7 @@ func (s) TestReadyReader_EOF(t *testing.T) {
 	}
 	defer conn.Close()
 
-	pool := mem.DefaultBufferPool()
+	pool := defaultBufferPool()
 	rr := readyreader.New(conn)
 	res, _, err := rr.ReadOnReady(len(data), pool)
 	if err != nil {
@@ -193,7 +194,7 @@ func (s) TestReadyReader_TCP(t *testing.T) {
 			serverConn := <-connCh
 			defer serverConn.Close()
 
-			pool := newTrackingPool(mem.DefaultBufferPool())
+			pool := newTrackingPool(defaultBufferPool())
 			const readBufSize = 1024
 
 			resCh := make(chan []byte)
@@ -244,31 +245,38 @@ func (s) TestReadyReader_TCP(t *testing.T) {
 	}
 }
 
-// trackingBufferPool wraps a mem.BufferPool and provides channels to track
-// when buffers are requested and returned, useful for verifying allocation
-// behavior in tests.
+// defaultBufferPool returns the default buffer pool as an
+// UninitializedBufferPool. It panics if the default buffer pool doesn't
+// support uninitialized buffers.
+func defaultBufferPool() imem.UninitializedBufferPool {
+	return mem.DefaultBufferPool().(imem.UninitializedBufferPool)
+}
+
+// trackingBufferPool wraps a buffer pool and provides channels to track when
+// buffers are requested and returned, useful for verifying allocation behavior
+// in tests.
 type trackingBufferPool struct {
-	mem.BufferPool
+	imem.UninitializedBufferPool
 	requestChan testutils.Channel
 	putChan     testutils.Channel
 }
 
-func newTrackingPool(pool mem.BufferPool) *trackingBufferPool {
+func newTrackingPool(pool imem.UninitializedBufferPool) *trackingBufferPool {
 	return &trackingBufferPool{
-		BufferPool:  pool,
-		requestChan: *testutils.NewChannelWithSize(1),
-		putChan:     *testutils.NewChannelWithSize(1),
+		UninitializedBufferPool: pool,
+		requestChan:             *testutils.NewChannelWithSize(1),
+		putChan:                 *testutils.NewChannelWithSize(1),
 	}
 }
 
-func (p *trackingBufferPool) Get(size int) *[]byte {
+func (p *trackingBufferPool) GetUninitialized(size int) *[]byte {
 	p.requestChan.Replace(size)
-	return p.BufferPool.Get(size)
+	return p.UninitializedBufferPool.GetUninitialized(size)
 }
 
 func (p *trackingBufferPool) Put(b *[]byte) {
 	p.putChan.Replace(len(*b))
-	p.BufferPool.Put(b)
+	p.UninitializedBufferPool.Put(b)
 }
 
 // Call Read to accumulate the text of a file
@@ -322,7 +330,7 @@ func (s) TestBufReader(t *testing.T) {
 				// We don't use t.Run() here to avoid excessive logging due to
 				// the large number of subtests.
 				read := readyreader.New(strings.NewReader(text))
-				buf := readyreader.NewBuffered(read, bufsize, mem.DefaultBufferPool())
+				buf := readyreader.NewBuffered(read, bufsize, defaultBufferPool())
 				s := bufreader.fn(buf)
 				if s != text {
 					t.Errorf("fn=%s bufsize=%d want=%q got=%q", bufreader.name, bufsize, text, s)
@@ -334,7 +342,7 @@ func (s) TestBufReader(t *testing.T) {
 
 func (s) TestBufReader_ReadEmptyBuffer(t *testing.T) {
 	rr := readyreader.New(new(bytes.Buffer))
-	l := readyreader.NewBuffered(rr, minReadBufferSize, mem.DefaultBufferPool())
+	l := readyreader.NewBuffered(rr, minReadBufferSize, defaultBufferPool())
 	b := make([]byte, 100)
 	n, err := l.Read(b)
 	if err != io.EOF {
@@ -360,7 +368,7 @@ func (r *errorThenGoodReader) Read(p []byte) (int, error) {
 
 func (s) TestBufReader_ClearError(t *testing.T) {
 	r := &errorThenGoodReader{}
-	b := readyreader.NewBuffered(readyreader.New(r), minReadBufferSize, mem.DefaultBufferPool())
+	b := readyreader.NewBuffered(readyreader.New(r), minReadBufferSize, defaultBufferPool())
 	buf := make([]byte, 1)
 	if _, err := b.Read(nil); err != nil {
 		t.Fatalf("1st nil Read = %v; want nil", err)
@@ -396,7 +404,7 @@ func (s) TestBufReader_ReadZero(t *testing.T) {
 	for _, size := range []int{100, 2} {
 		t.Run(fmt.Sprintf("bufsize=%d", size), func(t *testing.T) {
 			r := io.MultiReader(strings.NewReader("abc"), &emptyThenNonEmptyReader{r: strings.NewReader("def"), n: 1})
-			br := readyreader.NewBuffered(readyreader.New(r), size, mem.DefaultBufferPool())
+			br := readyreader.NewBuffered(readyreader.New(r), size, defaultBufferPool())
 			want := func(s string, wantErr error) {
 				p := make([]byte, 50)
 				n, err := br.Read(p)
