@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 )
 
 const (
@@ -61,6 +62,60 @@ type bufferPool interface {
 	Put(*[]byte)
 }
 
+// UninitializedBufferPool is an optional interface that a buffer pool may
+// implement to hand out buffers whose contents are not initialized.
+type UninitializedBufferPool interface {
+	bufferPool
+
+	// GetUninitialized returns a buffer of the given length, like Get, except
+	// that the contents of the buffer, up to its capacity, are unspecified and
+	// may contain data from previous users of the buffer. Callers must write
+	// every byte they later read (or expose to others), and must not pass the
+	// buffer to code that may read unwritten bytes.
+	//
+	// Buffers obtained from GetUninitialized are returned to the pool with
+	// Put, just like buffers from Get.
+	GetUninitialized(length int) *[]byte
+}
+
+// Compile-time checks to ensure that the buffer pools support uninitialized
+// buffers.
+var (
+	_ UninitializedBufferPool = (*BinaryTieredBufferPool)(nil)
+	_ UninitializedBufferPool = (*TieredBufferPool)(nil)
+	_ UninitializedBufferPool = (*SimpleBufferPool)(nil)
+	_ UninitializedBufferPool = (*sizedBufferPool)(nil)
+)
+
+// GetUninitialized returns a buffer of the given length from the pool.
+//
+// If the pool implements UninitializedBufferPool and uninitialized buffers are
+// enabled (see envconfig.EnableUninitializedBuffers), the buffer is fetched
+// using GetUninitialized and its contents are unspecified. Otherwise, the
+// buffer is fetched using Get.
+//
+// Callers must write every byte of the buffer that they later read or expose
+// to others.
+func GetUninitialized(pool bufferPool, length int) *[]byte {
+	if !envconfig.EnableUninitializedBuffers {
+		return pool.Get(length)
+	}
+	return GetUninitializedUngated(pool, length)
+}
+
+// GetUninitializedUngated is like GetUninitialized, but it ignores
+// envconfig.EnableUninitializedBuffers.
+//
+// It is meant for buffer pools that wrap another pool and forward
+// GetUninitialized to it. The decision to skip initialization was already made
+// by their caller.
+func GetUninitializedUngated(pool bufferPool, length int) *[]byte {
+	if p, ok := pool.(UninitializedBufferPool); ok {
+		return p.GetUninitialized(length)
+	}
+	return pool.Get(length)
+}
+
 // BinaryTieredBufferPool is a buffer pool that uses multiple sub-pools with
 // power-of-two sizes.
 type BinaryTieredBufferPool struct {
@@ -73,8 +128,8 @@ type BinaryTieredBufferPool struct {
 	// index of the previous largest sizedBufferPool. This is used by Put()
 	// to return a buffer to the most appropriate pool based on its capacity.
 	exponentToPreviousLargestPoolMap []int
-	sizedPools                       []bufferPool
-	fallbackPool                     bufferPool
+	sizedPools                       []*sizedBufferPool
+	fallbackPool                     *SimpleBufferPool
 	maxPoolCap                       int // Optimization: Cache max capacity
 }
 
@@ -85,21 +140,6 @@ type BinaryTieredBufferPool struct {
 // of 2), not the raw byte sizes. For example, to create a pool of 16KB buffers
 // (2^14 bytes), pass 14 as the argument.
 func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
-	return newBinaryTiered(func(size int) bufferPool {
-		return newSizedBufferPool(size, true)
-	}, &SimpleBufferPool{shouldZero: true}, powerOfTwoExponents...)
-}
-
-// NewDirtyBinaryTieredBufferPool returns a BufferPool backed by multiple
-// sub-pools. It is similar to NewBinaryTieredBufferPool but it does not
-// initialize the buffers before returning them.
-func NewDirtyBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
-	return newBinaryTiered(func(size int) bufferPool {
-		return newSizedBufferPool(size, false)
-	}, NewDirtySimplePool(), powerOfTwoExponents...)
-}
-
-func newBinaryTiered(sizedPoolFactory func(int) bufferPool, fallbackPool bufferPool, powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
 	slices.Sort(powerOfTwoExponents)
 	powerOfTwoExponents = slices.Compact(powerOfTwoExponents)
 
@@ -110,7 +150,7 @@ func newBinaryTiered(sizedPoolFactory func(int) bufferPool, fallbackPool bufferP
 	indexOfPreviousLargestBit := slices.Repeat([]int{-1}, maxExponent+1)
 
 	maxTier := 0
-	pools := make([]bufferPool, 0, len(powerOfTwoExponents))
+	pools := make([]*sizedBufferPool, 0, len(powerOfTwoExponents))
 
 	for i, exp := range powerOfTwoExponents {
 		// Allocating slices of size > 2^maxExponent isn't possible on
@@ -119,7 +159,7 @@ func newBinaryTiered(sizedPoolFactory func(int) bufferPool, fallbackPool bufferP
 			return nil, fmt.Errorf("mem: allocating slice of size 2^%d is not possible", exp)
 		}
 		tierSize := 1 << exp
-		pools = append(pools, sizedPoolFactory(tierSize))
+		pools = append(pools, newSizedBufferPool(tierSize))
 		maxTier = max(maxTier, tierSize)
 
 		// Map the exact power of 2 to this pool index.
@@ -148,7 +188,7 @@ func newBinaryTiered(sizedPoolFactory func(int) bufferPool, fallbackPool bufferP
 		exponentToPreviousLargestPoolMap: indexOfPreviousLargestBit,
 		sizedPools:                       pools,
 		maxPoolCap:                       maxTier,
-		fallbackPool:                     fallbackPool,
+		fallbackPool:                     &SimpleBufferPool{},
 	}, nil
 }
 
@@ -157,7 +197,13 @@ func (b *BinaryTieredBufferPool) Get(size int) *[]byte {
 	return b.poolForGet(size).Get(size)
 }
 
-func (b *BinaryTieredBufferPool) poolForGet(size int) bufferPool {
+// GetUninitialized returns a buffer with specified length from the pool. The
+// contents of the buffer are unspecified. See UninitializedBufferPool.
+func (b *BinaryTieredBufferPool) GetUninitialized(size int) *[]byte {
+	return b.poolForGet(size).GetUninitialized(size)
+}
+
+func (b *BinaryTieredBufferPool) poolForGet(size int) UninitializedBufferPool {
 	if size == 0 || size > b.maxPoolCap {
 		return b.fallbackPool
 	}
@@ -211,6 +257,10 @@ func (b *BinaryTieredBufferPool) poolForPut(bCap int) bufferPool {
 }
 
 // NopBufferPool is a buffer pool that returns new buffers without pooling.
+//
+// It intentionally doesn't implement UninitializedBufferPool: it is embedded
+// in the public mem.NopBufferPool, so its methods are part of the public API.
+// Since Get always allocates, there is no initialization that could be skipped.
 type NopBufferPool struct{}
 
 // Get returns a buffer with specified length from the pool.
@@ -234,17 +284,24 @@ func (NopBufferPool) Put(*[]byte) {
 type sizedBufferPool struct {
 	pool        sync.Pool
 	defaultSize int
-	shouldZero  bool
 }
 
 func (p *sizedBufferPool) Get(size int) *[]byte {
+	return p.get(size, true)
+}
+
+func (p *sizedBufferPool) GetUninitialized(size int) *[]byte {
+	return p.get(size, false)
+}
+
+func (p *sizedBufferPool) get(size int, zero bool) *[]byte {
 	buf, ok := p.pool.Get().(*[]byte)
 	if !ok {
 		buf := make([]byte, size, p.defaultSize)
 		return &buf
 	}
 	b := *buf
-	if p.shouldZero {
+	if zero {
 		clear(b[:cap(b)])
 	}
 	*buf = b[:size]
@@ -261,10 +318,9 @@ func (p *sizedBufferPool) Put(buf *[]byte) {
 	p.pool.Put(buf)
 }
 
-func newSizedBufferPool(size int, zero bool) *sizedBufferPool {
+func newSizedBufferPool(size int) *sizedBufferPool {
 	return &sizedBufferPool{
 		defaultSize: size,
-		shouldZero:  zero,
 	}
 }
 
@@ -281,11 +337,10 @@ func NewTieredBufferPool(poolSizes ...int) *TieredBufferPool {
 	sort.Ints(poolSizes)
 	pools := make([]*sizedBufferPool, len(poolSizes))
 	for i, s := range poolSizes {
-		pools[i] = newSizedBufferPool(s, true)
+		pools[i] = newSizedBufferPool(s)
 	}
 	return &TieredBufferPool{
-		sizedPools:   pools,
-		fallbackPool: SimpleBufferPool{shouldZero: true},
+		sizedPools: pools,
 	}
 }
 
@@ -294,12 +349,18 @@ func (p *TieredBufferPool) Get(size int) *[]byte {
 	return p.getPool(size).Get(size)
 }
 
+// GetUninitialized returns a buffer with specified length from the pool. The
+// contents of the buffer are unspecified. See UninitializedBufferPool.
+func (p *TieredBufferPool) GetUninitialized(size int) *[]byte {
+	return p.getPool(size).GetUninitialized(size)
+}
+
 // Put returns a buffer to the pool.
 func (p *TieredBufferPool) Put(buf *[]byte) {
 	p.getPool(cap(*buf)).Put(buf)
 }
 
-func (p *TieredBufferPool) getPool(size int) bufferPool {
+func (p *TieredBufferPool) getPool(size int) UninitializedBufferPool {
 	poolIdx := sort.Search(len(p.sizedPools), func(i int) bool {
 		return p.sizedPools[i].defaultSize >= size
 	})
@@ -315,25 +376,27 @@ func (p *TieredBufferPool) getPool(size int) bufferPool {
 // attempts to pool buffers with a sync.Pool. When Get is invoked, it tries to
 // acquire a buffer from the pool but if that buffer is too small, it returns it
 // to the pool and creates a new one.
+//
+// The zero value is ready to use.
 type SimpleBufferPool struct {
-	pool       sync.Pool
-	shouldZero bool
-}
-
-// NewDirtySimplePool constructs a [SimpleBufferPool]. It does not initialize
-// the buffers before returning them. Callers must ensure they don't read the
-// buffers before writing data to them.
-func NewDirtySimplePool() *SimpleBufferPool {
-	return &SimpleBufferPool{
-		shouldZero: false,
-	}
+	pool sync.Pool
 }
 
 // Get returns a buffer with specified length from the pool.
 func (p *SimpleBufferPool) Get(size int) *[]byte {
+	return p.get(size, true)
+}
+
+// GetUninitialized returns a buffer with specified length from the pool. The
+// contents of the buffer are unspecified. See UninitializedBufferPool.
+func (p *SimpleBufferPool) GetUninitialized(size int) *[]byte {
+	return p.get(size, false)
+}
+
+func (p *SimpleBufferPool) get(size int, zero bool) *[]byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
-		if p.shouldZero {
+		if zero {
 			clear((*bs)[:cap(*bs)])
 		}
 		*bs = (*bs)[:size]

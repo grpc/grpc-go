@@ -177,7 +177,9 @@ func (b *recvBuffer) compactBacklogLocked(r recvMsg) {
 	// copying ~29KB of data.
 
 	start := 0
-	newBuf := b.bufPool.Get(b.uncompactedBytes)
+	// The buffer doesn't need to be initialized since the payloads are copied
+	// into it and it is truncated to the number of bytes copied.
+	newBuf := imem.GetUninitialized(b.bufPool, b.uncompactedBytes)
 	startIdx := len(b.backlog) - b.uncompactedSuffixLen
 
 	for i := startIdx; i < len(b.backlog); i++ {

@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/mem"
 )
 
@@ -63,6 +64,14 @@ type swappableBufferPool struct {
 
 func (b *swappableBufferPool) Get(length int) *[]byte {
 	return (*b.Load()).Get(length)
+}
+
+// GetUninitialized implements imem.UninitializedBufferPool by forwarding the
+// call to the current pool, if it supports uninitialized buffers.
+func (b *swappableBufferPool) GetUninitialized(length int) *[]byte {
+	// The decision to skip initialization was already made by the caller, so
+	// the env var is not checked again.
+	return imem.GetUninitializedUngated(*b.Load(), length)
 }
 
 func (b *swappableBufferPool) Put(buf *[]byte) {
@@ -149,12 +158,56 @@ type trackingBufferPool struct {
 }
 
 func (p *trackingBufferPool) Get(length int) *[]byte {
+	buf := p.pool.Get(length)
+	p.track(buf)
+	return buf
+}
+
+// track records buf as allocated, along with the stack of the caller of the
+// tracking pool. It must be called directly by the methods that fetch buffers,
+// since it relies on its position in the call stack to skip the frames of the
+// tracking pool.
+func (p *trackingBufferPool) track(buf *[]byte) {
+	// Skip this method and the method that called it, so that the stack
+	// starts at the caller of the tracking pool.
+	stack := currentStack(3)
+
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.bufferCount++
-	buf := p.pool.Get(length)
-	p.allocatedBuffers[buf] = currentStack(2)
+	p.allocatedBuffers[buf] = stack
+}
+
+// poisonByte is the value written to every byte of the buffers returned by
+// trackingBufferPool.GetUninitialized.
+const poisonByte = 0xDB
+
+// GetUninitialized implements imem.UninitializedBufferPool.
+//
+// The contents of an uninitialized buffer are unspecified. To help tests catch
+// code that reads bytes it did not write, the returned buffer is filled with
+// poisonByte up to its capacity, instead of being left with whatever the
+// wrapped pool returned (which is often zeros).
+func (p *trackingBufferPool) GetUninitialized(length int) *[]byte {
+	// The decision to skip initialization was already made by the caller, so
+	// the env var is not checked again.
+	buf := imem.GetUninitializedUngated(p.pool, length)
+	poison((*buf)[:cap(*buf)])
+	p.track(buf)
 	return buf
+}
+
+// poison fills b with poisonByte.
+func poison(b []byte) {
+	if len(b) == 0 {
+		return
+	}
+	b[0] = poisonByte
+	// Double the filled prefix on every iteration. This is much faster than
+	// setting bytes one at a time, especially with the race detector enabled.
+	for n := 1; n < len(b); n *= 2 {
+		copy(b[n:], b[:n])
+	}
 }
 
 func (p *trackingBufferPool) Put(buf *[]byte) {

@@ -159,6 +159,19 @@ var (
 	//
 	// TODO: Remove this env var once v1.85.0 is released.
 	EnableReceiveBufferCompaction = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_RECEIVE_BUFFER_COMPACTION", true)
+
+	// EnableUninitializedBuffers controls whether gRPC fetches buffers from
+	// buffer pools without initializing them, at call sites that overwrite
+	// the buffers before reading them. This avoids the cost of clearing
+	// buffers that are about to be overwritten.
+	//
+	// This environment variable serves as an escape hatch to disable the
+	// feature if unforeseen issues arise, and it will be removed in a future
+	// release. It can be disabled by setting the environment variable
+	// "GRPC_GO_EXPERIMENTAL_ENABLE_UNINITIALIZED_BUFFERS" to "false".
+	//
+	// TODO: Remove this env var once v1.88.0 is released.
+	EnableUninitializedBuffers = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_UNINITIALIZED_BUFFERS", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

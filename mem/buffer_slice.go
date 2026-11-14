@@ -21,6 +21,8 @@ package mem
 import (
 	"fmt"
 	"io"
+
+	"google.golang.org/grpc/internal/mem"
 )
 
 const (
@@ -111,7 +113,9 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	if sLen == 0 {
 		return emptyBuffer{}
 	}
-	buf := pool.Get(sLen)
+	// The buffer doesn't need to be initialized since it is completely
+	// overwritten by CopyTo below.
+	buf := mem.GetUninitialized(pool, sLen)
 	s.CopyTo(*buf)
 	return NewBuffer(buf, pool)
 }
@@ -259,7 +263,9 @@ func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 	}
 nextBuffer:
 	for {
-		buf := pool.Get(readAllBufSize)
+		// The buffer doesn't need to be initialized since it is truncated to
+		// the number of bytes read into it before it is exposed.
+		buf := mem.GetUninitialized(pool, readAllBufSize)
 		// We asked for 32KiB but may have been given a bigger buffer.
 		// Use all of it if that's the case.
 		*buf = (*buf)[:cap(*buf)]

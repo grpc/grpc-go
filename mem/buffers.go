@@ -134,7 +134,9 @@ func Copy(data []byte, pool BufferPool) Buffer {
 		return buf
 	}
 
-	buf := pool.Get(len(data))
+	// The buffer doesn't need to be initialized since it is completely
+	// overwritten by the copy below.
+	buf := mem.GetUninitialized(pool, len(data))
 	copy(*buf, data)
 	return NewBuffer(buf, pool)
 }
