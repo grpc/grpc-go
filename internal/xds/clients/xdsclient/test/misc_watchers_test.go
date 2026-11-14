@@ -84,8 +84,8 @@ func (lw *testLDSWatcher) AmbientError(err error, onDone func()) {
 	onDone()
 }
 
-func (lw *testLDSWatcher) ResourceError(_ error, onDone func()) {
-	lw.updateCh.Replace(listenerUpdateErrTuple{resourceErr: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+func (lw *testLDSWatcher) ResourceError(err error, onDone func()) {
+	lw.updateCh.Replace(listenerUpdateErrTuple{resourceErr: err})
 	onDone()
 }
 
