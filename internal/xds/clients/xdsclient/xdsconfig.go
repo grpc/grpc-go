@@ -42,6 +42,8 @@ const (
 // xDS client's New function, no part of it may be modified. A Config may be
 // reused; the xdsclient package will also not modify it.
 type Config struct {
+	_ [0]func() // Disallow struct comparison.
+
 	// Servers specifies a list of xDS management servers to connect to. The
 	// order of the servers in this list reflects the order of preference of
 	// the data returned by those servers. The xDS client uses the first
@@ -95,6 +97,8 @@ type ServerConfig struct {
 //
 // See: https://www.envoyproxy.io/docs/envoy/latest/xds/core/v3/resource_locator.proto#xds-core-v3-resourcelocator
 type Authority struct {
+	_ [0]func() // Disallow struct comparison.
+
 	// XDSServers contains the list of server configurations for this authority.
 	//
 	// See Config.Servers for more details.

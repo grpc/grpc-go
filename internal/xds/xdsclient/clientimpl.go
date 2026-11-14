@@ -112,6 +112,8 @@ type clientImpl struct {
 // metricsReporter implements the clients.MetricsReporter interface and uses an
 // underlying stats.MetricsRecorderList to record metrics.
 type metricsReporter struct {
+	clients.UnimplementedMetricsReporter
+
 	recorder estats.MetricsRecorder
 	target   string
 }

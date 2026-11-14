@@ -18,7 +18,11 @@
 
 package xdsclient
 
-import "google.golang.org/protobuf/types/known/anypb"
+import (
+	"errors"
+
+	"google.golang.org/protobuf/types/known/anypb"
+)
 
 // ResourceType wraps all resource-type specific functionality. Each supported
 // resource type needs to provide an implementation of the Decoder.
@@ -49,6 +53,8 @@ type ResourceType struct {
 
 // Decoder wraps the resource-type specific functionality for validation
 // and deserialization.
+//
+// Implementations must embed UnimplementedDecoder.
 type Decoder interface {
 	// Decode deserializes and validates an xDS resource as received from the
 	// xDS management server.
@@ -62,7 +68,20 @@ type Decoder interface {
 	// If unmarshalling or validation fails, it returns a non-nil error.
 	// Otherwise, returns a fully populated DecodeResult.
 	Decode(resource *AnyProto, options DecodeOptions) (*DecodeResult, error)
+
+	mustEmbedUnimplementedDecoder()
 }
+
+// UnimplementedDecoder must be embedded to have forward compatible
+// implementations of Decoder.
+type UnimplementedDecoder struct{}
+
+// Decode returns an unimplemented error.
+func (UnimplementedDecoder) Decode(*AnyProto, DecodeOptions) (*DecodeResult, error) {
+	return nil, errors.New("Decoder.Decode is not implemented")
+}
+
+func (UnimplementedDecoder) mustEmbedUnimplementedDecoder() {}
 
 // AnyProto contains the type URL and serialized proto data of an xDS resource.
 type AnyProto struct {
@@ -90,6 +109,8 @@ func (a *AnyProto) ToAny() *anypb.Any {
 // DecodeOptions wraps the options required by ResourceType implementations for
 // decoding configuration received from the xDS management server.
 type DecodeOptions struct {
+	_ [0]func() // Disallow struct comparison.
+
 	// Config contains the complete configuration passed to the xDS client.
 	// This contains useful data for resource validation.
 	Config *Config
@@ -101,6 +122,8 @@ type DecodeOptions struct {
 
 // DecodeResult is the result of a decode operation.
 type DecodeResult struct {
+	_ [0]func() // Disallow struct comparison.
+
 	// Name is the name of the decoded resource.
 	Name string
 

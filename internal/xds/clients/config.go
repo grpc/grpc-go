@@ -102,6 +102,8 @@ type Locality struct {
 }
 
 // MetricsReporter is used by the XDSClient to report metrics.
+//
+// Implementations must embed UnimplementedMetricsReporter.
 type MetricsReporter interface {
 	// ReportMetric reports a metric. The metric will be one of the predefined
 	// set of types depending on the client (XDSClient or LRSClient).
@@ -120,7 +122,24 @@ type MetricsReporter interface {
 	// Once the returned cancel function is called, the Report method on the
 	// registered reporter is guaranteed not to be called again.
 	RegisterAsyncReporter(reporter AsyncReporter) func()
+
+	mustEmbedUnimplementedMetricsReporter()
 }
+
+// UnimplementedMetricsReporter must be embedded to have forward compatible
+// implementations of MetricsReporter.
+type UnimplementedMetricsReporter struct{}
+
+// ReportMetric is a no-op implementation of MetricsReporter.ReportMetric.
+func (UnimplementedMetricsReporter) ReportMetric(any) {}
+
+// RegisterAsyncReporter is a no-op implementation of
+// MetricsReporter.RegisterAsyncReporter.
+func (UnimplementedMetricsReporter) RegisterAsyncReporter(AsyncReporter) func() {
+	return func() {}
+}
+
+func (UnimplementedMetricsReporter) mustEmbedUnimplementedMetricsReporter() {}
 
 // AsyncReporter records metrics asynchronously.
 // Implementations must be concurrent-safe.

@@ -51,6 +51,8 @@ type ServerIdentifierExtension struct {
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
 // that contain an Extension field of type ServerIdentifierExtension.
 type Builder struct {
+	clients.UnimplementedTransportBuilder
+
 	// configs is a map of configuration names to their respective Config.
 	configs map[string]Config
 
@@ -171,6 +173,8 @@ func (b *Builder) cleanupFunc(si clients.ServerIdentifier, tr *grpcTransport) fu
 }
 
 type grpcTransport struct {
+	clients.UnimplementedTransport
+
 	cc *grpc.ClientConn
 
 	// cleanup is the function to be invoked for releasing the references to
@@ -193,6 +197,8 @@ func (g *grpcTransport) Close() {
 }
 
 type stream struct {
+	clients.UnimplementedStream
+
 	stream grpc.ClientStream
 }
 
