@@ -404,9 +404,9 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	cs := &configSelector{
 		channelID: r.channelID,
 		xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId(),
-		sendNewServiceConfig: func() {
+		removeUnusedClusters: func() {
 			r.serializer.TrySchedule(func(context.Context) {
-				r.sendNewServiceConfig(r.curConfigSelector)
+				r.removeUnusedClustersAndPlugins()
 			})
 		},
 		virtualHost: virtualHost{
@@ -527,21 +527,44 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 // activePlugins that have a reference count of zero. For clusters, it also
 // invokes the unsubscribe function to signal the dependency manager to stop the
 // xDS watch. Because cluster specifier plugins do not have their own watches,
-// they are simply removed from the map without an unsubscribe call.
+// they are simply removed from the map without an unsubscribe call. Returns
+// true if any entries were removed.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) pruneActiveClustersAndPlugins() {
+func (r *xdsResolver) pruneActiveClustersAndPlugins() bool {
+	pruned := false
 	for cluster, ci := range r.activeClusters {
 		if ci.refCount.Load() == 0 {
 			ci.unsubscribe()
 			delete(r.activeClusters, cluster)
+			pruned = true
 		}
 	}
 	for cluster, ci := range r.activePlugins {
 		if ci.refCount.Load() == 0 {
 			delete(r.activePlugins, cluster)
+			pruned = true
 		}
 	}
+	return pruned
+}
+
+// removeUnusedClustersAndPlugins removes clusters and plugins that are no
+// longer referenced, and if any were removed, sends a new service config to the
+// channel without them.
+//
+// The reference count of an entry may have been incremented again by a new
+// config selector between dropping to zero and this method running, in which
+// case the entry is retained. Because the dependency manager subscription for a
+// cluster is only released here, an entry in activeClusters always holds a live
+// subscription.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) removeUnusedClustersAndPlugins() {
+	if !r.pruneActiveClustersAndPlugins() {
+		return
+	}
+	r.sendNewServiceConfig(r.curConfigSelector)
 }
 
 // addOrGetActiveClusterInfo returns the clusterInfo for the provided key,
@@ -582,6 +605,10 @@ type clusterInfo struct {
 	// count in the dependency manager; once that count reaches zero, the
 	// underlying CDS watch is terminated. Plugins do not have associated
 	// watches and therefore do not require an unsubscribe function.
+	//
+	// It is only invoked when the entry is pruned from activeClusters, in the
+	// context of a serializer callback, so that an entry in activeClusters
+	// always holds a live subscription, even if its refCount is zero.
 	unsubscribe func()
 }
 
