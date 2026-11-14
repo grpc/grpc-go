@@ -79,6 +79,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 	"google.golang.org/grpc/status"
@@ -2769,4 +2770,74 @@ func checkMetricWithMethod(ctx context.Context, reader *metric.ManualReader, met
 		}
 	}
 	return fmt.Errorf("metric %q with method %q not found", metricName, method)
+}
+
+// embeddedTransportStream deliberately provides no forwarding methods. Include
+// a slice to also exercise a non-comparable value implementation.
+type embeddedTransportStream struct {
+	grpc.ServerTransportStream
+	_ []byte
+}
+
+// TestCompressionAPIs verifies that compression APIs work through the metrics
+// plugin and additional wrappers which only embed ServerTransportStream.
+func (s) TestCompressionAPIs(t *testing.T) {
+	for _, depth := range []int{0, 2} {
+		for _, api := range []string{"client_supported_compressors", "set_send_compressor"} {
+			t.Run(fmt.Sprintf("wrappers_%d/%s", depth, api), func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				provider := metric.NewMeterProvider()
+				defer provider.Shutdown(ctx)
+				ss := &stubserver.StubServer{
+					UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+						stream := grpc.ServerTransportStreamFromContext(ctx)
+						for i := 0; i < depth; i++ {
+							stream = embeddedTransportStream{ServerTransportStream: stream}
+						}
+						ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
+						if api == "client_supported_compressors" {
+							compressors, err := grpc.ClientSupportedCompressors(ctx)
+							if err != nil {
+								return nil, err
+							}
+							if !slices.Contains(compressors, gzip.Name) {
+								return nil, fmt.Errorf("ClientSupportedCompressors() = %v, want to contain %q", compressors, gzip.Name)
+							}
+						} else if err := grpc.SetSendCompressor(ctx, gzip.Name); err != nil {
+							return nil, err
+						}
+						return &testpb.SimpleResponse{Payload: &testpb.Payload{Body: []byte("compressed response")}}, nil
+					},
+				}
+				compression := make(chan string, 1)
+				handler := &itestutils.StubStatsHandler{HandleRPCF: func(_ context.Context, rs stats.RPCStats) {
+					if h, ok := rs.(*stats.InHeader); ok {
+						compression <- h.Compression
+					}
+				}}
+				if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opentelemetry.Options{
+					MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
+				})}, grpc.WithStatsHandler(handler)); err != nil {
+					t.Fatalf("Error starting server: %v", err)
+				}
+				defer ss.Stop()
+				if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+					t.Fatalf("UnaryCall() failed: %v", err)
+				}
+				want := ""
+				if api == "set_send_compressor" {
+					want = gzip.Name
+				}
+				select {
+				case got := <-compression:
+					if got != want {
+						t.Fatalf("response compression = %q, want %q", got, want)
+					}
+				case <-ctx.Done():
+					t.Fatal("Timed out waiting for response headers")
+				}
+			})
+		}
+	}
 }
