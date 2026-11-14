@@ -1079,6 +1079,172 @@ func (s) TestGracefulClose(t *testing.T) {
 	wg.Wait()
 }
 
+// TestNewStreamOnDrainingTransport ensures NewStream returns promptly when the
+// client transport is draining and a stream is still open. Previously the call
+// waited on a nil quota channel until that stream ended, so an RPC with no
+// deadline hung forever. See https://github.com/grpc/grpc-go/issues/9559.
+func (s) TestNewStreamOnDrainingTransport(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, pingpong)
+	defer cancel()
+	defer server.stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Open a stream and complete one exchange so it is established. GracefulClose
+	// then drains instead of closing the transport immediately.
+	s, err := ct.NewStream(ctx, &CallHdr{}, nil)
+	if err != nil {
+		t.Fatalf("NewStream(_, _) = _, %v, want _, <nil>", err)
+	}
+	msg := make([]byte, 1024)
+	outgoingHeader := make([]byte, 5)
+	binary.BigEndian.PutUint32(outgoingHeader[1:], uint32(len(msg)))
+	incomingHeader := make([]byte, 5)
+	if err := s.Write(outgoingHeader, newBufferSlice(msg), &WriteOptions{}); err != nil {
+		t.Fatalf("Error while writing: %v", err)
+	}
+	if _, err := s.readTo(incomingHeader); err != nil {
+		t.Fatalf("Error while reading: %v", err)
+	}
+	sz := binary.BigEndian.Uint32(incomingHeader[1:])
+	recvMsg := make([]byte, int(sz))
+	if _, err := s.readTo(recvMsg); err != nil {
+		t.Fatalf("Error while reading: %v", err)
+	}
+
+	ct.GracefulClose()
+
+	// Cancellable so a hanging NewStream is released when the test fails.
+	// The context has no deadline: that is the case that used to block forever.
+	noDeadline, stop := context.WithCancel(context.Background())
+	defer stop()
+	done := make(chan error, 1)
+	go func() {
+		_, nerr := ct.NewStream(noDeadline, &CallHdr{}, nil)
+		done <- nerr
+	}()
+	select {
+	case err := <-done:
+		var nse *NewStreamError
+		if !errors.As(err, &nse) || nse.Err != ErrConnClosing || !nse.AllowTransparentRetry {
+			t.Fatalf("NewStream(_, _) = _, %v, want NewStreamError{Err: ErrConnClosing, AllowTransparentRetry: true}", err)
+		}
+	case <-time.After(5 * time.Second):
+		stop()
+		<-done
+		t.Fatal("NewStream hung on a draining transport with an open stream")
+	}
+
+	// Finish the open stream so the draining transport closes.
+	if err := s.Write(nil, nil, &WriteOptions{Last: true}); err != nil {
+		t.Fatalf("Error while writing: %v", err)
+	}
+	if _, err := s.readTo(incomingHeader); err != io.EOF {
+		t.Fatalf("Client expected EOF from the server. Got: %v", err)
+	}
+}
+
+// TestNewStreamWaitingForQuotaOnGracefulClose covers a NewStream that is
+// already blocked because the stream quota is exhausted when GracefulClose is
+// called. It must return ErrConnClosing promptly even though the streams that
+// hold the quota stay open. Previously nothing woke it until one of those
+// streams ended, so an RPC with no deadline could hang forever.
+// See https://github.com/grpc/grpc-go/issues/9559.
+func (s) TestNewStreamWaitingForQuotaOnGracefulClose(t *testing.T) {
+	const maxStreams = 2
+	server, ct, cancel := setUpWithOptions(t, 0, &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
+		MaxStreams: maxStreams,
+	}, pingpong, ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	})
+	defer cancel()
+	defer server.stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if got := ct.maxConcurrentStreams; got != maxStreams {
+		t.Fatalf("maxConcurrentStreams = %d, want %d", got, maxStreams)
+	}
+
+	// Fill every slot and leave the streams established so GracefulClose drains
+	// instead of closing the transport.
+	streams := make([]*ClientStream, maxStreams)
+	for i := range streams {
+		s, err := ct.NewStream(ctx, &CallHdr{}, nil)
+		if err != nil {
+			t.Fatalf("NewStream(_, _) = _, %v, want _, <nil>", err)
+		}
+		exchangePingPong(t, s)
+		streams[i] = s
+	}
+
+	// Cancellable so a hanging NewStream is released when the test fails.
+	// The context has no deadline: that is the case that used to block forever.
+	noDeadline, stop := context.WithCancel(context.Background())
+	defer stop()
+	done := make(chan error, 1)
+	go func() {
+		_, nerr := ct.NewStream(noDeadline, &CallHdr{}, nil)
+		done <- nerr
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("NewStream returned before a quota slot was free: %v", err)
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	ct.GracefulClose()
+
+	// Both streams are still open, so no quota is returned. The waiter must be
+	// woken by GracefulClose itself.
+	select {
+	case err := <-done:
+		var nse *NewStreamError
+		if !errors.As(err, &nse) || nse.Err != ErrConnClosing || !nse.AllowTransparentRetry {
+			t.Fatalf("NewStream(_, _) = _, %v, want NewStreamError{Err: ErrConnClosing, AllowTransparentRetry: true}", err)
+		}
+	case <-time.After(5 * time.Second):
+		stop()
+		<-done
+		t.Fatal("NewStream waiting for stream quota stayed blocked after GracefulClose")
+	}
+
+	// Finish the open streams so the draining transport closes.
+	for _, s := range streams {
+		finishPingPong(t, s)
+	}
+}
+
+func exchangePingPong(t *testing.T, s *ClientStream) {
+	t.Helper()
+	msg := make([]byte, 1024)
+	outgoingHeader := make([]byte, 5)
+	binary.BigEndian.PutUint32(outgoingHeader[1:], uint32(len(msg)))
+	if err := s.Write(outgoingHeader, newBufferSlice(msg), &WriteOptions{}); err != nil {
+		t.Fatalf("Error while writing: %v", err)
+	}
+	incomingHeader := make([]byte, 5)
+	if _, err := s.readTo(incomingHeader); err != nil {
+		t.Fatalf("Error while reading: %v", err)
+	}
+	sz := binary.BigEndian.Uint32(incomingHeader[1:])
+	if _, err := s.readTo(make([]byte, int(sz))); err != nil {
+		t.Fatalf("Error while reading: %v", err)
+	}
+}
+
+func finishPingPong(t *testing.T, s *ClientStream) {
+	t.Helper()
+	if err := s.Write(nil, nil, &WriteOptions{Last: true}); err != nil {
+		t.Fatalf("Error while writing: %v", err)
+	}
+	if _, err := s.readTo(make([]byte, 5)); err != io.EOF {
+		t.Fatalf("Client expected EOF from the server. Got: %v", err)
+	}
+}
+
 func (s) TestLargeMessageSuspension(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
