@@ -869,6 +869,14 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 	firstTry := true
 	var ch chan struct{}
 	transportDrainRequired := false
+	// transportClosing is set when the transport is already draining or
+	// closed. checkForStreamQuota does not assign ch in that case, and
+	// nothing else wakes the caller: goAway closes only when a server
+	// GOAWAY arrives, and the transport context is canceled only when the
+	// last stream ends. A deadline-less NewStream would otherwise park
+	// until that stream ends, which may be never.
+	// See https://github.com/grpc/grpc-go/issues/9559.
+	transportClosing := false
 	checkForStreamQuota := func() bool {
 		if t.streamQuota <= 0 { // Can go negative if server decreases it.
 			if firstTry {
@@ -885,6 +893,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 		t.mu.Lock()
 		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
 			t.mu.Unlock()
+			transportClosing = true
 			return false // Don't create a stream if the transport is already closed.
 		}
 
@@ -938,6 +947,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 		}
 		if hdrListSizeErr != nil {
 			return nil, &NewStreamError{Err: hdrListSizeErr}
+		}
+		if transportClosing {
+			// GracefulClose promises that NewStream returns an error so the
+			// RPC can be retried on another transport.
+			return nil, &NewStreamError{Err: ErrConnClosing, AllowTransparentRetry: true}
 		}
 		firstTry = false
 		select {
