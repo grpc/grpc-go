@@ -86,14 +86,13 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	ctx, cancel := context.WithCancel(context.Background())
 
 	b := &autoshardingBalancer{
-		ClientConn:            cc,
-		uuid:                  uuid.New().String(),
-		endpointMap:           make(map[string]*endpointState),
-		endpointsByAddrs:      resolver.NewEndpointMap[*endpointState](),
-		serializer:            grpcsync.NewCallbackSerializer(ctx),
-		serializerCancel:      cancel,
-		state:                 connectivity.Connecting,
-		initialConnectPending: true,
+		ClientConn:       cc,
+		uuid:             uuid.New().String(),
+		endpointMap:      make(map[string]*endpointState),
+		endpointsByAddrs: resolver.NewEndpointMap[*endpointState](),
+		serializer:       grpcsync.NewCallbackSerializer(ctx),
+		serializerCancel: cancel,
+		state:            connectivity.Connecting,
 	}
 
 	// Configure endpointsharding to not automatically reconnect a child that
@@ -173,32 +172,40 @@ type autoshardingBalancer struct {
 	// parent), and moving back to CONNECTING when a pick triggers a connection
 	// attempt would start a new failover timer, thereby delaying failover.
 	//
-	// initialConnectPending is set to true at build time, and is cleared when
-	// either:
-	// - at least one endpoint is seen to have moved out of IDLE (when computing
-	//   the aggregated connectivity state), or
-	// - TRANSIENT_FAILURE is reported. After that, the priority LB policy (if
-	//   that is our parent) would have cancelled its failover timer, and
-	//   reporting IDLE is harmless.
+	// While waiting for the first result from the autosharding client (i.e.,
+	// both assignment and assignmentErr are nil), CONNECTING is reported and
+	// RPCs are queued. When the first usable result (a valid assignment, or an
+	// error with fallback enabled) is received, the initial connect timer is
+	// started, to give queued RPCs a chance to trigger a connection attempt to
+	// the endpoint they are routed to. While the timer is running, CONNECTING
+	// is reported instead of IDLE (which is the state computed by the
+	// aggregation rules while all endpoints are IDLE), and the rules for
+	// proactively triggering connection attempts are not applied. The timer is
+	// stopped when any of the following happens:
+	// - The timer fires. A connection attempt is triggered to a random IDLE
+	//   endpoint.
+	// - ExitIdle is called. A connection attempt is triggered to a random IDLE
+	//   endpoint.
+	// - An endpoint moves out of IDLE, for example because a pick triggered a
+	//   connection attempt.
+	// - TRANSIENT_FAILURE is reported because of a resolver error, or because
+	//   of an error from the autosharding client with fallback disabled. After
+	//   that, the priority LB policy (if that is our parent) would have
+	//   cancelled its failover timer, and reporting IDLE is harmless.
 	//
-	// While it is set, CONNECTING is reported instead of IDLE (which is the
-	// state computed by the aggregation rules while all endpoints are IDLE),
-	// and the rules for proactively triggering connection attempts are not
-	// applied. Instead, when the first usable result is received from the
-	// autosharding client, a timer is started to give queued RPCs a chance to
-	// trigger a connection attempt to the endpoint they are routed to. If the
-	// timer fires while initialConnectPending is still set, a connection
-	// attempt is triggered to a random IDLE endpoint, and the timer is
-	// restarted (in case that endpoint is removed by a resolver update before
-	// it reports a new state).
+	// Once a connection attempt has been triggered, the aggregated state is
+	// reported as usual. In rare cases (for example, if the endpoint is removed
+	// by a resolver update before it reports CONNECTING), this may result in
+	// IDLE being reported, which is acceptable.
 	//
-	// seenExitIdle is set when ExitIdle is called while initialConnectPending is
-	// set and the initial connect timer is not running. If it is set when the
-	// first usable result is received, a connection attempt is triggered to a
-	// random IDLE endpoint immediately. If ExitIdle is called while the timer
-	// is running, a connection attempt is triggered to a random IDLE endpoint
-	// immediately, and the timer is left running.
-	initialConnectPending   bool
+	// seenExitIdle is set when ExitIdle is called while waiting for the first
+	// result from the autosharding client. When the first usable result is
+	// received, the recorded ExitIdle call is handled (as if ExitIdle was
+	// called while the timer is running) after the picker for that result has
+	// been reported. Handling it before reporting the picker would result in
+	// IDLE being reported, since the connection attempt is triggered
+	// asynchronously, and the endpoint would still be IDLE when the aggregated
+	// state is computed.
 	initialConnectTimerStop func() bool // Stops the initial connect timer. Nil if the timer is not running.
 	initialConnectTimerGen  int         // Incremented every time the timer is started or stopped, to ignore stale timer callbacks.
 	seenExitIdle            bool
@@ -461,10 +468,7 @@ func (b *autoshardingBalancer) onAssignmentUpdate(gen int, assignment *sharding.
 		firstResult := b.assignment == nil && b.assignmentErr == nil
 		b.assignment = assignment
 		b.assignmentErr = nil
-		if firstResult {
-			b.maybeStartInitialConnectLocked()
-		}
-		b.updateStateAndPickerLocked(true)
+		b.handleAutoshardingResultLocked(firstResult)
 	})
 }
 
@@ -485,39 +489,37 @@ func (b *autoshardingBalancer) onAssignmentError(gen int, err error) {
 		firstResult := b.assignment == nil && b.assignmentErr == nil
 		b.assignment = nil
 		b.assignmentErr = err
-		if firstResult {
-			b.maybeStartInitialConnectLocked()
-		}
-		b.updateStateAndPickerLocked(true)
+		b.handleAutoshardingResultLocked(firstResult)
 	})
 }
 
-// maybeStartInitialConnectLocked is called after the first result from the
-// autosharding client has been stored. If the result can be used to route RPCs,
-// and no endpoint has moved out of IDLE yet, it ensures that a connection
-// attempt is eventually triggered.
+// handleAutoshardingResultLocked is called after a result from the autosharding
+// client has been stored, and updates the picker. firstResult is true if this
+// is the first result received from the autosharding client.
 //
-// If ExitIdle was called before this result was received, there may be no RPCs
-// queued, and a connection attempt is triggered to a random IDLE endpoint
-// immediately. Otherwise, a timer is started to give queued RPCs a chance to
-// trigger a connection attempt to the endpoint they are routed to. In both
-// cases, the timer acts as a backstop that triggers a connection attempt to a
-// random IDLE endpoint if no endpoint moves out of IDLE before it fires.
-func (b *autoshardingBalancer) maybeStartInitialConnectLocked() {
+// If this is the first result and it can be used to route RPCs, the initial
+// connect timer is started before the picker is updated. An ExitIdle call
+// recorded while waiting for this result is handled only after the picker has
+// been updated. See the comment on seenExitIdle for details.
+func (b *autoshardingBalancer) handleAutoshardingResultLocked(firstResult bool) {
 	usable := b.assignment != nil || b.lbCfg.EnableFallback
-	if !usable || !b.initialConnectPending {
-		return
+	startInitialConnect := firstResult && usable
+	if startInitialConnect {
+		b.startInitialConnectTimerLocked()
 	}
-	if b.seenExitIdle {
-		b.connectToRandomIdleEndpointLocked()
+	b.updateStateAndPickerLocked(true)
+	if startInitialConnect && b.seenExitIdle {
+		b.seenExitIdle = false
+		b.exitIdleLocked()
 	}
-	b.startInitialConnectTimerLocked()
 }
 
-// startInitialConnectTimerLocked starts (or restarts) the initial connect
-// timer.
+// startInitialConnectTimerLocked starts the initial connect timer, unless it is
+// already running.
 func (b *autoshardingBalancer) startInitialConnectTimerLocked() {
-	b.stopInitialConnectTimerLocked()
+	if b.initialConnectTimerStop != nil {
+		return
+	}
 	gen := b.initialConnectTimerGen
 	b.initialConnectTimerStop = internal.AfterFunc(internal.InitialConnectDelay, func() {
 		b.onInitialConnectTimer(gen)
@@ -535,11 +537,11 @@ func (b *autoshardingBalancer) stopInitialConnectTimerLocked() {
 	}
 }
 
-// onInitialConnectTimer is invoked when the initial connect timer fires. If no
-// endpoint has moved out of IDLE yet, it triggers a connection attempt to a
-// random IDLE endpoint and restarts the timer. The timer is restarted to handle
-// the case where the chosen endpoint is removed by a resolver update before it
-// reports a new state.
+// onInitialConnectTimer is invoked when the initial connect timer fires. It
+// triggers a connection attempt to a random IDLE endpoint.
+//
+// The timer is stopped as soon as an endpoint moves out of IDLE, so all
+// endpoints are IDLE when it fires.
 func (b *autoshardingBalancer) onInitialConnectTimer(gen int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -548,20 +550,16 @@ func (b *autoshardingBalancer) onInitialConnectTimer(gen int) {
 		return
 	}
 	b.initialConnectTimerStop = nil
-	if !b.initialConnectPending {
-		return
-	}
 	if b.logger.V(2) {
-		b.logger.Infof("Initial connect timer fired with no endpoint out of IDLE, triggering connection attempt to a random endpoint")
+		b.logger.Infof("Initial connect timer fired, triggering connection attempt to a random endpoint")
 	}
 	b.connectToRandomIdleEndpointLocked()
-	b.startInitialConnectTimerLocked()
 }
 
-// clearInitialConnectLocked clears all state associated with avoiding
-// reporting IDLE before the first connection attempt is made.
+// clearInitialConnectLocked stops the initial connect timer, and discards any
+// ExitIdle call recorded while waiting for the first result from the
+// autosharding client.
 func (b *autoshardingBalancer) clearInitialConnectLocked() {
-	b.initialConnectPending = false
 	b.seenExitIdle = false
 	b.stopInitialConnectTimerLocked()
 }
@@ -655,16 +653,20 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked(regenerateSliceMap boo
 		return
 	}
 
-	// Compute the aggregated connectivity state. This also clears
-	// initialConnectPending if any endpoint has moved out of IDLE.
+	// Compute the aggregated connectivity state.
 	aggState := b.computeAggregatedConnectivityStateLocked()
 
-	// If no endpoint has moved out of IDLE yet, report CONNECTING instead of
-	// IDLE, and do not proactively trigger connection attempts. See the comment
-	// on initialConnectPending for details.
-	if aggState == connectivity.Idle && b.initialConnectPending {
-		b.updateStateLocked(connectivity.Connecting, newPicker(b.endpointMap, b.sliceMap, &b.lbCfg))
-		return
+	// While the initial connect timer is running, report CONNECTING instead of
+	// IDLE, and do not proactively trigger connection attempts. Once an
+	// endpoint has moved out of IDLE (for example, because a pick triggered a
+	// connection attempt), the timer is no longer needed. See the comment on
+	// initialConnectTimerStop for details.
+	if b.initialConnectTimerStop != nil {
+		if aggState == connectivity.Idle {
+			b.updateStateLocked(connectivity.Connecting, newPicker(b.endpointMap, b.sliceMap, &b.lbCfg))
+			return
+		}
+		b.stopInitialConnectTimerLocked()
 	}
 
 	// The specific behavior that will enable this LB policy to stop reporting
@@ -691,18 +693,10 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked(regenerateSliceMap boo
 //     endpoint, report state CONNECTING.
 //   - If there is at least one endpoint in Idle state, report Idle.
 //   - Otherwise, report TRANSIENT_FAILURE.
-//
-// Since it already iterates over all endpoints, it also clears
-// initialConnectPending once any endpoint has moved out of IDLE, since the
-// aggregated state can no longer be IDLE after that.
 func (b *autoshardingBalancer) computeAggregatedConnectivityStateLocked() connectivity.State {
 	var nums [5]int
 	for _, es := range b.endpointMap {
 		nums[es.connectivityState]++
-	}
-
-	if b.initialConnectPending && nums[connectivity.Idle] != len(b.endpointMap) {
-		b.clearInitialConnectLocked()
 	}
 
 	switch {
@@ -759,23 +753,23 @@ func (b *autoshardingBalancer) ExitIdle() {
 	if b.closed {
 		return
 	}
-	if b.initialConnectPending {
-		if b.initialConnectTimerStop != nil {
-			// The first usable result has been received from the autosharding
-			// client, and the initial connect timer is running. Don't wait for
-			// it to fire. Trigger a connection attempt to a random endpoint
-			// now. The timer is left running as a backstop, in case that
-			// endpoint is removed before it reports a new state.
-			b.connectToRandomIdleEndpointLocked()
-		} else {
-			// Record that ExitIdle was called, so that a connection attempt
-			// can be triggered as soon as the first usable result is received
-			// from the autosharding client, instead of waiting for the initial
-			// connect timer.
-			b.seenExitIdle = true
-		}
-	}
-	if b.state == connectivity.Idle {
+	b.exitIdleLocked()
+}
+
+// exitIdleLocked handles a request to exit IDLE. See the comment on
+// initialConnectTimerStop for details.
+func (b *autoshardingBalancer) exitIdleLocked() {
+	switch {
+	case b.assignment == nil && b.assignmentErr == nil:
+		// No result has been received from the autosharding client yet.
+		// Record the request, so that it can be handled once the first usable
+		// result is received.
+		b.seenExitIdle = true
+	case b.initialConnectTimerStop != nil:
+		// The initial connect timer is running. Don't wait for it to fire.
+		b.stopInitialConnectTimerLocked()
+		b.connectToRandomIdleEndpointLocked()
+	case b.state == connectivity.Idle:
 		b.connectToRandomIdleEndpointLocked()
 	}
 }

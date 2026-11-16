@@ -277,8 +277,7 @@ func (s) TestInitialConnect_PickBeforeTimerFires(t *testing.T) {
 // client and no pick triggers a connection attempt, the balancer continues to
 // report CONNECTING (including across resolver updates), and triggers a
 // connection attempt to a random endpoint when the initial connect timer fires.
-// Also verifies that the timer is restarted when it fires, and that the
-// restarted timer is stopped once an endpoint moves out of IDLE.
+// Also verifies that the timer is not restarted after it fires.
 func (s) TestInitialConnect_TimerFiresWithoutPick(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -316,14 +315,10 @@ func (s) TestInitialConnect_TimerFiresWithoutPick(t *testing.T) {
 			verifyNoSubConn(t, env.cc)
 
 			// When the timer fires, a connection attempt must be triggered to
-			// the chosen endpoint, and the timer must be restarted.
+			// the chosen endpoint, and the timer must not be restarted.
 			ft1.fire()
 			scB := waitForSubConnWithAddr(ctx, t, env.cc, "10.0.0.2:8080")
-			ft2 := waitForTimer(ctx, t, env.timerCh)
-
-			// The restarted timer must be stopped once host-b reports that it
-			// has moved out of IDLE.
-			waitForEvent(ctx, t, ft2.stopped, "restarted initial connect timer to be stopped")
+			verifyNoTimer(t, env.timerCh)
 
 			scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 			scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -338,8 +333,10 @@ func (s) TestInitialConnect_TimerFiresWithoutPick(t *testing.T) {
 // Tests that when ExitIdle is called before the first result is received from
 // the autosharding client, a connection attempt is triggered to a random
 // endpoint as soon as the first result is received, without waiting for the
-// initial connect timer to fire. The timer is still started as a backstop, and
-// is stopped once the endpoint moves out of IDLE.
+// initial connect timer to fire. The timer is started when the first result is
+// received, and is stopped when the recorded ExitIdle call is handled, after
+// the picker for that result has been reported. Verifies that IDLE is never
+// reported, even though the connection attempt is triggered asynchronously.
 func (s) TestInitialConnect_ExitIdleBeforeFirstResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -365,11 +362,9 @@ func (s) TestInitialConnect_ExitIdleBeforeFirstResult(t *testing.T) {
 }
 
 // Tests that when ExitIdle is called after the first result is received from
-// the autosharding client, while the initial connect timer is running, a
-// connection attempt is triggered to a random endpoint immediately (without
-// waiting for the timer to fire), and the timer is left running. The timer is
-// stopped once the endpoint moves out of IDLE, and a callback from it after
-// that is ignored.
+// the autosharding client, while the initial connect timer is running, the
+// timer is stopped and a connection attempt is triggered to a random endpoint
+// immediately, and that a callback from the stopped timer is ignored.
 func (s) TestInitialConnect_ExitIdleWhileTimerRunning(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -382,15 +377,12 @@ func (s) TestInitialConnect_ExitIdleWhileTimerRunning(t *testing.T) {
 	ft := waitForTimer(ctx, t, env.timerCh)
 	verifyNoSubConn(t, env.cc)
 
-	// ExitIdle while the timer is running must trigger a connection attempt
-	// right away, and must not restart the timer.
+	// ExitIdle while the timer is running must stop the timer and trigger a
+	// connection attempt right away, without starting a new timer.
 	env.b.ExitIdle()
+	waitForEvent(ctx, t, ft.stopped, "initial connect timer to be stopped")
 	_ = waitForSubConnWithAddr(ctx, t, env.cc, "10.0.0.2:8080")
 	verifyNoTimer(t, env.timerCh)
-
-	// The timer must be stopped once host-b reports that it has moved out of
-	// IDLE.
-	waitForEvent(ctx, t, ft.stopped, "initial connect timer to be stopped")
 
 	// A callback from the stopped timer must not trigger another connection
 	// attempt.
@@ -442,20 +434,31 @@ func (s) TestInitialConnect_TransientFailureThenIdle(t *testing.T) {
 	}
 }
 
-// Tests that after a resolver error results in TRANSIENT_FAILURE, a subsequent
-// valid configuration and assignment result in normal aggregation rules being
-// applied, i.e. the initial connect logic is not re-armed.
-func (s) TestInitialConnect_ResolverErrorClearsPending(t *testing.T) {
+// Tests that when a resolver error results in TRANSIENT_FAILURE, an ExitIdle
+// call recorded while waiting for the first result from the autosharding client
+// is discarded, and the initial connect timer is stopped.
+//
+// A resolver update that results in TRANSIENT_FAILURE also discards the result
+// from the autosharding client. So, the initial connect timer is started again
+// when a subsequent valid configuration results in a new autosharding client,
+// and the first result is received from it.
+func (s) TestInitialConnect_ResolverError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	env := setupInitialConnectTest(ctx, t, false)
 
+	// ExitIdle before the first result is recorded, and must not trigger a
+	// connection attempt.
+	env.b.ExitIdle()
+	verifyNoSubConn(t, env.cc)
+
 	// An update with no endpoints results in TRANSIENT_FAILURE.
-	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+	noEndpointsCCS := balancer.ClientConnState{
 		ResolverState:  resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), nil),
 		BalancerConfig: env.lbConfig,
-	}); err == nil {
+	}
+	if err := env.b.UpdateClientConnState(noEndpointsCCS); err == nil {
 		t.Fatal("UpdateClientConnState() with no endpoints succeeded, want error")
 	}
 	if err := env.cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
@@ -478,13 +481,22 @@ func (s) TestInitialConnect_ResolverErrorClearsPending(t *testing.T) {
 		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 	}
 
-	// Since TRANSIENT_FAILURE was reported, the first assignment from the new
-	// client results in IDLE (since all endpoints are IDLE), and the initial
-	// connect timer is not started.
+	// The first assignment from the new client starts the initial connect
+	// timer. Since the recorded ExitIdle call was discarded, no connection
+	// attempt is triggered.
 	tac.onAssignmentUpdate(twoSliceAssignment())
-	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	ft := waitForTimer(ctx, t, env.timerCh)
+	_ = waitForAssignmentPicker(ctx, t, env.cc)
+	verifyNoSubConn(t, env.cc)
+
+	// Another update with no endpoints results in TRANSIENT_FAILURE, and must
+	// stop the timer.
+	if err := env.b.UpdateClientConnState(noEndpointsCCS); err == nil {
+		t.Fatal("UpdateClientConnState() with no endpoints succeeded, want error")
 	}
-	verifyNoTimer(t, env.timerCh)
-	env.cc.verifyNoIdleBefore(t, connectivity.TransientFailure)
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+		t.Fatalf("WaitForConnectivityState(TransientFailure) failed: %v", err)
+	}
+	waitForEvent(ctx, t, ft.stopped, "initial connect timer to be stopped")
+	env.cc.verifyNoIdleBefore(t, connectivity.Ready)
 }
