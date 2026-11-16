@@ -1791,12 +1791,30 @@ type serverStream struct {
 
 	binlogs []binarylog.MethodLogger
 
+	// secondMsgErr carries the result of the background read for a second
+	// request message on a unary RPC. It is set by RecvMsg after the first
+	// message arrives and consulted (without blocking) by SendMsg before
+	// the response is sent. The background read reports nil if the client
+	// half-closed the stream, a cardinality violation error if a second
+	// message arrived, or the read error otherwise. It is nil for
+	// streaming RPCs and when RecvMsg was never called.
+	secondMsgErr chan error
+	// secondMsgResult memoizes the outcome of the background read once
+	// observed, so a second RecvMsg call and the SendMsg check report the
+	// same outcome instead of racing for the single channel value.
+	// secondMsgDone reports whether the outcome has been observed.
+	secondMsgResult error
+
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
 	// int-sized. See https://github.com/grpc/grpc-go/issues/9349 for benchmarks.
 	// Add new bool fields here, not inline above.
 
 	recvFirstMsg bool // set after the first message is received
+	// secondMsgDone reports whether the outcome of the background read for
+	// a second request message on a unary RPC has been observed. See
+	// secondMsgErr.
+	secondMsgDone bool
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().
@@ -1876,6 +1894,15 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 			// This behavior is similar to an interceptor.
 		}
 	}()
+
+	// For unary RPCs, a second request message that arrived while the
+	// handler was running violates the cardinality of the RPC: fail
+	// instead of sending a response. If the background read has not
+	// finished yet, send the response as usual; the transport resets
+	// the stream after the status if the client has not half-closed.
+	if err := ss.checkSecondMsg(); err != nil {
+		return err
+	}
 
 	// Server handler could have set new compressor by calling SetSendCompressor.
 	// In case it is set, we need to use it for compressing outbound message.
@@ -1959,6 +1986,18 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 			// This behavior is similar to an interceptor.
 		}
 	}()
+	if ss.secondMsgErr != nil {
+		// A previous RecvMsg call on this unary RPC already started the
+		// background read for a second message, so there is no second
+		// message left to read here. Report the outcome of that read:
+		// the client half-closed (io.EOF), sent a second message
+		// (cardinality violation), or the read failed.
+		err := ss.waitSecondMsg()
+		if err == nil {
+			return io.EOF
+		}
+		return err
+	}
 	var payInfo *payloadInfo
 	if ss.statsHandler != nil || len(ss.binlogs) != 0 {
 		payInfo = &payloadInfo{}
@@ -2007,6 +2046,20 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		return nil
 	}
 	// Special handling for non-client-stream rpcs.
+	if !ss.desc.ServerStreams {
+		// Unary RPC: do not wait for the client to half-close before
+		// running the handler. Start a background read for a second
+		// request message (or EOF) and return now; SendMsg checks the
+		// result, without blocking, before sending the response, so a
+		// second message that arrives while the handler runs is still
+		// rejected with a cardinality violation. If nothing has arrived
+		// yet, the response is sent as usual and the transport resets
+		// the stream with RST_STREAM(NO_ERROR) after the status. See
+		// https://github.com/grpc/grpc-go/issues/9618.
+		ss.secondMsgErr = make(chan error, 1)
+		go ss.recvSecondMsg()
+		return nil
+	}
 	// This recv expects EOF or errors, so we don't collect inPayload.
 	if err := recv(&ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, nil, ss.decompressorV1, true); err == io.EOF {
 		return nil
@@ -2014,6 +2067,67 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		return err
 	}
 	return status.Error(codes.Internal, "cardinality violation: received multiple request messages for non-client-streaming RPC")
+}
+
+// recvSecondMsg reads a second request message for a unary RPC in the
+// background, reporting the outcome on ss.secondMsgErr: nil if the client
+// half-closed the stream (io.EOF), a cardinality violation error if a
+// second message arrived, or the read error otherwise. The read unblocks
+// when the stream's context is done, so this goroutine always terminates
+// when the RPC finishes.
+func (ss *serverStream) recvSecondMsg() {
+	_, data, err := ss.p.recvMsg(ss.maxReceiveMessageSize)
+	if data != nil {
+		data.Free()
+	}
+	switch {
+	case err == io.EOF:
+		ss.secondMsgErr <- nil
+	case err == nil:
+		ss.secondMsgErr <- status.Error(codes.Internal, "cardinality violation: received multiple request messages for non-client-streaming RPC")
+	default:
+		ss.secondMsgErr <- err
+	}
+}
+
+// waitSecondMsg blocks until the background read for a second request
+// message finishes and returns its outcome: nil if the client half-closed,
+// a cardinality violation error if a second message arrived, or the read
+// error otherwise. It returns nil immediately if no background read was
+// started. The outcome is memoized, so repeated calls report the same
+// result.
+func (ss *serverStream) waitSecondMsg() error {
+	if ss.secondMsgDone {
+		return ss.secondMsgResult
+	}
+	if ss.secondMsgErr == nil {
+		return nil
+	}
+	ss.secondMsgResult = <-ss.secondMsgErr
+	ss.secondMsgDone = true
+	return ss.secondMsgResult
+}
+
+// checkSecondMsg returns the result of the background read for a second
+// request message, without blocking: nil if the client already
+// half-closed, a cardinality violation (or read) error if one arrived, or
+// nil if nothing has arrived yet. The outcome is memoized, so repeated
+// calls report the same result.
+func (ss *serverStream) checkSecondMsg() error {
+	if ss.secondMsgDone {
+		return ss.secondMsgResult
+	}
+	if ss.secondMsgErr == nil {
+		return nil
+	}
+	select {
+	case err := <-ss.secondMsgErr:
+		ss.secondMsgResult = err
+		ss.secondMsgDone = true
+		return err
+	default:
+		return nil
+	}
 }
 
 // MethodFromServerStream returns the method string for the input stream.
