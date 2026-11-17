@@ -41,8 +41,8 @@ import (
 )
 
 const (
-	maxHeaderKeyLen   = 16384
-	maxHeaderValueLen = 16384
+	maxHeaderKeyLen   = 32768
+	maxHeaderValueLen = 32768
 )
 
 // Config is the parsed form of a GrpcService proto. It carries the built,

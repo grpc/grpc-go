@@ -316,6 +316,59 @@ func (s) TestParse(t *testing.T) {
 	}
 }
 
+// Tests that initial metadata header keys and values up to 32 KiB are
+// accepted, per the gRFC A102 update (grpc/proposal#582), and that longer
+// ones are rejected.
+func (s) TestParseInitialMetadataHeaderLimits(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers []*v3corepb.HeaderValue
+		wantErr string
+	}{
+		{
+			name:    "value_at_16k_accepted",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: strings.Repeat("a", 16384)}},
+		},
+		{
+			name:    "value_just_over_16k_accepted",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: strings.Repeat("a", 16385)}},
+		},
+		{
+			name:    "value_at_32k_accepted",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: strings.Repeat("a", 32768)}},
+		},
+		{
+			name:    "value_over_32k_rejected",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: strings.Repeat("a", 32769)}},
+			wantErr: "header value exceeds maximum allowed length of 32768",
+		},
+		{
+			name:    "key_at_32k_accepted",
+			headers: []*v3corepb.HeaderValue{{Key: strings.Repeat("a", 32768), Value: "v"}},
+		},
+		{
+			name:    "key_over_32k_rejected",
+			headers: []*v3corepb.HeaderValue{{Key: strings.Repeat("a", 32769), Value: "v"}},
+			wantErr: "header key exceeds maximum allowed length of 32768",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := parseInitialMetadata(test.headers)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("parseInitialMetadata() error = %v, want substring %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseInitialMetadata() returned unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 // Tests that Dial applies the config's credentials to the created channel:
 // call credentials that require transport security combined with insecure
 // channel credentials must fail channel creation.
