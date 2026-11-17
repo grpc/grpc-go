@@ -1983,6 +1983,10 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		}
 		return toRPCErr(err)
 	}
+	if !ss.desc.ClientStreams && ss.recvFirstMsg {
+		// The first call returned before the client half-closed; see below.
+		return status.Error(codes.Internal, "cardinality violation: received multiple request messages for non-client-streaming RPC")
+	}
 	ss.recvFirstMsg = true
 	if ss.statsHandler != nil {
 		ss.statsHandler.HandleRPC(ss.s.Context(), &stats.InPayload{
@@ -2004,6 +2008,15 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 
 	if ss.desc.ClientStreams {
 		// Subsequent messages should be received by subsequent RecvMsg calls.
+		return nil
+	}
+	if !ss.desc.ServerStreams && ss.s.ReadWouldBlock() {
+		// The client has not half-closed yet. Some clients send END_STREAM in
+		// a separate empty DATA frame after the request message, and waiting
+		// for it would delay every unary RPC by up to a network round trip.
+		// If the client still has not half-closed when the status is written,
+		// the transport ends the stream with RST_STREAM(NO_ERROR), as RFC 9113
+		// section 8.1 allows.
 		return nil
 	}
 	// Special handling for non-client-stream rpcs.

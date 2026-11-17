@@ -4060,6 +4060,158 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 	}
 }
 
+// readUntilRSTStream reads frames until the server resets stream 1 and returns
+// the grpc-status the server sent in the trailers before the reset.
+func readUntilRSTStream(t *testing.T, st *serverTester) string {
+	t.Helper()
+	var grpcStatus string
+	for {
+		f, err := st.readFrame()
+		if err != nil {
+			t.Fatalf("Failed to read frame: %v", err)
+		}
+		switch f := f.(type) {
+		case *http2.MetaHeadersFrame:
+			for _, h := range f.Fields {
+				if h.Name == "grpc-status" {
+					grpcStatus = h.Value
+				}
+			}
+		case *http2.RSTStreamFrame:
+			if f.ErrCode != http2.ErrCodeNo {
+				t.Fatalf("Got RST_STREAM with error code %v, want %v", f.ErrCode, http2.ErrCodeNo)
+			}
+			return grpcStatus
+		}
+	}
+}
+
+// Tests that the server runs a unary handler and sends the whole response
+// without waiting for the client to half-close. Some clients send END_STREAM in
+// a separate empty DATA frame after the request message, so waiting for it adds
+// up to a network round trip to every RPC.
+func (s) TestUnaryRPC_ServerRespondsBeforeClientHalfClose(t *testing.T) {
+	ss := stubserver.StubServer{
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	conn, err := net.DialTimeout("tcp", ss.Address, defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer conn.Close()
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall", false)
+	st.writeData(1, false, []byte{0, 0, 0, 0, 0})
+
+	if got, want := readUntilRSTStream(t, st), strconv.Itoa(int(codes.OK)); got != want {
+		t.Errorf("Got grpc-status %q, want %q", got, want)
+	}
+}
+
+// Tests that the server fails a unary RPC with a cardinality violation, without
+// calling the handler, when the client sends two request messages in one DATA
+// frame and does not half-close.
+func (s) TestUnaryRPC_ClientSendsMultipleMessagesInOneFrame(t *testing.T) {
+	ss := stubserver.StubServer{
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			t.Error("Unary handler called, want the RPC to fail before the handler runs")
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	conn, err := net.DialTimeout("tcp", ss.Address, defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer conn.Close()
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall", false)
+	st.writeData(1, false, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+
+	if got, want := readUntilRSTStream(t, st), strconv.Itoa(int(codes.Internal)); got != want {
+		t.Errorf("Got grpc-status %q, want %q", got, want)
+	}
+}
+
+// Tests that a second RecvMsg call on a unary RPC fails with a cardinality
+// violation when the client sends a second request message after the first
+// RecvMsg call has returned.
+func (s) TestUnaryRPC_ServerCallRecvMsgTwice_ClientSendsSecondMessage(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	firstRecvDone := make(chan struct{})
+	secondRecvErr := make(chan error, 1)
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "UnaryCall",
+				Handler: func(_ any, stream grpc.ServerStream) error {
+					if err := stream.RecvMsg(&testpb.Empty{}); err != nil {
+						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
+					}
+					close(firstRecvDone)
+					err := stream.RecvMsg(&testpb.Empty{})
+					secondRecvErr <- err
+					return err
+				},
+				ClientStreams: false,
+				ServerStreams: false,
+			},
+		},
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer conn.Close()
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall", false)
+	st.writeData(1, false, []byte{0, 0, 0, 0, 0})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-firstRecvDone:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the first RecvMsg to return before the client half-closed")
+	}
+	st.writeData(1, false, []byte{0, 0, 0, 0, 0})
+
+	select {
+	case err := <-secondRecvErr:
+		if status.Code(err) != codes.Internal {
+			t.Errorf("Second stream.RecvMsg() = %v, want error %v", err, codes.Internal)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the second RecvMsg to return")
+	}
+}
+
 // Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
 // and sends multiple messages.
 func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {

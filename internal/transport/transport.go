@@ -226,6 +226,13 @@ func (b *recvBuffer) get() <-chan recvMsg {
 	return b.c
 }
 
+// isEmpty reports whether b holds no unread data or error.
+func (b *recvBuffer) isEmpty() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.c) == 0 && len(b.backlog) == 0
+}
+
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
@@ -277,6 +284,12 @@ func (r *recvBufferReader) Read(n int) (buf mem.Buffer, err error) {
 		buf, r.err = r.read(n)
 	}
 	return buf, r.err
+}
+
+// readWouldBlock reports whether the next read from r would block waiting for
+// the transport to receive more data or an error.
+func (r *recvBufferReader) readWouldBlock() bool {
+	return r.err == nil && r.last == nil && r.recv.isEmpty()
 }
 
 func (r *recvBufferReader) readMessageHeader(header []byte) (n int, err error) {

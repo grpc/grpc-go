@@ -61,6 +61,12 @@ func (s *ServerStream) Read(n int) (mem.BufferSlice, error) {
 	return b, err
 }
 
+// ReadWouldBlock reports whether the next read from s would block waiting for
+// data, the end of the stream or an error.
+func (s *ServerStream) ReadWouldBlock() bool {
+	return s.trReader.er == nil && s.trReader.reader.readWouldBlock()
+}
+
 // SendHeader sends the header metadata for the given stream.
 func (s *ServerStream) SendHeader(md metadata.MD) error {
 	return s.st.writeHeader(s, md)
