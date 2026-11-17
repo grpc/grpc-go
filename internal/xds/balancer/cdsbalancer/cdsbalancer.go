@@ -226,10 +226,12 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 		b.closeChildPolicyAndReportTF(err)
 		return err
 	}
-	// If the cluster resource has an error (for example, the resource was
-	// removed by the management server), close the child policy so that
+	// If the cluster resource has an error, close the child policy so that
 	// connections to the backends are not kept alive, report TRANSIENT_FAILURE,
-	// and return the error.
+	// and return the error. The xDS dependency manager sets this error when the
+	// management server removes the cluster resource, when the resource is
+	// NACKed and there is no previous good update to fall back to, and when the
+	// aggregate cluster graph is invalid (for example, it has no leaf clusters).
 	if clusterUpdate.Err != nil {
 		b.closeChildPolicyAndReportTF(clusterUpdate.Err)
 		return clusterUpdate.Err

@@ -1223,6 +1223,70 @@ func (s) TestClusterUpdate_ResourceRemoved_ChildPolicyClosed(t *testing.T) {
 	}
 }
 
+// Tests that when the cluster resource is updated after a previous good update
+// to one that results in an error (other than the resource being removed), the
+// cds LB policy closes its child policy, puts the channel in TRANSIENT_FAILURE,
+// and fails RPCs with an Unavailable error. The error used here is an aggregate
+// cluster graph with a cycle and no leaf clusters.
+func (s) TestClusterUpdate_ResourceError_ChildPolicyClosed(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, _, _, childPolicyCloseEvent := registerWrappedPriorityPolicy(ctx, t)
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure default resources in the management server.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Change the cluster resource into an aggregate cluster that is part of a
+	// cycle with no leaf clusters. The resource is valid on its own and is not
+	// NACKed, but the xDS dependency manager reports an error for the cluster.
+	clusterNameA := resources.Clusters[0].Name
+	clusterNameB := clusterNameA + "-B"
+	resources.Clusters = []*v3clusterpb.Cluster{
+		makeAggregateClusterResource(clusterNameA, []string{clusterNameB}),
+		makeAggregateClusterResource(clusterNameB, []string{clusterNameA}),
+	}
+	resources.SkipValidation = true
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the child policy is closed.
+	select {
+	case <-childPolicyCloseEvent.Done():
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for child policy to be closed")
+	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Ensure RPC fails with Unavailable status code and the error message is
+	// meaningful and contains the xDS node ID.
+	const wantErr = "aggregate cluster graph has no leaf clusters"
+	_, err := client.EmptyCall(ctx, &testpb.Empty{})
+	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Tests that closing the cds LB policy results in the the child policy being
 // closed.
 func (s) TestClose(t *testing.T) {
