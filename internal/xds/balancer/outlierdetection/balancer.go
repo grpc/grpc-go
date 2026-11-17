@@ -326,8 +326,14 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		}
 	}
 
-	for ep := range b.endpoints.All() {
+	for ep, epInfo := range b.endpoints.All() {
 		if _, ok := newEndpoints.Get(ep); !ok {
+			// A removed endpoint that was ejected must stop counting
+			// against MaxEjectionPercent, or it would keep blocking
+			// later ejections on the remaining endpoints.
+			if !epInfo.latestEjectionTimestamp.IsZero() {
+				b.numEndpointsEjected--
+			}
 			b.endpoints.Delete(ep)
 		}
 	}
@@ -735,6 +741,15 @@ func (b *outlierDetectionBalancer) meanAndStdDev(endpoints []*endpointInfo) (flo
 	return mean, math.Sqrt(variance)
 }
 
+// canEjectOneMore reports whether ejecting one more endpoint keeps the
+// percentage of ejected endpoints at or below MaxEjectionPercent. Integer
+// cross-multiplication keeps exact boundaries exact.
+//
+// Caller must hold b.mu.
+func (b *outlierDetectionBalancer) canEjectOneMore() bool {
+	return uint64(b.numEndpointsEjected+1)*100 <= uint64(b.cfg.MaxEjectionPercent)*uint64(b.endpoints.Len())
+}
+
 // successRateAlgorithm ejects any endpoints where the success rate falls below
 // the other endpoints according to mean and standard deviation, and if overall
 // applicable from other set heuristics.
@@ -754,7 +769,7 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 		if successRate < requiredSuccessRate {
 			channelz.Infof(logger, b.channelzParent, "SuccessRate algorithm detected outlier: %s. Parameters: successRate=%f, mean=%f, stddev=%f, requiredSuccessRate=%f", epInfo, successRate, mean, stddev, requiredSuccessRate)
 			// Check if max ejection percentage would prevent ejection.
-			if float64(b.numEndpointsEjected+1)/float64(b.endpoints.Len())*100 > float64(b.cfg.MaxEjectionPercent) {
+			if !b.canEjectOneMore() {
 				// Record unenforced ejection due to max ejection percentage.
 				ejectionsUnenforcedMetric.Record(b.metricsRecorder, 1, b.target, "success_rate", "max_ejection_overflow")
 				continue
@@ -787,7 +802,7 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
 			channelz.Infof(logger, b.channelzParent, "FailurePercentage algorithm detected outlier: %s, failurePercentage=%f", epInfo, failurePercentage)
 			// Check if max ejection percentage would prevent ejection.
-			if float64(b.numEndpointsEjected+1)/float64(b.endpoints.Len())*100 > float64(b.cfg.MaxEjectionPercent) {
+			if !b.canEjectOneMore() {
 				// Record unenforced ejection due to max ejection percentage.
 				ejectionsUnenforcedMetric.Record(b.metricsRecorder, 1, b.target, "failure_percentage", "max_ejection_overflow")
 				continue
