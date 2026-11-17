@@ -283,6 +283,9 @@ func endOfClientStream(cc *ClientConn, err error, opts ...CallOption) {
 // we can type-assert the generic Interceptor field in iresolver.RPCConfig
 // without introducing a dependency on xDS packages.
 type clientInterceptor interface {
+	// NewStream creates a ClientStream for an RPC. The provided newStream
+	// function may be called at most once per NewStream invocation; subsequent
+	// calls will return an error with code Internal.
 	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...CallOption) (ClientStream, error), opts ...CallOption) (ClientStream, error)
 	Close()
 }
@@ -332,7 +335,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	mc := &emptyMethodConfig
 	newStream := func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
 		if !csw.streamCreated.CompareAndSwap(false, true) {
-			return nil, status.Error(codes.Internal, "newStream called more than once for a single RPC")
+			return nil, status.Error(codes.Internal, "client interceptor called newStream more than once for a single RPC")
 		}
 		return newClientStreamWithParams(ctx, desc, cc, method, mc, nameResolutionDelayed, opts...)
 	}

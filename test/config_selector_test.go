@@ -146,7 +146,7 @@ func (s) TestConfigSelector(t *testing.T) {
 		config: &iresolver.RPCConfig{
 			Interceptor: doubleNewStreamInterceptor{},
 		},
-		wantErr: status.Errorf(codes.Internal, "newStream called more than once for a single RPC"),
+		wantErr: status.Errorf(codes.Internal, "client interceptor called newStream more than once for a single RPC"),
 	}}
 
 	for _, tc := range testCases {

@@ -916,7 +916,9 @@ func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.Proce
 		if ocs.procStreamBypass.Load() {
 			return nil
 		}
-		return err
+		// The RPC context is done and the receive loop has not yet recorded
+		// the outcome. Never return the raw Send error (typically io.EOF).
+		return status.FromContextError(ocs.ctx.Err()).Err()
 	}
 	return nil
 }
