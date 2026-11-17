@@ -1758,3 +1758,39 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Tests that subscribing to a new cluster after the dependency manager is
+// closed does not panic, and that the returned unsubscribe function can be
+// called safely.
+func (s) TestSubscribeToClusterAfterClose(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+
+	watcher := newTestWatcher()
+	defer watcher.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	dm.Close()
+
+	unsubscribe := dm.SubscribeToCluster("new-cluster-name")
+	unsubscribe()
+}

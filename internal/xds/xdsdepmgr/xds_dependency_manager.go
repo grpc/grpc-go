@@ -981,6 +981,11 @@ type clusterRef struct {
 func (m *DependencyManager) SubscribeToCluster(name string) func() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Balancers can subscribe after Close has already torn down all watchers
+	// and dropped m.watcher / m.xdsClient.
+	if m.stopped {
+		return func() {}
+	}
 
 	// If the cluster is already being tracked, increment its dynamic refcount
 	// and return.
