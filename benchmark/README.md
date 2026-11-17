@@ -13,7 +13,7 @@ All commands in this README are run from the repository root.
 ## Contents
 
 - **benchmain/** - the main benchmark driver. Run with
-  `go run benchmark/benchmain/main.go -benchtime=10s -workloads=all`.
+  `go run benchmark/benchmain/main.go -benchtime=60s -workloads=all`.
   Supports configurable workload type, payload size, compression,
   concurrency, network mode, and profiling output.
 - **benchresult/** - formats and compares `benchmain` result files, e.g.
@@ -44,9 +44,9 @@ All commands in this README are run from the repository root.
 
 Run:
 
-`go run benchmark/benchmain/main.go -benchtime=10s -workloads=all`
+`go run benchmark/benchmain/main.go -benchtime=60s -workloads=all`
 
-Here, `-benchtime=10s` runs each benchmark workload for 10 seconds, and
+Here, `-benchtime=60s` runs each benchmark workload for 60 seconds, and
 `-workloads=all` runs every available workload type (unary, streaming,
 etc.) rather than a single one.
 
@@ -61,12 +61,12 @@ in the PR description.
 1. On a clean checkout of the base branch (e.g. `master`), run the benchmark
    and save the result to a file:
 
-   `go run benchmark/benchmain/main.go -benchtime=10s -workloads=all -resultFile=basePerf`
+   `go run benchmark/benchmain/main.go -benchtime=60s -workloads=all -resultFile=basePerf`
 
 2. Check out your branch with the change applied, and run the same
    benchmark, saving to a different file:
 
-   `go run benchmark/benchmain/main.go -benchtime=10s -workloads=all -resultFile=curPerf`
+   `go run benchmark/benchmain/main.go -benchtime=60s -workloads=all -resultFile=curPerf`
 
 3. To view a single result on its own:
 
@@ -118,7 +118,7 @@ workload, so they show `NaN%` otherwise.
 Note: Latency and throughput measurements can vary by several percent
 between identical runs, especially with short `-benchtime` durations or high
 simulated latency (where total operations are low). For more reliable
-comparisons, use a longer `-benchtime` (e.g. `10s` or more), run on an
+comparisons, use a longer `-benchtime` (e.g. `60s` or more), run on an
 otherwise idle machine, and treat small latency/throughput differences with
 caution.
 
