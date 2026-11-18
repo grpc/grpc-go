@@ -100,10 +100,9 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 }
 
 // runner is responsible for managing the lifetime of an LRS streaming call. It
-// creates the stream, sends the initial LoadStatsRequest, receives the first
-// LoadStatsResponse, and then starts a goroutine to periodically send
-// LoadStatsRequests. The runner will restart the stream if it encounters any
-// errors.
+// creates the stream, sends the initial LoadStatsRequest, starts a goroutine to
+// read LoadStatsResponses, and periodically sends LoadStatsRequests. The
+// runner will restart the stream if it encounters any errors.
 func (lrs *streamImpl) runner(ctx context.Context) {
 	defer close(lrs.doneCh)
 
@@ -133,29 +132,79 @@ func (lrs *streamImpl) runner(ctx context.Context) {
 			return nil
 		}
 
-		clusters, interval, err := lrs.recvFirstLoadStatsResponse(stream)
-		if err != nil {
-			lrs.logger.Warningf("Reading from LRS streaming RPC failed: %v", err)
+		// Start a goroutine that reads every response on this stream, including
+		// the first one, and passes them to us on updateCh.
+		updateCh := make(chan lrsUpdate)
+		readerDone := make(chan struct{})
+		go func() {
+			defer close(readerDone)
+			lrs.recvLoadStatsResponses(streamCtx, stream, updateCh)
+		}()
+		// Make sure the reader goroutine has exited before we return, so that
+		// it never outlives this stream. Canceling streamCtx unblocks any
+		// pending stream.Recv() call.
+		defer func() {
+			cancel()
+			<-readerDone
+		}()
+
+		// Wait for the first valid response. The reader drops invalid
+		// responses, so we keep waiting until we get a valid one or the
+		// stream fails.
+		var first lrsUpdate
+		select {
+		case first = <-updateCh:
+		case <-streamCtx.Done():
+			return nil
+		}
+		if first.err != nil {
 			return nil
 		}
 
 		// We reset backoff state when we successfully receive at least one
 		// message from the server.
-		lrs.sendLoads(streamCtx, stream, clusters, interval)
+		lrs.sendLoads(streamCtx, stream, first.clusters, first.interval, updateCh)
 		return backoff.ErrResetBackoff
 	}
 	backoff.RunF(ctx, runLoadReportStream, lrs.backoff)
 }
 
+// lrsUpdate is sent by the reader goroutine to the goroutine sending loads.
+// Exactly one of the following is true:
+//   - err is non-nil: the stream has failed, and no more updates will be sent.
+//   - err is nil: clusters and interval contain the config from a valid
+//     LoadStatsResponse.
+type lrsUpdate struct {
+	clusters []string
+	interval time.Duration
+	err      error
+}
+
 // sendLoads is responsible for periodically sending load reports to the LRS
-// server at the specified interval for the specified clusters, until the passed
-// in context is canceled.
-func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration) {
+// server at the specified interval for the specified clusters. It applies new
+// config received on updateCh, and returns when the passed in context is
+// canceled, when the reader goroutine reports a stream failure, or after the
+// final load report is sent.
+func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration, updateCh <-chan lrsUpdate) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
 		select {
 		case <-tick.C:
+		case u := <-updateCh:
+			if u.err != nil {
+				// The reader goroutine has already logged the error.
+				return
+			}
+			clusterNames = u.clusters
+			// Only reset the ticker if the interval changed. Otherwise, a
+			// server that keeps sending the same response would keep pushing
+			// out the next load report.
+			if u.interval != interval {
+				interval = u.interval
+				tick.Reset(interval)
+			}
+			continue
 		case <-ctx.Done():
 			return
 		case <-lrs.finalSendRequest:
@@ -198,26 +247,57 @@ func (lrs *streamImpl) sendFirstLoadStatsRequest(stream clients.Stream, node *v3
 	return err
 }
 
-// recvFirstLoadStatsResponse receives the first LoadStatsResponse from the LRS
-// server.  Returns the following:
+// recvLoadStatsResponses reads LoadStatsResponse messages from the stream and
+// sends them to updateCh, until reading from the stream fails or ctx is
+// canceled.
+//
+// Responses that fail to parse are logged and dropped, and the existing config
+// stays in effect. This matches what grpc-java and grpc C++ do. Only a failure
+// to read from the stream ends the stream.
+//
+// This is the only goroutine that calls stream.Recv() once the first request
+// has been sent.
+func (lrs *streamImpl) recvLoadStatsResponses(ctx context.Context, stream clients.Stream, updateCh chan<- lrsUpdate) {
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() == nil {
+				lrs.logger.Warningf("Reading from LRS streaming RPC failed: %v", err)
+			}
+			select {
+			case updateCh <- lrsUpdate{err: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		clusters, interval, err := lrs.parseLoadStatsResponse(r)
+		if err != nil {
+			lrs.logger.Warningf("Ignoring invalid LoadStatsResponse: %v", err)
+			continue
+		}
+
+		select {
+		case updateCh <- lrsUpdate{clusters: clusters, interval: interval}:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// parseLoadStatsResponse parses a LoadStatsResponse received from the LRS
+// server. Returns the following:
 //   - a list of cluster names requested by the server or an empty slice if the
 //     server requested for load from all clusters
 //   - the load reporting interval, and
 //   - any error encountered
-func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]string, time.Duration, error) {
-	r, err := stream.Recv()
-	if err != nil {
-		return nil, 0, fmt.Errorf("lrs: failed to receive first LoadStatsResponse: %v", err)
-	}
+func (lrs *streamImpl) parseLoadStatsResponse(r []byte) ([]string, time.Duration, error) {
 	var resp v3lrspb.LoadStatsResponse
 	if err := proto.Unmarshal(r, &resp); err != nil {
-		if lrs.logger.V(2) {
-			lrs.logger.Infof("Failed to unmarshal response to LoadStatsResponse: %v", err)
-		}
-		return nil, time.Duration(0), fmt.Errorf("lrs: unexpected message type %T", r)
+		return nil, 0, fmt.Errorf("lrs: failed to unmarshal LoadStatsResponse: %v", err)
 	}
 	if lrs.logger.V(perRPCVerbosityLevel) {
-		lrs.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(&resp))
+		lrs.logger.Infof("Received LoadStatsResponse: %s", pretty.ToJSON(&resp))
 	}
 
 	interval := resp.GetLoadReportingInterval()
@@ -241,7 +321,6 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 		// Return an empty slice to send stats for all clusters.
 		clusters = []string{}
 	}
-
 	return clusters, loadReportingInterval, nil
 }
 
@@ -331,11 +410,7 @@ func (lrs *streamImpl) sendLoadStatsRequest(stream clients.Stream, loads []*load
 		}
 		return err
 	}
-	err = stream.Send(msg)
-	if err == io.EOF {
-		return getStreamError(stream)
-	}
-	return err
+	return stream.Send(msg)
 }
 
 func getStreamError(stream clients.Stream) error {
