@@ -58,6 +58,63 @@ func (s) TestPanic(t *testing.T) {
 	RegisterInt64Gauge(desc)
 }
 
+// TestSnapshotMetricsRegistry tests that snapshotMetricsRegistryForTesting
+// preserves previously registered metrics inside the snapshot and restores the
+// registry to its prior state upon cleanup.
+func (s) TestSnapshotMetricsRegistry(t *testing.T) {
+	outerCleanup := snapshotMetricsRegistryForTesting()
+	defer outerCleanup()
+
+	beforeDesc := MetricDescriptor{
+		Name:        "before snapshot counter",
+		Description: "metric registered before taking snapshot",
+		Unit:        "{call}",
+		Default:     true,
+	}
+	RegisterInt64Count(beforeDesc)
+	if DescriptorForMetric(beforeDesc.Name) == nil {
+		t.Fatalf("DescriptorForMetric(%q) = nil, want non-nil", beforeDesc.Name)
+	}
+
+	innerCleanup := snapshotMetricsRegistryForTesting()
+	defer func() {
+		if innerCleanup != nil {
+			innerCleanup()
+		}
+	}()
+
+	if DescriptorForMetric(beforeDesc.Name) == nil {
+		t.Fatalf("DescriptorForMetric(%q) = nil inside snapshot, want non-nil", beforeDesc.Name)
+	}
+	if !DefaultMetrics.Metrics()[beforeDesc.Name] {
+		t.Fatalf("DefaultMetrics.Metrics()[%q] = false inside snapshot, want true", beforeDesc.Name)
+	}
+
+	duringDesc := MetricDescriptor{
+		Name:        "during snapshot counter",
+		Description: "metric registered inside snapshot",
+		Unit:        "{call}",
+		Default:     true,
+	}
+	RegisterInt64Count(duringDesc)
+	if DescriptorForMetric(duringDesc.Name) == nil {
+		t.Fatalf("DescriptorForMetric(%q) = nil inside snapshot, want non-nil", duringDesc.Name)
+	}
+
+	innerCleanup()
+	innerCleanup = nil
+
+	if DescriptorForMetric(duringDesc.Name) != nil {
+		t.Fatalf("DescriptorForMetric(%q) = %v after cleanup, want nil", duringDesc.Name, DescriptorForMetric(duringDesc.Name))
+	}
+	if DefaultMetrics.Metrics()[duringDesc.Name] {
+		t.Fatalf("DefaultMetrics.Metrics()[%q] = true after cleanup, want false", duringDesc.Name)
+	}
+	if DescriptorForMetric(beforeDesc.Name) == nil {
+		t.Fatalf("DescriptorForMetric(%q) = nil after cleanup, want non-nil", beforeDesc.Name)
+	}
+}
+
 // TestInstrumentRegistry tests the metric registry. It registers testing only
 // metrics using the metric registry, and creates a fake metrics recorder which
 // uses these metrics. Using the handles returned from the metric registry, this
