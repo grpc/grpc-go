@@ -21,6 +21,7 @@ package xdsdepmgr_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 
 	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter
 )
@@ -1760,10 +1762,21 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 }
 
 // Tests that subscribing to a new cluster after the dependency manager is
-// closed does not panic, and that the returned unsubscribe function can be
-// called safely.
+// closed does not panic and does not start a new watch on the xDS client.
 func (s) TestSubscribeToClusterAfterClose(t *testing.T) {
-	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+	const newClusterName = "new-cluster-name"
+	cdsRequested := testutils.NewChannel()
+	nodeID := uuid.New().String()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if slices.Contains(req.GetResourceNames(), newClusterName) {
+				cdsRequested.Replace(req.GetResourceNames())
+			}
+			return nil
+		},
+	})
+	t.Cleanup(mgmtServer.Stop)
+	xdsClient := createXDSClient(t, e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address))
 
 	watcher := newTestWatcher()
 	defer watcher.close()
@@ -1791,6 +1804,14 @@ func (s) TestSubscribeToClusterAfterClose(t *testing.T) {
 
 	dm.Close()
 
-	unsubscribe := dm.SubscribeToCluster("new-cluster-name")
-	unsubscribe()
+	unsubscribe := dm.SubscribeToCluster(newClusterName)
+	defer unsubscribe()
+
+	// The xDS client outlives the dependency manager (as it does when shared
+	// across channels), so a watch started after Close would show up here.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if names, err := cdsRequested.Receive(sCtx); err == nil {
+		t.Fatalf("Management server received a request for %v after the dependency manager was closed", names)
+	}
 }
