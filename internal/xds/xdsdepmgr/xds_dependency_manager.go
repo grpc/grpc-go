@@ -977,7 +977,8 @@ type clusterRef struct {
 // map. It returns a function to unsubscribe from the cluster i.e. decrease its
 // refcount. This returned function is idempotent, meaning it can be called
 // multiple times without any additional effect. Calling Subscribe in a blocking
-// manner while handling an update will lead to a deadlock.
+// manner while handling an update will lead to a deadlock. After Close, this is
+// a no-op and returns a no-op unsubscribe function.
 func (m *DependencyManager) SubscribeToCluster(name string) func() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
