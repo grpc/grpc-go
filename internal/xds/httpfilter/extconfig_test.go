@@ -313,6 +313,33 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			wantMD:  metadata.MD{"a-bin": []string{string([]byte{1, 2, 3})}},
 		},
 		{
+			name: "RawValuePreferredForNonBinHeader",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x-foo", Value: "value", RawValue: []byte("raw")}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{"x-foo": []string{"raw"}},
+		},
+		{
+			name: "RawValueEmptyFallsBackToValue",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "a-bin", Value: "value"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{"a-bin": []string{"value"}},
+		},
+		{
+			name: "InvalidRawValueNonPrintable",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x-nul", Value: "ok", RawValue: []byte("a\x00b")}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantErr: true,
+		},
+		{
 			name: "AppendIfExistsOrAdd_Exists",
 			hmr:  &HeaderMutationRules{},
 			hvos: []*v3corepb.HeaderValueOption{

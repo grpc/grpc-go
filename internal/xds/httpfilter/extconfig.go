@@ -146,7 +146,9 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 		}
 
 		value := header.GetValue()
-		if strings.HasSuffix(key, "-bin") {
+		// raw_value takes precedence over the legacy value field, matching
+		// parseInitialMetadata in internal/xds/grpcservice.
+		if len(header.GetRawValue()) > 0 {
 			value = string(header.GetRawValue())
 		}
 		if len(value) > maxHeaderSize {
@@ -175,7 +177,9 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 		}
 
 		value := header.GetValue()
-		if strings.HasSuffix(key, "-bin") {
+		// raw_value takes precedence over the legacy value field, matching
+		// parseInitialMetadata in internal/xds/grpcservice.
+		if len(header.GetRawValue()) > 0 {
 			value = string(header.GetRawValue())
 		}
 
