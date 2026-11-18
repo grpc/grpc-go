@@ -344,11 +344,6 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 		return true, nil, state.lastErr
 	}
 
-	clusterConfigs[clusterName] = &xdsresource.ClusterResult{
-		Config: xdsresource.ClusterConfig{
-			Cluster: state.lastUpdate,
-		},
-	}
 	update := state.lastUpdate
 
 	switch update.ClusterType {
@@ -357,6 +352,11 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 	case xdsresource.ClusterTypeLogicalDNS:
 		return m.populateLogicalDNSClusterLocked(clusterName, update, clusterConfigs, dnsResourcesSeen)
 	case xdsresource.ClusterTypeAggregate:
+		clusterConfigs[clusterName] = &xdsresource.ClusterResult{
+			Config: xdsresource.ClusterConfig{
+				Cluster: update,
+			},
+		}
 		return m.populateAggregateClusterLocked(clusterName, update, depth, clusterConfigs, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
 	default:
 		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("cluster type %v of cluster %s not supported", update.ClusterType, clusterName))}
@@ -384,9 +384,14 @@ func (m *DependencyManager) populateEDSClusterLocked(clusterName string, update 
 	}
 
 	// Store the update and error.
-	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
-		EDSUpdate:      endpointState.lastUpdate,
-		ResolutionNote: endpointState.lastErr,
+	clusterConfigs[clusterName] = &xdsresource.ClusterResult{
+		Config: xdsresource.ClusterConfig{
+			Cluster: update,
+			EndpointConfig: &xdsresource.EndpointConfig{
+				EDSUpdate:      endpointState.lastUpdate,
+				ResolutionNote: endpointState.lastErr,
+			},
+		},
 	}
 	return true, []string{clusterName}, nil
 }
@@ -411,9 +416,14 @@ func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, 
 		return false, nil, nil
 	}
 
-	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
-		DNSEndpoints:   dnsState.lastUpdate,
-		ResolutionNote: dnsState.lastErr,
+	clusterConfigs[clusterName] = &xdsresource.ClusterResult{
+		Config: xdsresource.ClusterConfig{
+			Cluster: update,
+			EndpointConfig: &xdsresource.EndpointConfig{
+				DNSEndpoints:   dnsState.lastUpdate,
+				ResolutionNote: dnsState.lastErr,
+			},
+		},
 	}
 	return true, []string{clusterName}, nil
 }
@@ -433,6 +443,7 @@ func (m *DependencyManager) populateAggregateClusterLocked(clusterName string, u
 		leafClusters = append(leafClusters, childLeafClusters...)
 	}
 	if !haveAllResources {
+		delete(clusterConfigs, clusterName)
 		return false, leafClusters, nil
 	}
 	if haveAllResources && len(leafClusters) == 0 {
