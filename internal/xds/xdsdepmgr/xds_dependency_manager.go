@@ -421,22 +421,42 @@ func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, 
 func (m *DependencyManager) populateAggregateClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, depth int, clusterConfigs map[string]*xdsresource.ClusterResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) (bool, []string, error) {
 	var leafClusters []string
 	haveAllResources := true
+	// The error of the first child skipped because of a resource error, used
+	// to explain a failure if no child is left.
+	var firstSkippedErr error
 	for _, child := range update.PrioritizedClusterNames {
 		ok, childLeafClusters, err := m.populateClusterConfigLocked(child, depth+1, clusterConfigs, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
 		if !ok {
 			haveAllResources = false
 		}
 		if err != nil {
-			clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
-			return true, leafClusters, err
+			// Errors that concern the whole graph, like exceeding the maximum
+			// depth, are recorded for the child and fail the aggregate cluster.
+			if r := clusterConfigs[child]; r != nil && r.Err != nil {
+				clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
+				return true, leafClusters, err
+			}
+			// Per gRFC A74, a child whose resource does not exist or was
+			// rejected is skipped instead of failing the aggregate cluster.
+			m.logger.Warningf("Skipping child cluster %q of aggregate cluster %q: %v", child, clusterName, err)
+			if firstSkippedErr == nil {
+				firstSkippedErr = err
+			}
+			continue
 		}
 		leafClusters = append(leafClusters, childLeafClusters...)
 	}
 	if !haveAllResources {
 		return false, leafClusters, nil
 	}
-	if haveAllResources && len(leafClusters) == 0 {
-		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))}
+	if len(leafClusters) == 0 {
+		// If children were skipped, report why the first one failed. The
+		// error is already annotated with the node ID.
+		err := firstSkippedErr
+		if err == nil {
+			err = m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))
+		}
+		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
 		return true, leafClusters, nil
 	}
 	clusterConfigs[clusterName].Config.AggregateConfig = &xdsresource.AggregateConfig{
