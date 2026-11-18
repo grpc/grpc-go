@@ -18,7 +18,10 @@
 
 package mem
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 var defaultBufferPoolSizeExponents = []uint8{
 	8,
@@ -126,5 +129,41 @@ func TestNewBinaryTieredBufferPool_Duplicates(t *testing.T) {
 	}
 	if len(pool.sizedPools) != 6 {
 		t.Errorf("sized buffer pool count = %d, want %d", len(pool.sizedPools), 6)
+	}
+}
+
+// TestBinaryTieredBufferPool_GetZero verifies that a zero-length request does
+// not route to the fallback pool. The fallback clears the entire capacity of
+// the buffer it holds, so after a large buffer was pooled there, Get(0) would
+// pay to clear it. See https://github.com/grpc/grpc-go/issues/9626.
+func TestBinaryTieredBufferPool_GetZero(t *testing.T) {
+	pool, err := NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
+	if err != nil {
+		t.Fatalf("NewBinaryTieredBufferPool() error = %v", err)
+	}
+
+	// Routing check: poolForGet(0) must be the no-op pool, matching
+	// poolForPut, which already discards zero-capacity buffers via
+	// NopBufferPool.
+	if _, ok := pool.poolForGet(0).(NopBufferPool); !ok {
+		t.Errorf("poolForGet(0) = %T, want NopBufferPool", pool.poolForGet(0))
+	}
+
+	// End-to-end: after a large buffer is pooled in the fallback, Get(0)
+	// must come back with no capacity attached instead of that buffer.
+	// Pin to a single P so the pooled buffer is in this P's slot.
+	oldMaxProcs := runtime.GOMAXPROCS(1)
+	defer runtime.GOMAXPROCS(oldMaxProcs)
+
+	const huge = 512 << 20
+	seed := pool.Get(huge)
+	pool.Put(seed)
+	got := pool.Get(0)
+	defer pool.Put(got)
+	if len(*got) != 0 {
+		t.Errorf("Get(0) len = %d, want 0", len(*got))
+	}
+	if cap(*got) != 0 {
+		t.Errorf("Get(0) cap = %d, want 0 (must not reuse the pooled %d-byte buffer)", cap(*got), huge)
 	}
 }
