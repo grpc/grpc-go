@@ -26,6 +26,7 @@
 package gzip
 
 import (
+	"bufio"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -85,19 +86,22 @@ var _ io.Closer = &reader{}
 
 type reader struct {
 	*gzip.Reader
+	buf  *bufio.Reader
 	pool *sync.Pool
 }
 
 func (c *compressor) Decompress(r io.Reader) (io.Reader, error) {
 	z, inPool := c.poolDecompressor.Get().(*reader)
 	if !inPool {
-		newZ, err := gzip.NewReader(r)
+		buf := bufio.NewReader(r)
+		newZ, err := gzip.NewReader(buf)
 		if err != nil {
 			return nil, err
 		}
-		return &reader{Reader: newZ, pool: &c.poolDecompressor}, nil
+		return &reader{Reader: newZ, buf: buf, pool: &c.poolDecompressor}, nil
 	}
-	if err := z.Reset(r); err != nil {
+	z.buf.Reset(r)
+	if err := z.Reset(z.buf); err != nil {
 		c.poolDecompressor.Put(z)
 		return nil, err
 	}
@@ -110,6 +114,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 }
 
 func (r *reader) Close() error {
+	// r.buf is not reset, because it does not free any memory.
 	defer r.pool.Put(r)
 	return r.Reader.Close()
 }
