@@ -57,8 +57,9 @@ type AutoshardingServiceClient interface {
 	// streams with an error.)
 	//
 	// The client should keep this stream open at all times and reopen the stream
-	// after it closes, with backoff if the stream closed without delivering any
-	// data.
+	// after it closes (for example, the server may periodically close streams
+	// with OK to rebalance connections), with backoff if the stream closed
+	// without delivering any data.
 	WatchShardingAssignment(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WatchShardingAssignmentRequest, WatchShardingAssignmentResponse], error)
 }
 
@@ -118,8 +119,9 @@ type AutoshardingServiceServer interface {
 	// streams with an error.)
 	//
 	// The client should keep this stream open at all times and reopen the stream
-	// after it closes, with backoff if the stream closed without delivering any
-	// data.
+	// after it closes (for example, the server may periodically close streams
+	// with OK to rebalance connections), with backoff if the stream closed
+	// without delivering any data.
 	WatchShardingAssignment(grpc.BidiStreamingServer[WatchShardingAssignmentRequest, WatchShardingAssignmentResponse]) error
 	mustEmbedUnimplementedAutoshardingServiceServer()
 }

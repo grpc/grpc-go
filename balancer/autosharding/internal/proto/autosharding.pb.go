@@ -43,7 +43,10 @@ type WatchShardingAssignmentRequest struct {
 	// The client's acknowledgment of the last received assignment.
 	//
 	// The client MUST respond with this message to every received
-	// `AssignmentMetadata` message from the server.
+	// `AssignmentMetadata` message from the server. An implementation of the
+	// Autosharding service may wait for this acknowledgment before sending a
+	// subsequent assignment, and may terminate the stream with an error if the
+	// client does not send `AssignmentAck` within a server-defined timeout.
 	AssignmentAck *AssignmentAck `protobuf:"bytes,3,opt,name=assignment_ack,json=assignmentAck,proto3" json:"assignment_ack,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -101,6 +104,10 @@ func (x *WatchShardingAssignmentRequest) GetAssignmentAck() *AssignmentAck {
 }
 
 // In each instance of this message, the server will set exactly one field.
+//
+// An implementation of the Autosharding service may terminate the stream with
+// an error if the client does not read a response message within a
+// server-defined timeout.
 type WatchShardingAssignmentResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Configuration dictating how the client should aggregate and send load
@@ -119,9 +126,17 @@ type WatchShardingAssignmentResponse struct {
 	// Metadata associated with the most recent chunked assignment. Acts as a
 	// trailer indicating that the server has finished delivering all chunks for
 	// that assignment.
-	Metadata      *AssignmentMetadata `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Metadata *AssignmentMetadata `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	// Indicates that the server currently does not have a new assignment to send
+	// to the client.
+	//
+	// Sent at most once per stream, immediately after `InitialClientConfig`, when
+	// either the server has no cached assignment yet or the client is already
+	// up-to-date given `InitialClientConfig.latest_generation`. Clients MUST NOT
+	// respond to this message.
+	NoAssignmentUpdate *NoAssignmentUpdate `protobuf:"bytes,4,opt,name=no_assignment_update,json=noAssignmentUpdate,proto3" json:"no_assignment_update,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *WatchShardingAssignmentResponse) Reset() {
@@ -171,6 +186,13 @@ func (x *WatchShardingAssignmentResponse) GetChunk() *AssignmentChunk {
 func (x *WatchShardingAssignmentResponse) GetMetadata() *AssignmentMetadata {
 	if x != nil {
 		return x.Metadata
+	}
+	return nil
+}
+
+func (x *WatchShardingAssignmentResponse) GetNoAssignmentUpdate() *NoAssignmentUpdate {
+	if x != nil {
+		return x.NoAssignmentUpdate
 	}
 	return nil
 }
@@ -691,6 +713,55 @@ func (x *AssignmentMetadata) GetGeneration() int64 {
 	return 0
 }
 
+// Indicates that the server currently does not have a new assignment to send
+// to the client.
+type NoAssignmentUpdate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The latest assignment generation currently cached by the server, or 0 if
+	// the server does not have a cached assignment yet. Always less than or equal
+	// to `InitialClientConfig.latest_generation`.
+	CurrentGeneration int64 `protobuf:"varint,1,opt,name=current_generation,json=currentGeneration,proto3" json:"current_generation,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *NoAssignmentUpdate) Reset() {
+	*x = NoAssignmentUpdate{}
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NoAssignmentUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NoAssignmentUpdate) ProtoMessage() {}
+
+func (x *NoAssignmentUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NoAssignmentUpdate.ProtoReflect.Descriptor instead.
+func (*NoAssignmentUpdate) Descriptor() ([]byte, []int) {
+	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *NoAssignmentUpdate) GetCurrentGeneration() int64 {
+	if x != nil {
+		return x.CurrentGeneration
+	}
+	return 0
+}
+
 // A portion of an assignment of slices to endpoints. The individual fields'
 // documentation describes how to reassemble a set of chunks into a complete
 // assignment.
@@ -712,7 +783,7 @@ type AssignmentChunk struct {
 
 func (x *AssignmentChunk) Reset() {
 	*x = AssignmentChunk{}
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[9]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -724,7 +795,7 @@ func (x *AssignmentChunk) String() string {
 func (*AssignmentChunk) ProtoMessage() {}
 
 func (x *AssignmentChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[9]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -737,7 +808,7 @@ func (x *AssignmentChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignmentChunk.ProtoReflect.Descriptor instead.
 func (*AssignmentChunk) Descriptor() ([]byte, []int) {
-	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{9}
+	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AssignmentChunk) GetSliceAssignments() []*SliceAssignment {
@@ -765,7 +836,7 @@ type EndpointState struct {
 
 func (x *EndpointState) Reset() {
 	*x = EndpointState{}
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[10]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -777,7 +848,7 @@ func (x *EndpointState) String() string {
 func (*EndpointState) ProtoMessage() {}
 
 func (x *EndpointState) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[10]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -790,7 +861,7 @@ func (x *EndpointState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EndpointState.ProtoReflect.Descriptor instead.
 func (*EndpointState) Descriptor() ([]byte, []int) {
-	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{10}
+	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *EndpointState) GetEndpoint() string {
@@ -813,7 +884,7 @@ type SliceAssignment struct {
 
 func (x *SliceAssignment) Reset() {
 	*x = SliceAssignment{}
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[11]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -825,7 +896,7 @@ func (x *SliceAssignment) String() string {
 func (*SliceAssignment) ProtoMessage() {}
 
 func (x *SliceAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[11]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -838,7 +909,7 @@ func (x *SliceAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SliceAssignment.ProtoReflect.Descriptor instead.
 func (*SliceAssignment) Descriptor() ([]byte, []int) {
-	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{11}
+	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SliceAssignment) GetSlice() *Slice {
@@ -870,7 +941,7 @@ type Slice struct {
 
 func (x *Slice) Reset() {
 	*x = Slice{}
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[12]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -882,7 +953,7 @@ func (x *Slice) String() string {
 func (*Slice) ProtoMessage() {}
 
 func (x *Slice) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[12]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -895,7 +966,7 @@ func (x *Slice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Slice.ProtoReflect.Descriptor instead.
 func (*Slice) Descriptor() ([]byte, []int) {
-	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{12}
+	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Slice) GetStartKey() []byte {
@@ -925,7 +996,7 @@ type PerSliceEndpointState struct {
 
 func (x *PerSliceEndpointState) Reset() {
 	*x = PerSliceEndpointState{}
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[13]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -937,7 +1008,7 @@ func (x *PerSliceEndpointState) String() string {
 func (*PerSliceEndpointState) ProtoMessage() {}
 
 func (x *PerSliceEndpointState) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[13]
+	mi := &file_proto_autosharding_v1_autosharding_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -950,7 +1021,7 @@ func (x *PerSliceEndpointState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerSliceEndpointState.ProtoReflect.Descriptor instead.
 func (*PerSliceEndpointState) Descriptor() ([]byte, []int) {
-	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{13}
+	return file_proto_autosharding_v1_autosharding_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PerSliceEndpointState) GetEndpointIndex() int32 {
@@ -969,11 +1040,12 @@ const file_proto_autosharding_v1_autosharding_proto_rawDesc = "" +
 	"\x15initial_client_config\x18\x01 \x01(\v21.google.cloud.autosharding.v1.InitialClientConfigB\x04\xe2A\x01\x01R\x13initialClientConfig\x12O\n" +
 	"\vload_report\x18\x02 \x01(\v2(.google.cloud.autosharding.v1.LoadReportB\x04\xe2A\x01\x01R\n" +
 	"loadReport\x12X\n" +
-	"\x0eassignment_ack\x18\x03 \x01(\v2+.google.cloud.autosharding.v1.AssignmentAckB\x04\xe2A\x01\x01R\rassignmentAck\"\xff\x01\n" +
+	"\x0eassignment_ack\x18\x03 \x01(\v2+.google.cloud.autosharding.v1.AssignmentAckB\x04\xe2A\x01\x01R\rassignmentAck\"\xe3\x02\n" +
 	"\x1fWatchShardingAssignmentResponse\x12I\n" +
 	"\x06config\x18\x01 \x01(\v21.google.cloud.autosharding.v1.LoadReportingConfigR\x06config\x12C\n" +
 	"\x05chunk\x18\x02 \x01(\v2-.google.cloud.autosharding.v1.AssignmentChunkR\x05chunk\x12L\n" +
-	"\bmetadata\x18\x03 \x01(\v20.google.cloud.autosharding.v1.AssignmentMetadataR\bmetadata\"\x8d\x01\n" +
+	"\bmetadata\x18\x03 \x01(\v20.google.cloud.autosharding.v1.AssignmentMetadataR\bmetadata\x12b\n" +
+	"\x14no_assignment_update\x18\x04 \x01(\v20.google.cloud.autosharding.v1.NoAssignmentUpdateR\x12noAssignmentUpdate\"\x8d\x01\n" +
 	"\x13InitialClientConfig\x12\x1c\n" +
 	"\x06target\x18\x01 \x01(\tB\x04\xe2A\x01\x02R\x06target\x12%\n" +
 	"\vclient_uuid\x18\x02 \x01(\tB\x04\xe2A\x01\x02R\n" +
@@ -1008,7 +1080,9 @@ const file_proto_autosharding_v1_autosharding_proto_rawDesc = "" +
 	"\x12AssignmentMetadata\x12$\n" +
 	"\n" +
 	"generation\x18\x01 \x01(\x03B\x04\xe2A\x01\x02R\n" +
-	"generation\"\xb8\x01\n" +
+	"generation\"C\n" +
+	"\x12NoAssignmentUpdate\x12-\n" +
+	"\x12current_generation\x18\x01 \x01(\x03R\x11currentGeneration\"\xb8\x01\n" +
 	"\x0fAssignmentChunk\x12Z\n" +
 	"\x11slice_assignments\x18\x01 \x03(\v2-.google.cloud.autosharding.v1.SliceAssignmentR\x10sliceAssignments\x12I\n" +
 	"\tendpoints\x18\x02 \x03(\v2+.google.cloud.autosharding.v1.EndpointStateR\tendpoints\"+\n" +
@@ -1040,7 +1114,7 @@ func file_proto_autosharding_v1_autosharding_proto_rawDescGZIP() []byte {
 	return file_proto_autosharding_v1_autosharding_proto_rawDescData
 }
 
-var file_proto_autosharding_v1_autosharding_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_proto_autosharding_v1_autosharding_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_proto_autosharding_v1_autosharding_proto_goTypes = []any{
 	(*WatchShardingAssignmentRequest)(nil),  // 0: google.cloud.autosharding.v1.WatchShardingAssignmentRequest
 	(*WatchShardingAssignmentResponse)(nil), // 1: google.cloud.autosharding.v1.WatchShardingAssignmentResponse
@@ -1051,40 +1125,42 @@ var file_proto_autosharding_v1_autosharding_proto_goTypes = []any{
 	(*RangeLoad)(nil),                       // 6: google.cloud.autosharding.v1.RangeLoad
 	(*AssignmentAck)(nil),                   // 7: google.cloud.autosharding.v1.AssignmentAck
 	(*AssignmentMetadata)(nil),              // 8: google.cloud.autosharding.v1.AssignmentMetadata
-	(*AssignmentChunk)(nil),                 // 9: google.cloud.autosharding.v1.AssignmentChunk
-	(*EndpointState)(nil),                   // 10: google.cloud.autosharding.v1.EndpointState
-	(*SliceAssignment)(nil),                 // 11: google.cloud.autosharding.v1.SliceAssignment
-	(*Slice)(nil),                           // 12: google.cloud.autosharding.v1.Slice
-	(*PerSliceEndpointState)(nil),           // 13: google.cloud.autosharding.v1.PerSliceEndpointState
-	nil,                                     // 14: google.cloud.autosharding.v1.LoadReport.MetricLoadsEntry
-	(*durationpb.Duration)(nil),             // 15: google.protobuf.Duration
-	(*timestamppb.Timestamp)(nil),           // 16: google.protobuf.Timestamp
+	(*NoAssignmentUpdate)(nil),              // 9: google.cloud.autosharding.v1.NoAssignmentUpdate
+	(*AssignmentChunk)(nil),                 // 10: google.cloud.autosharding.v1.AssignmentChunk
+	(*EndpointState)(nil),                   // 11: google.cloud.autosharding.v1.EndpointState
+	(*SliceAssignment)(nil),                 // 12: google.cloud.autosharding.v1.SliceAssignment
+	(*Slice)(nil),                           // 13: google.cloud.autosharding.v1.Slice
+	(*PerSliceEndpointState)(nil),           // 14: google.cloud.autosharding.v1.PerSliceEndpointState
+	nil,                                     // 15: google.cloud.autosharding.v1.LoadReport.MetricLoadsEntry
+	(*durationpb.Duration)(nil),             // 16: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil),           // 17: google.protobuf.Timestamp
 }
 var file_proto_autosharding_v1_autosharding_proto_depIdxs = []int32{
 	2,  // 0: google.cloud.autosharding.v1.WatchShardingAssignmentRequest.initial_client_config:type_name -> google.cloud.autosharding.v1.InitialClientConfig
 	4,  // 1: google.cloud.autosharding.v1.WatchShardingAssignmentRequest.load_report:type_name -> google.cloud.autosharding.v1.LoadReport
 	7,  // 2: google.cloud.autosharding.v1.WatchShardingAssignmentRequest.assignment_ack:type_name -> google.cloud.autosharding.v1.AssignmentAck
 	3,  // 3: google.cloud.autosharding.v1.WatchShardingAssignmentResponse.config:type_name -> google.cloud.autosharding.v1.LoadReportingConfig
-	9,  // 4: google.cloud.autosharding.v1.WatchShardingAssignmentResponse.chunk:type_name -> google.cloud.autosharding.v1.AssignmentChunk
+	10, // 4: google.cloud.autosharding.v1.WatchShardingAssignmentResponse.chunk:type_name -> google.cloud.autosharding.v1.AssignmentChunk
 	8,  // 5: google.cloud.autosharding.v1.WatchShardingAssignmentResponse.metadata:type_name -> google.cloud.autosharding.v1.AssignmentMetadata
-	15, // 6: google.cloud.autosharding.v1.LoadReportingConfig.load_reporting_interval:type_name -> google.protobuf.Duration
-	15, // 7: google.cloud.autosharding.v1.LoadReportingConfig.load_report_start_threshold:type_name -> google.protobuf.Duration
-	14, // 8: google.cloud.autosharding.v1.LoadReport.metric_loads:type_name -> google.cloud.autosharding.v1.LoadReport.MetricLoadsEntry
-	16, // 9: google.cloud.autosharding.v1.LoadReport.start_time:type_name -> google.protobuf.Timestamp
-	16, // 10: google.cloud.autosharding.v1.LoadReport.end_time:type_name -> google.protobuf.Timestamp
-	6,  // 11: google.cloud.autosharding.v1.Load.range_loads:type_name -> google.cloud.autosharding.v1.RangeLoad
-	11, // 12: google.cloud.autosharding.v1.AssignmentChunk.slice_assignments:type_name -> google.cloud.autosharding.v1.SliceAssignment
-	10, // 13: google.cloud.autosharding.v1.AssignmentChunk.endpoints:type_name -> google.cloud.autosharding.v1.EndpointState
-	12, // 14: google.cloud.autosharding.v1.SliceAssignment.slice:type_name -> google.cloud.autosharding.v1.Slice
-	13, // 15: google.cloud.autosharding.v1.SliceAssignment.endpoints:type_name -> google.cloud.autosharding.v1.PerSliceEndpointState
-	5,  // 16: google.cloud.autosharding.v1.LoadReport.MetricLoadsEntry.value:type_name -> google.cloud.autosharding.v1.Load
-	0,  // 17: google.cloud.autosharding.v1.AutoshardingService.WatchShardingAssignment:input_type -> google.cloud.autosharding.v1.WatchShardingAssignmentRequest
-	1,  // 18: google.cloud.autosharding.v1.AutoshardingService.WatchShardingAssignment:output_type -> google.cloud.autosharding.v1.WatchShardingAssignmentResponse
-	18, // [18:19] is the sub-list for method output_type
-	17, // [17:18] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	9,  // 6: google.cloud.autosharding.v1.WatchShardingAssignmentResponse.no_assignment_update:type_name -> google.cloud.autosharding.v1.NoAssignmentUpdate
+	16, // 7: google.cloud.autosharding.v1.LoadReportingConfig.load_reporting_interval:type_name -> google.protobuf.Duration
+	16, // 8: google.cloud.autosharding.v1.LoadReportingConfig.load_report_start_threshold:type_name -> google.protobuf.Duration
+	15, // 9: google.cloud.autosharding.v1.LoadReport.metric_loads:type_name -> google.cloud.autosharding.v1.LoadReport.MetricLoadsEntry
+	17, // 10: google.cloud.autosharding.v1.LoadReport.start_time:type_name -> google.protobuf.Timestamp
+	17, // 11: google.cloud.autosharding.v1.LoadReport.end_time:type_name -> google.protobuf.Timestamp
+	6,  // 12: google.cloud.autosharding.v1.Load.range_loads:type_name -> google.cloud.autosharding.v1.RangeLoad
+	12, // 13: google.cloud.autosharding.v1.AssignmentChunk.slice_assignments:type_name -> google.cloud.autosharding.v1.SliceAssignment
+	11, // 14: google.cloud.autosharding.v1.AssignmentChunk.endpoints:type_name -> google.cloud.autosharding.v1.EndpointState
+	13, // 15: google.cloud.autosharding.v1.SliceAssignment.slice:type_name -> google.cloud.autosharding.v1.Slice
+	14, // 16: google.cloud.autosharding.v1.SliceAssignment.endpoints:type_name -> google.cloud.autosharding.v1.PerSliceEndpointState
+	5,  // 17: google.cloud.autosharding.v1.LoadReport.MetricLoadsEntry.value:type_name -> google.cloud.autosharding.v1.Load
+	0,  // 18: google.cloud.autosharding.v1.AutoshardingService.WatchShardingAssignment:input_type -> google.cloud.autosharding.v1.WatchShardingAssignmentRequest
+	1,  // 19: google.cloud.autosharding.v1.AutoshardingService.WatchShardingAssignment:output_type -> google.cloud.autosharding.v1.WatchShardingAssignmentResponse
+	19, // [19:20] is the sub-list for method output_type
+	18, // [18:19] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_autosharding_v1_autosharding_proto_init() }
@@ -1092,14 +1168,14 @@ func file_proto_autosharding_v1_autosharding_proto_init() {
 	if File_proto_autosharding_v1_autosharding_proto != nil {
 		return
 	}
-	file_proto_autosharding_v1_autosharding_proto_msgTypes[12].OneofWrappers = []any{}
+	file_proto_autosharding_v1_autosharding_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_autosharding_v1_autosharding_proto_rawDesc), len(file_proto_autosharding_v1_autosharding_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
