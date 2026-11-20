@@ -120,10 +120,12 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 // each underlying buffer.
 func (s BufferSlice) Reader() *Reader {
 	s.Ref()
-	return &Reader{
+	r := &Reader{
 		data: s,
 		len:  s.Len(),
 	}
+	r.fill()
+	return r
 }
 
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface
@@ -136,8 +138,7 @@ func (s BufferSlice) Reader() *Reader {
 type Reader struct {
 	data BufferSlice
 	len  int
-	// The index into data[0].ReadOnlyData().
-	bufferIdx int
+	cur  []byte // The unread part of data[0]; empty only if len is 0.
 }
 
 // Remaining returns the number of unread bytes remaining in the slice.
@@ -152,7 +153,7 @@ func (r *Reader) Reset(s BufferSlice) {
 	s.Ref()
 	r.data = s
 	r.len = s.Len()
-	r.bufferIdx = 0
+	r.fill()
 }
 
 // Close frees the underlying BufferSlice and never returns an error. Subsequent
@@ -161,18 +162,8 @@ func (r *Reader) Close() error {
 	r.data.Free()
 	r.data = nil
 	r.len = 0
+	r.cur = nil
 	return nil
-}
-
-func (r *Reader) freeFirstBufferIfEmpty() bool {
-	if len(r.data) == 0 || r.bufferIdx != r.data[0].Len() {
-		return false
-	}
-
-	r.data[0].Free()
-	r.data = r.data[1:]
-	r.bufferIdx = 0
-	return true
 }
 
 func (r *Reader) Read(buf []byte) (n int, _ error) {
@@ -183,16 +174,10 @@ func (r *Reader) Read(buf []byte) (n int, _ error) {
 	for len(buf) != 0 && r.len != 0 {
 		// Copy as much as possible from the first Buffer in the slice into the
 		// given byte slice.
-		data := r.data[0].ReadOnlyData()
-		copied := copy(buf, data[r.bufferIdx:])
-		r.len -= copied       // Reduce len by the number of bytes copied.
-		r.bufferIdx += copied // Increment the buffer index.
-		n += copied           // Increment the total number of bytes read.
-		buf = buf[copied:]    // Shrink the given byte slice.
-
-		// If we have copied all the data from the first Buffer, free it and advance to
-		// the next in the slice.
-		r.freeFirstBufferIfEmpty()
+		copied := copy(buf, r.cur)
+		r.advance(copied)  // Frees the first Buffer once all its data is read.
+		n += copied        // Increment the total number of bytes read.
+		buf = buf[copied:] // Shrink the given byte slice.
 	}
 
 	return n, nil
@@ -204,17 +189,37 @@ func (r *Reader) ReadByte() (byte, error) {
 		return 0, io.EOF
 	}
 
+	b := r.cur[0]
+	r.advance(1)
+	return b, nil
+}
+
+// fill sets cur to the data of the first non-empty buffer and frees the empty
+// buffers before it.
+func (r *Reader) fill() {
+	r.cur = nil
 	// There may be any number of empty buffers in the slice, clear them all until a
 	// non-empty buffer is reached. This is guaranteed to exit since r.len is not 0.
-	for r.freeFirstBufferIfEmpty() {
+	for len(r.data) > 0 {
+		r.cur = r.data[0].ReadOnlyData()
+		if len(r.cur) > 0 {
+			return
+		}
+		r.data[0].Free()
+		r.data = r.data[1:]
 	}
+}
 
-	b := r.data[0].ReadOnlyData()[r.bufferIdx]
-	r.len--
-	r.bufferIdx++
-	// Free the first buffer in the slice if the last byte was read
-	r.freeFirstBufferIfEmpty()
-	return b, nil
+// advance marks the first n bytes of cur as read.
+func (r *Reader) advance(n int) {
+	r.cur = r.cur[n:]
+	r.len -= n
+	if len(r.cur) > 0 {
+		return
+	}
+	r.data[0].Free()
+	r.data = r.data[1:]
+	r.fill()
 }
 
 var _ io.Writer = (*writer)(nil)
@@ -296,16 +301,9 @@ nextBuffer:
 func (r *Reader) Discard(n int) (discarded int, err error) {
 	total := n
 	for n > 0 && r.len > 0 {
-		curData := r.data[0].ReadOnlyData()
-		curSize := min(n, len(curData)-r.bufferIdx)
+		curSize := min(n, len(r.cur))
 		n -= curSize
-		r.len -= curSize
-		r.bufferIdx += curSize
-		if r.bufferIdx >= len(curData) {
-			r.data[0].Free()
-			r.data = r.data[1:]
-			r.bufferIdx = 0
-		}
+		r.advance(curSize)
 	}
 	discarded = total - n
 	if n > 0 {
@@ -326,16 +324,15 @@ func (r *Reader) Discard(n int) (discarded int, err error) {
 // If Peek returns fewer than n bytes, it also returns an error.
 func (r *Reader) Peek(n int, res [][]byte) ([][]byte, error) {
 	for i := 0; n > 0 && i < len(r.data); i++ {
-		curData := r.data[i].ReadOnlyData()
-		start := 0
-		if i == 0 {
-			start = r.bufferIdx
+		curData := r.cur
+		if i > 0 {
+			curData = r.data[i].ReadOnlyData()
 		}
-		curSize := min(n, len(curData)-start)
+		curSize := min(n, len(curData))
 		if curSize == 0 {
 			continue
 		}
-		res = append(res, curData[start:start+curSize])
+		res = append(res, curData[:curSize])
 		n -= curSize
 	}
 	if n > 0 {
