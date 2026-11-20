@@ -28,6 +28,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/clients"
 	clientsinternal "google.golang.org/grpc/internal/xds/clients/internal"
@@ -50,7 +53,7 @@ var (
 // LRSClient is an LRS (Load Reporting Service) client.
 type LRSClient struct {
 	transportBuilder clients.TransportBuilder
-	node             clients.Node
+	nodeProto        *v3corepb.Node
 	backoff          func(int) time.Duration // Backoff for LRS stream failures.
 	minInterval      time.Duration           // Lower bound on the load reporting interval.
 	logger           *igrpclog.PrefixLogger
@@ -68,6 +71,10 @@ func New(config Config) (*LRSClient, error) {
 	if config.TransportBuilder == nil {
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
+	nodeProto, err := clientsinternal.NodeProto(config.Node)
+	if err != nil {
+		return nil, fmt.Errorf("lrsclient: %w", err)
+	}
 
 	minInterval := config.MinLoadReportingInterval
 	if minInterval <= 0 {
@@ -75,7 +82,7 @@ func New(config Config) (*LRSClient, error) {
 	}
 	c := &LRSClient{
 		transportBuilder: config.TransportBuilder,
-		node:             config.Node,
+		nodeProto:        nodeProto,
 		backoff:          defaultExponentialBackoff,
 		minInterval:      minInterval,
 		lrsStreams:       make(map[clients.ServerIdentifier]*streamImpl),
@@ -130,7 +137,7 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		return nil, fmt.Errorf("lrsclient: failed to create transport for server identifier %s: %v", serverIdentifier, err)
 	}
 
-	nodeProto := clientsinternal.NodeProto(c.node)
+	nodeProto := proto.Clone(c.nodeProto).(*v3corepb.Node)
 	nodeProto.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
 	lrs := newStreamImpl(streamOpts{
 		transport:   tr,
