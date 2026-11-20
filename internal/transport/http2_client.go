@@ -96,7 +96,12 @@ type http2Client struct {
 	writerDone chan struct{} // sync point to enable testing.
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
-	goAway        chan struct{}
+	goAway chan struct{}
+	// gracefulClose is closed by GracefulClose when the transport starts
+	// draining. It wakes NewStream callers that are blocked waiting for
+	// stream quota, so they fail fast instead of waiting for a long-lived
+	// stream to end.
+	gracefulClose chan struct{}
 	keepaliveDone chan struct{} // Closed when the keepalive goroutine exits.
 	framer        *framer
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -357,6 +362,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		readerDone:            make(chan struct{}),
 		writerDone:            make(chan struct{}),
 		goAway:                make(chan struct{}),
+		gracefulClose:         make(chan struct{}),
 		keepaliveDone:         make(chan struct{}),
 		framer:                newFramer(conn, writeBufSize, readBufSize, opts.SharedWriteBuffer, maxHeaderListSize, opts.BufferPool),
 		fc:                    &trInFlow{limit: uint32(icwz)},
@@ -877,16 +883,20 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			ch = t.streamsQuotaAvailable
 			return false
 		}
-		if !firstTry {
-			t.waitingStreams--
-		}
-		t.streamQuota--
 
 		t.mu.Lock()
 		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
 			t.mu.Unlock()
+			// The stream is not created, so leave streamQuota untouched.
+			// waitingStreams is left as is too: no more streams will be
+			// created on this transport, so it no longer matters. The caller
+			// is woken by goAway, gracefulClose or the transport context.
 			return false // Don't create a stream if the transport is already closed.
 		}
+		if !firstTry {
+			t.waitingStreams--
+		}
+		t.streamQuota--
 
 		hdr.streamID = t.nextID
 		t.nextID += 2
@@ -946,6 +956,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			return nil, &NewStreamError{Err: ContextErr(ctx.Err())}
 		case <-t.goAway:
 			return nil, &NewStreamError{Err: errStreamDrain, AllowTransparentRetry: true}
+		case <-t.gracefulClose:
+			return nil, &NewStreamError{Err: ErrConnClosing, AllowTransparentRetry: true}
 		case <-t.ctx.Done():
 			return nil, &NewStreamError{Err: ErrConnClosing, AllowTransparentRetry: true}
 		}
@@ -1129,6 +1141,8 @@ func (t *http2Client) GracefulClose() {
 	}
 	t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo})
 	t.state = draining
+	// The state check above ensures this runs at most once.
+	close(t.gracefulClose)
 	active := len(t.activeStreams)
 	t.mu.Unlock()
 	if active == 0 {
