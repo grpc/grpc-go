@@ -400,14 +400,6 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	cancelCtx, cancel := context.WithCancel(ctx)
 	procCtx, procCancel := createProcContext(cancelCtx, i.config.server)
 
-	// Collect OnFinishCallOption functions from the call options.
-	var onFinish []func(error)
-	for _, o := range opts {
-		if onFinishOpt, ok := o.(grpc.OnFinishCallOption); ok && onFinishOpt.OnFinish != nil {
-			onFinish = append(onFinish, onFinishOpt.OnFinish)
-		}
-	}
-
 	csCommon := &commonStream{
 		ctx:                    cancelCtx,
 		cancel:                 cancel,
@@ -423,7 +415,6 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// initializing attributes upfront avoids repeated protobuf construction on
 		// subsequent SendMsg and RecvMsg calls.
 		reqAttrs: constructRequestAttributes(ri, outgoingMD, added, i.config.requestAttributes),
-		onFinish: onFinish,
 	}
 
 	// In the ClientStream API, outgoing headers are sent immediately when the
@@ -546,13 +537,9 @@ type commonStream struct {
 
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
-	clientHeadersStartTime time.Time // holds the start time of client headers processing for metrics and relative timestamp calculations
-	defaultWindowSize      int64     // initial flow control window size captured at stream creation
-
-	// onFinish stores OnFinishCallOption callbacks to execute if calling the
-	// delegate (newStream) fails or if the RPC fails before delegating.
-	onFinish            []func(err error)
-	dataplaneRecvCalled atomic.Bool // tracks if RecvMsg has been called on dataplaneStream by the application
+	clientHeadersStartTime time.Time   // holds the start time of client headers processing for metrics and relative timestamp calculations
+	defaultWindowSize      int64       // initial flow control window size captured at stream creation
+	dataplaneRecvCalled    atomic.Bool // tracks if RecvMsg has been called on dataplaneStream by the application
 }
 
 func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
@@ -584,13 +571,6 @@ func (cs *commonStream) handleInitError(err error, newStream func(context.Contex
 	}
 	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
 	return cs.dataplaneStream, nil
-}
-
-// callOnFinish executes all registered OnFinish CallOption callbacks.
-func (cs *commonStream) callOnFinish(err error) {
-	for _, f := range cs.onFinish {
-		f(err)
-	}
 }
 
 // cleanupDataplane cancels the dataplane stream's context to immediately tear
@@ -1753,8 +1733,6 @@ func (cs *clientStream) createDataplaneStream(ctx context.Context, newStream fun
 	defer close(cs.dataplaneSetup)
 	cs.dataplaneStream, cs.dataplaneCreationErr = newStream(ctx, opts...)
 	if cs.dataplaneCreationErr != nil {
-		// Execute the OnFinish call options if the delegate failed.
-		cs.callOnFinish(cs.dataplaneCreationErr)
 		cs.cancel()
 		return cs.dataplaneCreationErr
 	}
@@ -1771,10 +1749,6 @@ func (cs *clientStream) failProcStream(err error) bool {
 	}
 	cs.procCancel()
 	if err != io.EOF && (cs.ignoreFailureMode.Load() || !cs.config.failureModeAllow) {
-		// Execute the OnFinish call options if the delegate is never called.
-		if cs.dataplaneStream == nil {
-			cs.callOnFinish(err)
-		}
 		cs.procStreamErr.Store(status.Errorf(codes.Internal, "extproc: %v", err))
 		cs.procStreamFailed.Fire()
 		cs.cleanupDataplane()
@@ -1789,10 +1763,6 @@ func (cs *clientStream) failProcStream(err error) bool {
 func (cs *clientStream) cancelStream(err error) {
 	if !cs.procStreamClosed.CompareAndSwap(false, true) {
 		return
-	}
-	// Execute the OnFinish call options if the delegate is never called.
-	if cs.dataplaneStream == nil {
-		cs.callOnFinish(err)
 	}
 	cs.procStreamErr.Store(err)
 	cs.procStreamFailed.Fire()

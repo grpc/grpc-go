@@ -211,17 +211,9 @@ func startTestServiceBackend(t *testing.T, respHeaders metadata.MD) (*stubserver
 // makeUnaryRPC is a helper function to make a unary RPC and verify the
 // returned status code, response headers and trailers, and the request headers
 // received by the server handler (when headersCh is non-nil). It returns the
-// error returned by the RPC, which is nil if the RPC is skipped.
+// error returned by the RPC.
 func makeUnaryRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantStatus codes.Code, wantRespHeaders, wantTrailers metadata.MD, headersCh chan metadata.MD, wantHeaders metadata.MD) error {
 	t.Helper()
-	// TODO: Remove these skips once the fix for headers and trailers
-	// requested via call options (grpc.Header and grpc.Trailer) lands.
-	if len(wantTrailers) > 0 {
-		t.Skip("Unary RPC trailer/header passing using call options is currently not supported for denied streams")
-	}
-	if len(wantRespHeaders) > 0 {
-		t.Skip("Unary RPC response header mutation with CallOption is currently not supported")
-	}
 	client := testgrpc.NewTestServiceClient(cc)
 	var gotRespHeaders, gotTrailers metadata.MD
 	_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Header(&gotRespHeaders), grpc.Trailer(&gotTrailers))
@@ -682,10 +674,8 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			makeStreamingRPC(ctx, t, cc, tt.wantStatus, nil, tt.wantTrailer, gotStreamingMD, tt.wantHeaders)
-			// Make the unary RPC last, since it skips the test when trailers
-			// are expected.
 			makeUnaryRPC(ctx, t, cc, tt.wantStatus, nil, tt.wantTrailer, gotUnaryMD, tt.wantHeaders)
+			makeStreamingRPC(ctx, t, cc, tt.wantStatus, nil, tt.wantTrailer, gotStreamingMD, tt.wantHeaders)
 		})
 	}
 }
@@ -1082,10 +1072,8 @@ func (s) TestExtAuthz_Allowed_WithResponseHeaders(t *testing.T) {
 			cc := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
 
 			outgoingCtx := metadata.NewOutgoingContext(ctx, tt.outgoingHeaders)
-			makeStreamingRPC(outgoingCtx, t, cc, tt.wantStatus, tt.wantRespHeaders, nil, gotStreamingMD, tt.wantHeaders)
-			// Make the unary RPC last, since it skips the test when response
-			// headers are expected.
 			makeUnaryRPC(outgoingCtx, t, cc, tt.wantStatus, tt.wantRespHeaders, nil, gotUnaryMD, tt.wantHeaders)
+			makeStreamingRPC(outgoingCtx, t, cc, tt.wantStatus, tt.wantRespHeaders, nil, gotStreamingMD, tt.wantHeaders)
 		})
 	}
 }
@@ -1114,6 +1102,9 @@ func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *test
 
 	// Backend returns without sending initial headers (trailers-only response).
 	backend := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return nil, status.Error(codes.Aborted, "trailers-only error")
+		},
 		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			return nil
 		},
@@ -1126,6 +1117,14 @@ func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *test
 	cc := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
 
 	client := testgrpc.NewTestServiceClient(cc)
+	var gotUnaryHeaders metadata.MD
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Header(&gotUnaryHeaders)); status.Code(err) != codes.Aborted {
+		t.Fatalf("EmptyCall() error = %v, want code %v", err, codes.Aborted)
+	}
+	if gotUnaryHeaders != nil {
+		t.Fatalf("EmptyCall() gotHeaders = %v, want nil for trailers-only response", gotUnaryHeaders)
+	}
+
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall() failed: %v", err)

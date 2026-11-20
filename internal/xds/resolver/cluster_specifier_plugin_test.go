@@ -435,22 +435,27 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	// Verify that the interceptor is not nil.
-	if res.Interceptor == nil {
-		t.Fatal("RPCInfo does not contain interceptors list")
+	// Verify that the interceptors list is not empty.
+	if len(res.Interceptors) == 0 {
+		t.Fatal("RPCConfig does not contain interceptors list")
 	}
 	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
 		return nil, nil
 	}
-
-	interceptor, ok := res.Interceptor.(httpfilter.ClientInterceptor)
-	if !ok {
-		t.Fatalf("res.Interceptor is type %T, want httpfilter.ClientInterceptor", res.Interceptor)
+	for idx := len(res.Interceptors) - 1; idx >= 0; idx-- {
+		ns := newStream
+		interceptor, ok := res.Interceptors[idx].(httpfilter.ClientInterceptor)
+		if !ok {
+			t.Fatalf("res.Interceptors[%d] is type %T, want httpfilter.ClientInterceptor", idx, res.Interceptors[idx])
+		}
+		newStream = func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+			return interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method"}, ns, opts...)
+		}
 	}
-	// Invoke the interceptor to create a new stream, which should invoke the
-	// filters. Use RPCConfig.Context as the context for the new stream. This
+	// Invoke the interceptor chain to create a new stream, which should invoke
+	// the filters. Use RPCConfig.Context as the context for the new stream. This
 	// contains the "onCommitted" function as a value.
-	if _, err = interceptor.NewStream(res.Context, iresolver.RPCInfo{Method: "/service/method"}, newStream); err != nil {
+	if _, err = newStream(res.Context); err != nil {
 		t.Fatalf("NewStream() failed with error: %v", err)
 	}
 

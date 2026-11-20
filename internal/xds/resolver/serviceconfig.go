@@ -108,8 +108,8 @@ type virtualHost struct {
 
 // routeCluster holds information about a cluster as referenced by a route.
 type routeCluster struct {
-	name        string                       // Name of the cluster.
-	interceptor httpfilter.ClientInterceptor // HTTP filters to run for RPCs matching this route.
+	name         string                         // Name of the cluster.
+	interceptors []httpfilter.ClientInterceptor // HTTP filters to run for RPCs matching this route.
 }
 
 type route struct {
@@ -217,9 +217,13 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		lbCtx = clusterimpl.EnableAutoHostRewrite(lbCtx)
 	}
 
+	interceptors := make([]any, len(cluster.interceptors))
+	for i, interceptor := range cluster.interceptors {
+		interceptors[i] = interceptor
+	}
 	config := &iresolver.RPCConfig{
-		Context:     lbCtx,
-		Interceptor: cluster.interceptor,
+		Context:      lbCtx,
+		Interceptors: interceptors,
 	}
 	// Add a ref to the selected cluster to keep the interceptors alive until RPC
 	// is committed.

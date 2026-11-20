@@ -528,7 +528,7 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 	if len(trailers) == 0 {
 		return nil, err
 	}
-	return newDeniedClientStream(ctx, err, trailers, opts), nil
+	return &deniedClientStream{ctx: ctx, err: err, mutatedTrailers: trailers}, nil
 }
 
 // handleOkResponse handles cases where the external authorization server
@@ -625,41 +625,6 @@ func (s *clientStream) Header() (metadata.MD, error) {
 	return s.header.Copy(), nil
 }
 
-// newDeniedClientStream returns a synthetic ClientStream that immediately fails
-// stream operations with err and returns the specified trailers on Trailer(). It
-// extracts and executes OnFinishCallOption callbacks when the stream completes
-// or when ctx is canceled.
-func newDeniedClientStream(ctx context.Context, err error, trailers metadata.MD, opts []grpc.CallOption) *deniedClientStream {
-	// Collect OnFinishCallOption functions from the call options.
-	var onFinish []func(error)
-	for _, o := range opts {
-		if onFinishOpt, ok := o.(grpc.OnFinishCallOption); ok && onFinishOpt.OnFinish != nil {
-			onFinish = append(onFinish, onFinishOpt.OnFinish)
-		}
-	}
-
-	callOnFinish := func() {
-		for _, f := range onFinish {
-			f(err)
-		}
-	}
-	// Ensure onFinish callbacks are executed when the context is canceled or
-	// expires, even if the caller abandons the stream without invoking any
-	// stream methods.
-	stop := context.AfterFunc(ctx, callOnFinish)
-
-	return &deniedClientStream{
-		ctx:             ctx,
-		err:             err,
-		mutatedTrailers: trailers,
-		finish: func() {
-			if stop() {
-				callOnFinish()
-			}
-		},
-	}
-}
-
 // deniedClientStream is a synthetic ClientStream returned when the external
 // authorization server denies the RPC and specifies headers to return as
 // trailers. It intercepts the stream operations to return error without
@@ -672,26 +637,20 @@ type deniedClientStream struct {
 	// mutatedTrailers holds response trailers specified by the external
 	// authorization server in the denied response.
 	mutatedTrailers metadata.MD
-	// finish unregisters the context cancellation callback and executes
-	// OnFinishCallOption callbacks at most once.
-	finish func()
 }
 
 // Header returns nil metadata and a nil error because a denied RPC terminates
 // without headers. Per the grpc.ClientStream contract, the status is then
 // discovered by calling RecvMsg.
 func (s *deniedClientStream) Header() (metadata.MD, error) {
-	s.finish()
 	return nil, nil
 }
 
 func (s *deniedClientStream) Trailer() metadata.MD {
-	s.finish()
 	return s.mutatedTrailers
 }
 
 func (s *deniedClientStream) CloseSend() error {
-	s.finish()
 	return nil
 }
 
@@ -700,12 +659,10 @@ func (s *deniedClientStream) Context() context.Context {
 }
 
 func (s *deniedClientStream) SendMsg(any) error {
-	s.finish()
 	return io.EOF
 }
 
 func (s *deniedClientStream) RecvMsg(any) error {
-	s.finish()
 	return s.err
 }
 
