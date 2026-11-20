@@ -148,3 +148,49 @@ func TestBinaryTieredBufferPool_GetZero(t *testing.T) {
 		t.Errorf("poolForGet(0) = %T, want NopBufferPool", pool.poolForGet(0))
 	}
 }
+
+func TestBufferPoolWithFallback_PoolSelection(t *testing.T) {
+	fallback := NewTieredBufferPoolWithFallback(NopBufferPool{}, 12, 16)
+	pool, err := NewBinaryTieredBufferPoolWithFallback(fallback, 3) // 8 bytes
+	if err != nil {
+		t.Fatalf("Failed to create buffer pool: %v", err)
+	}
+
+	tierSize := func(p bufferPool, size int) int {
+		t.Helper()
+		if tp, ok := p.(*TieredBufferPool); ok {
+			p = tp.getPool(size)
+		}
+		switch p := p.(type) {
+		case *sizedBufferPool:
+			return p.defaultSize
+		case NopBufferPool:
+			return 0
+		}
+		t.Fatalf("Unexpected pool of type %T for buffers of size %d", p, size)
+		return 0
+	}
+
+	tests := []struct {
+		size     int
+		wantTier int // 0 if the buffer must not be pooled.
+	}{
+		{size: 0, wantTier: 0},
+		{size: 8, wantTier: 8},
+		{size: 9, wantTier: 12},
+		{size: 12, wantTier: 12},
+		{size: 13, wantTier: 16},
+		{size: 16, wantTier: 16},
+		{size: 17, wantTier: 0},
+	}
+
+	for _, tt := range tests {
+		if got := tierSize(pool.poolForGet(tt.size), tt.size); got != tt.wantTier {
+			t.Errorf("poolForGet(%d) returned pool with buffers of capacity %d, want %d", tt.size, got, tt.wantTier)
+		}
+		bufCap := max(tt.size, tt.wantTier)
+		if got := tierSize(pool.poolForPut(bufCap), bufCap); got != tt.wantTier {
+			t.Errorf("poolForPut(%d) returned pool with buffers of capacity %d, want %d", bufCap, got, tt.wantTier)
+		}
+	}
+}
