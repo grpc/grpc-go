@@ -349,18 +349,17 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	primaryCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: primaryClusterName,
 		ServiceName: primaryServiceName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
 	secondaryCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: secondaryClusterName,
 		ServiceName: secondaryServiceName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		Type:        e2e.ClusterTypeAggregate,
-		// TODO: when "A75: xDS Aggregate Cluster Behavior Fixes" is implemented, the
-		// policy will have to be set on the child clusters.
-		Policy:     e2e.LoadBalancingPolicyRingHash,
-		ChildNames: []string{primaryClusterName, secondaryClusterName},
+		ChildNames:  []string{primaryClusterName, secondaryClusterName},
 	})
 	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
@@ -441,6 +440,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	edsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: edsClusterName,
 		ServiceName: edsClusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
 
 	logicalDNSCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
@@ -450,14 +450,12 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 		// are required to be present for the resource to be valid.
 		DNSHostName: "server.example.com",
 		DNSPort:     443,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		Type:        e2e.ClusterTypeAggregate,
-		// TODO: when "A75: xDS Aggregate Cluster Behavior Fixes" is merged, the
-		// policy will have to be set on the child clusters.
-		Policy:     e2e.LoadBalancingPolicyRingHash,
-		ChildNames: []string{edsClusterName, logicalDNSClusterName},
+		ChildNames:  []string{edsClusterName, logicalDNSClusterName},
 	})
 	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
@@ -521,6 +519,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	edsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: edsClusterName,
 		ServiceName: edsClusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
 
 	logicalDNSCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
@@ -530,14 +529,12 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		// are required to be present for the resource to be valid.
 		DNSHostName: "server.example.com",
 		DNSPort:     443,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		Type:        e2e.ClusterTypeAggregate,
-		// TODO: when "A75: xDS Aggregate Cluster Behavior Fixes" is merged, the
-		// policy will have to be set on the child clusters.
-		Policy:     e2e.LoadBalancingPolicyRingHash,
-		ChildNames: []string{edsClusterName, logicalDNSClusterName},
+		ChildNames:  []string{edsClusterName, logicalDNSClusterName},
 	})
 	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
