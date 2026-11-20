@@ -277,7 +277,6 @@ func (cf *clientFilter) newExternalServiceEntry(config *grpcservice.Config) (*ex
 	entry.client = grpcsync.NewRefCounted(client, func() {
 		cf.removeExternalServiceEntry(entry)
 		release()
-		entry.config.Close()
 	})
 	return entry, nil
 }

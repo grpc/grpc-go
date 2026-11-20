@@ -72,6 +72,8 @@ import (
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+
+	_ "google.golang.org/grpc/internal/xds/httpfilter/ext_authz"
 )
 
 const (
@@ -1991,6 +1993,32 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				return &v3authpb.CheckResponse{
 					Status: &statuspb.Status{Code: int32(codes.OK)},
 				}, nil
+			},
+			wantCode:    codes.OK,
+			wantMetrics: []string{allowedRPCs},
+		},
+		{
+			name: "Allowed_RPCs_WithHeaderMutations",
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							Headers: []*corepb.HeaderValueOption{
+								{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},
+							},
+							HeadersToRemove: []string{"k2"},
+							ResponseHeadersToAdd: []*corepb.HeaderValueOption{
+								{Header: &corepb.HeaderValue{Key: "k3", Value: "v3"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				AllowExpression:    &matcherpb.RegexMatcher{Regex: "^k.*"},
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
 			},
 			wantCode:    codes.OK,
 			wantMetrics: []string{allowedRPCs},
