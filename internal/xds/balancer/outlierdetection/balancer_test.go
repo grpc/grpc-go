@@ -356,7 +356,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-				MaxEjectionPercent: 10,
+				MaxEjectionPercent: 100,
 				FailurePercentageEjection: &FailurePercentageEjection{
 					Threshold:             50,
 					EnforcementPercentage: 100,
@@ -378,7 +378,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-				MaxEjectionPercent: 10,
+				MaxEjectionPercent: 100,
 				FailurePercentageEjection: &FailurePercentageEjection{
 					Threshold:             50,
 					EnforcementPercentage: 100,
@@ -400,7 +400,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-				MaxEjectionPercent: 10,
+				MaxEjectionPercent: 100,
 				FailurePercentageEjection: &FailurePercentageEjection{
 					Threshold:             50,
 					EnforcementPercentage: 0,
@@ -740,7 +740,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
 			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-			MaxEjectionPercent: 10,
+			MaxEjectionPercent: 100,
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           500,
 				EnforcementPercentage: 100,
@@ -906,6 +906,464 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
 		}); err != nil {
 			t.Fatalf("Error in Sub Conn update: %v", err)
+		}
+	}
+}
+
+// TestMaxEjectionPercentNotExceeded verifies that one interval never ejects
+// endpoints past MaxEjectionPercent (grpc/grpc-go#9582). With three endpoints
+// all failing and MaxEjectionPercent set to 50, only one endpoint may be
+// ejected: ejecting a second would take the ejected share from 33% to 67%.
+// TestMaxEjectionPercent verifies the MaxEjectionPercent cap across both
+// detection algorithms: an ejection that would take the ejected share past
+// the cap is blocked, and one landing exactly on the cap is allowed.
+func (s) TestMaxEjectionPercent(t *testing.T) {
+	tests := []struct {
+		name               string
+		numEndpoints       int
+		maxEjectionPercent uint32
+		algorithm          string // "failure_percentage" or "success_rate"
+		wantEjections      int
+	}{
+		{
+			name:               "failure percentage 3 endpoints at 50%",
+			numEndpoints:       3,
+			maxEjectionPercent: 50,
+			algorithm:          "failure_percentage",
+			wantEjections:      1,
+		},
+		{
+			name:               "exact boundary 2 endpoints at 50%",
+			numEndpoints:       2,
+			maxEjectionPercent: 50,
+			algorithm:          "failure_percentage",
+			wantEjections:      1,
+		},
+		{
+			name:               "default cap 3 endpoints at 10%",
+			numEndpoints:       3,
+			maxEjectionPercent: 10,
+			algorithm:          "failure_percentage",
+			wantEjections:      0,
+		},
+		{
+			name:               "success rate 4 endpoints at 30%",
+			numEndpoints:       4,
+			maxEjectionPercent: 30,
+			algorithm:          "success_rate",
+			wantEjections:      1,
+		},
+		{
+			name:               "success rate 4 endpoints at 10%",
+			numEndpoints:       4,
+			maxEjectionPercent: 10,
+			algorithm:          "success_rate",
+			wantEjections:      0,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			scsCh := testutils.NewChannel()
+			scws := make([]balancer.SubConn, test.numEndpoints)
+			connectivityCh := make(chan struct{})
+			stub.Register(t.Name(), stub.BalancerFuncs{
+				UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+					if scws[0] != nil { // UpdateClientConnState was already called, no need to recreate SubConns.
+						return nil
+					}
+					var err error
+					for i := range scws {
+						opts := balancer.NewSubConnOptions{
+							StateListener: func(balancer.SubConnState) {},
+						}
+						if i == len(scws)-1 {
+							opts.StateListener = func(scs balancer.SubConnState) {
+								if scs.ConnectivityState == connectivity.Ready {
+									close(connectivityCh)
+								}
+							}
+						}
+						scws[i], err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: fmt.Sprintf("address%d", i+1)}}, opts)
+						if err != nil {
+							t.Errorf("error in od.NewSubConn call: %v", err)
+						}
+						scws[i].Connect()
+					}
+					return nil
+				},
+			})
+
+			od, tcc, cleanup := setup(t)
+			defer cleanup()
+
+			endpoints := make([]resolver.Endpoint, test.numEndpoints)
+			for i := range endpoints {
+				endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{{Addr: fmt.Sprintf("address%d", i+1)}}}
+			}
+			lbCfg := &LBConfig{
+				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: test.maxEjectionPercent,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name:   t.Name(),
+					Config: emptyChildConfig{},
+				},
+			}
+			if test.algorithm == "failure_percentage" {
+				lbCfg.FailurePercentageEjection = &FailurePercentageEjection{
+					Threshold:             50,
+					EnforcementPercentage: 100,
+					MinimumHosts:          uint32(test.numEndpoints),
+					RequestVolume:         3,
+				}
+			} else {
+				lbCfg.SuccessRateEjection = &SuccessRateEjection{
+					StdevFactor:           500,
+					EnforcementPercentage: 100,
+					MinimumHosts:          uint32(test.numEndpoints),
+					RequestVolume:         3,
+				}
+			}
+			od.UpdateClientConnState(balancer.ClientConnState{
+				ResolverState:  resolver.State{Endpoints: endpoints},
+				BalancerConfig: lbCfg,
+			})
+
+			od.UpdateState(balancer.State{
+				ConnectivityState: connectivity.Ready,
+				Picker: &rrPicker{
+					scs: scws,
+				},
+			})
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Transition the SubConns to READY so that they can register health
+			// listeners.
+			for range test.numEndpoints {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Timed out waiting for creation of new SubConn.")
+				case sc := <-tcc.NewSubConnCh:
+					sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+					sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+				}
+			}
+			// Register health listeners after all the connectivity updates are
+			// processed to avoid data races while accessing the health listener within
+			// the TestClientConn.
+			select {
+			case <-ctx.Done():
+				t.Fatal("Context timed out waiting for all SubConns to become READY.")
+			case <-connectivityCh:
+			}
+
+			for _, scw := range scws {
+				scw.RegisterHealthListener(func(healthState balancer.SubConnState) {
+					scsCh.Send(subConnWithState{sc: scw, state: healthState})
+				})
+			}
+
+			select {
+			case <-ctx.Done():
+				t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+			case picker := <-tcc.NewPickerCh:
+				// Drive five calls per endpoint. In the
+				// failure-percentage cases every call fails, so every
+				// endpoint is a candidate. In the success-rate cases the
+				// first two endpoints fail every call and the rest
+				// succeed, so only the first two are outliers: with mean
+				// 0.5 and stddev 0.5, the required success rate is 0.25.
+				// The picker round-robins through the SubConns in order,
+				// so the pick index identifies the endpoint: the wrapped
+				// picker returns the inner SubConn, not the wrapper held
+				// here, so the SubConns cannot be compared directly.
+				pickNum := 0
+				for r := 0; r < 5; r++ {
+					for range test.numEndpoints {
+						pi, err := picker.Pick(balancer.PickInfo{})
+						if err != nil {
+							t.Fatalf("picker.Pick failed with error: %v", err)
+						}
+						doneErr := errors.New("some error")
+						if test.algorithm == "success_rate" && pickNum%test.numEndpoints >= 2 {
+							doneErr = nil
+						}
+						pickNum++
+						pi.Done(balancer.DoneInfo{Err: doneErr})
+					}
+				}
+
+				tmr := stats.NewTestMetricsRecorder()
+				od.metricsRecorder = tmr
+
+				od.intervalTimerAlgorithm()
+
+				// Exactly wantEjections endpoints may be ejected.
+				for i := 0; i < test.wantEjections; i++ {
+					gotSCWS, err := scsCh.Receive(ctx)
+					if err != nil {
+						t.Fatalf("Error waiting for SubConn to be ejected: %v", err)
+					}
+					if gotSCWS.(subConnWithState).state.ConnectivityState != connectivity.TransientFailure {
+						t.Fatalf("Unexpected subconnection state: %v", gotSCWS)
+					}
+				}
+
+				sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+				defer cancel()
+				if _, err := scsCh.Receive(sCtx); err == nil {
+					t.Fatalf("Received unexpected subchannel state change: only %d endpoint(s) should have been ejected", test.wantEjections)
+				}
+				// The metrics recorder only keeps the most recent value per
+				// metric, so the enforced count cannot verify how many were
+				// ejected; the state changes above are the real check. The
+				// unenforced metric is recorded only when the cap blocks an
+				// ejection, so its presence shows the cap did block one:
+				// EnforcementPercentage is 100, so it can only come from
+				// max_ejection_overflow.
+				if _, ok := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); !ok {
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced not recorded, want an ejection blocked by max_ejection_overflow")
+				}
+				if test.wantEjections > 0 {
+					if _, ok := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); !ok {
+						t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced not recorded, want %d ejection(s)", test.wantEjections)
+					}
+				} else if _, ok := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); ok {
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced recorded, want no ejections")
+				}
+			}
+		})
+	}
+}
+
+// TestCanEjectOneMore checks the integer MaxEjectionPercent boundary math
+// directly, including the float-sensitive cases where dividing first and
+// multiplying by 100 rounds above the exact cap.
+func (s) TestCanEjectOneMore(t *testing.T) {
+	tests := []struct {
+		name               string
+		numEndpoints       int
+		maxEjectionPercent uint32
+		ejected            int
+		want               bool
+	}{
+		{"100 endpoints at 7%, 6 ejected", 100, 7, 6, true},
+		{"100 endpoints at 7%, 7 ejected", 100, 7, 7, false},
+		{"25 endpoints at 28%, 6 ejected", 25, 28, 6, true},
+		{"25 endpoints at 28%, 7 ejected", 25, 28, 7, false},
+		{"20 endpoints at 55%, 10 ejected", 20, 55, 10, true},
+		{"20 endpoints at 55%, 11 ejected", 20, 55, 11, false},
+		{"3 endpoints at 50%, 0 ejected", 3, 50, 0, true},
+		{"3 endpoints at 50%, 1 ejected", 3, 50, 1, false},
+		{"3 endpoints at 10%, 0 ejected", 3, 10, 0, false},
+		{"2 endpoints at 50%, 0 ejected", 2, 50, 0, true},
+		{"2 endpoints at 50%, 1 ejected", 2, 50, 1, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b := &outlierDetectionBalancer{
+				cfg:       &LBConfig{MaxEjectionPercent: test.maxEjectionPercent},
+				endpoints: resolver.NewEndpointMap[*endpointInfo](),
+			}
+			for i := 0; i < test.numEndpoints; i++ {
+				b.endpoints.Set(resolver.Endpoint{Addresses: []resolver.Address{{Addr: fmt.Sprintf("address%d", i)}}}, newEndpointInfo())
+			}
+			b.numEndpointsEjected = test.ejected
+			if got := b.canEjectOneMore(); got != test.want {
+				t.Errorf("canEjectOneMore() with %d endpoints, MaxEjectionPercent %d, %d ejected: got %v, want %v", test.numEndpoints, test.maxEjectionPercent, test.ejected, got, test.want)
+			}
+		})
+	}
+}
+
+// TestUpdateClientConnStateRemovesEjectedEndpoint verifies that an endpoint
+// removed by a config update stops counting against MaxEjectionPercent. With
+// 5 endpoints at a 30% cap the first ejection takes the share to 20%; after
+// the ejected endpoint is removed, a second ejection on the remaining 4 must
+// be allowed (25%), which would be blocked if the removed endpoint still
+// counted (50%).
+func (s) TestUpdateClientConnStateRemovesEjectedEndpoint(t *testing.T) {
+	scsCh := testutils.NewChannel()
+	scws := make([]balancer.SubConn, 5)
+	connectivityCh := make(chan struct{})
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+			if scws[0] != nil { // UpdateClientConnState was already called, no need to recreate SubConns.
+				return nil
+			}
+			var err error
+			for i := range scws {
+				opts := balancer.NewSubConnOptions{
+					StateListener: func(balancer.SubConnState) {},
+				}
+				if i == len(scws)-1 {
+					opts.StateListener = func(scs balancer.SubConnState) {
+						if scs.ConnectivityState == connectivity.Ready {
+							close(connectivityCh)
+						}
+					}
+				}
+				scws[i], err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: fmt.Sprintf("address%d", i+1)}}, opts)
+				if err != nil {
+					t.Errorf("error in od.NewSubConn call: %v", err)
+				}
+				scws[i].Connect()
+			}
+			return nil
+		},
+	})
+
+	od, tcc, cleanup := setup(t)
+	defer cleanup()
+
+	lbCfg := &LBConfig{
+		Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+		MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+		MaxEjectionPercent: 30,
+		FailurePercentageEjection: &FailurePercentageEjection{
+			Threshold:             50,
+			EnforcementPercentage: 100,
+			MinimumHosts:          3,
+			RequestVolume:         3,
+		},
+		ChildPolicy: &iserviceconfig.BalancerConfig{
+			Name:   t.Name(),
+			Config: emptyChildConfig{},
+		},
+	}
+	endpoints := make([]resolver.Endpoint, 5)
+	for i := range endpoints {
+		endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{{Addr: fmt.Sprintf("address%d", i+1)}}}
+	}
+	od.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Endpoints: endpoints},
+		BalancerConfig: lbCfg,
+	})
+	od.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker: &rrPicker{
+			scs: scws,
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Transition the SubConns to READY so that they can register health
+	// listeners.
+	for range 5 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for creation of new SubConn.")
+		case sc := <-tcc.NewSubConnCh:
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		}
+	}
+	// Register health listeners after all the connectivity updates are
+	// processed to avoid data races while accessing the health listener within
+	// the TestClientConn.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for all SubConns to become READY.")
+	case <-connectivityCh:
+	}
+	for _, scw := range scws {
+		scw.RegisterHealthListener(func(healthState balancer.SubConnState) {
+			scsCh.Send(subConnWithState{sc: scw, state: healthState})
+		})
+	}
+
+	// driveFailingCalls runs five failing calls per endpoint in picker.
+	driveFailingCalls := func(picker balancer.Picker, numEndpoints int) {
+		for r := 0; r < 5; r++ {
+			for range numEndpoints {
+				pi, err := picker.Pick(balancer.PickInfo{})
+				if err != nil {
+					t.Fatalf("picker.Pick failed with error: %v", err)
+				}
+				pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+			}
+		}
+	}
+	// expectEjections waits for exactly n ejection state changes, then
+	// fails if any further state change arrives.
+	expectEjections := func(n int) {
+		for i := 0; i < n; i++ {
+			gotSCWS, err := scsCh.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Error waiting for SubConn to be ejected: %v", err)
+			}
+			if gotSCWS.(subConnWithState).state.ConnectivityState != connectivity.TransientFailure {
+				t.Fatalf("Unexpected subconnection state: %v", gotSCWS)
+			}
+		}
+		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+		defer cancel()
+		if _, err := scsCh.Receive(sCtx); err == nil {
+			t.Fatalf("Received unexpected subchannel state change: only %d endpoint(s) should have been ejected", n)
+		}
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+	case picker := <-tcc.NewPickerCh:
+		// Every upstream fails every call, so all five are ejection
+		// candidates.
+		driveFailingCalls(picker, 5)
+
+		od.intervalTimerAlgorithm()
+
+		// Exactly one endpoint may be ejected: the first takes the share
+		// to 20%, a second would take it to 40%, past the 30% cap.
+		// Remember which one was ejected so it can be removed below.
+		gotSCWS, err := scsCh.Receive(ctx)
+		if err != nil {
+			t.Fatalf("Error waiting for SubConn to be ejected: %v", err)
+		}
+		if gotSCWS.(subConnWithState).state.ConnectivityState != connectivity.TransientFailure {
+			t.Fatalf("Unexpected subconnection state: %v", gotSCWS)
+		}
+		ejected := gotSCWS.(subConnWithState).sc
+		expectEjections(0)
+
+		// Remove the ejected endpoint with a config update.
+		remainingEndpoints := make([]resolver.Endpoint, 0, 4)
+		remainingSCs := make([]balancer.SubConn, 0, 4)
+		for i, scw := range scws {
+			if scw == ejected {
+				continue
+			}
+			remainingEndpoints = append(remainingEndpoints, endpoints[i])
+			remainingSCs = append(remainingSCs, scw)
+		}
+		od.UpdateClientConnState(balancer.ClientConnState{
+			ResolverState:  resolver.State{Endpoints: remainingEndpoints},
+			BalancerConfig: lbCfg,
+		})
+		od.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Ready,
+			Picker: &rrPicker{
+				scs: remainingSCs,
+			},
+		})
+
+		// Drive fresh failing calls on the remaining endpoints and run
+		// the algorithm again. The removed endpoint must no longer count
+		// against the cap: a second ejection (25%) is allowed, and would
+		// have been blocked (50%) if its count had leaked.
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+		case picker2 := <-tcc.NewPickerCh:
+			driveFailingCalls(picker2, 4)
+			od.intervalTimerAlgorithm()
+			expectEjections(1)
 		}
 	}
 }
