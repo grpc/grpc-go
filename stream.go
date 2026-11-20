@@ -1224,7 +1224,10 @@ func (cs *clientStream) finish(err error) {
 
 	cs.mu.Unlock()
 	// Only one of cancel or trailer needs to be logged.
-	if len(cs.binlogs) != 0 {
+	// If no attempt was ever created, there is nothing to log: Trailer()
+	// below would panic on the nil attempt, and a cancel entry would be an
+	// orphan for a stream that never started.
+	if len(cs.binlogs) != 0 && attemptCreated {
 		switch err {
 		case errContextCanceled, errContextDeadline, ErrClientConnClosing:
 			c := &binarylog.Cancel{
