@@ -34,6 +34,8 @@ const (
 // routeConfigResourceDecoder is an implementation of the xdsclient.Decoder
 // interface for route configuration resources.
 type routeConfigResourceDecoder struct {
+	xdsclient.UnimplementedDecoder
+
 	bootstrapConfig *bootstrap.Config
 	serverConfigs   map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
@@ -103,6 +105,8 @@ type RouteConfigWatcher interface {
 }
 
 type delegatingRouteConfigWatcher struct {
+	xdsclient.UnimplementedResourceWatcher
+
 	watcher RouteConfigWatcher
 }
 

@@ -35,6 +35,8 @@ const (
 // clusterResourceDecoder is an implementation of the xdsclient.Decoder
 // interface for listener resources.
 type clusterResourceDecoder struct {
+	xdsclient.UnimplementedDecoder
+
 	bootstrapConfig *bootstrap.Config
 	serverConfigs   map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
@@ -111,6 +113,8 @@ type ClusterWatcher interface {
 }
 
 type delegatingClusterWatcher struct {
+	xdsclient.UnimplementedResourceWatcher
+
 	watcher ClusterWatcher
 }
 

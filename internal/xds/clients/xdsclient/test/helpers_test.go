@@ -171,7 +171,9 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*listenerUpdate, err
 	return lu, nil
 }
 
-type listenerDecoder struct{}
+type listenerDecoder struct {
+	xdsclient.UnimplementedDecoder
+}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
@@ -280,6 +282,8 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 // recording events on channels and provides helpers to check if certain events
 // have taken place.
 type testMetricsReporter struct {
+	clients.UnimplementedMetricsReporter
+
 	metricsCh *buffer.Unbounded[any]
 
 	mu             sync.Mutex

@@ -34,6 +34,8 @@ const (
 // endpointsResourceDecoder is an implementation of the xdsclient.Decoder
 // interface for endpoints resources.
 type endpointsResourceDecoder struct {
+	xdsclient.UnimplementedDecoder
+
 	bootstrapConfig *bootstrap.Config
 }
 
@@ -97,6 +99,8 @@ type EndpointsWatcher interface {
 }
 
 type delegatingEndpointsWatcher struct {
+	xdsclient.UnimplementedResourceWatcher
+
 	watcher EndpointsWatcher
 }
 

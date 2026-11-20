@@ -43,6 +43,8 @@ import (
 // DoneNotifier passed to the callback available to the test, thereby enabling
 // the test to block this watcher for as long as required.
 type blockingListenerWatcher struct {
+	xdsclient.UnimplementedResourceWatcher
+
 	doneNotifierCh chan func()   // DoneNotifier passed to the callback.
 	updateCh       chan struct{} // Written to when an update is received.
 	ambientErrCh   chan struct{} // Written to when an ambient error is received.
@@ -98,6 +100,8 @@ func (lw *blockingListenerWatcher) AmbientError(_ error, done func()) {
 }
 
 type transportBuilder struct {
+	clients.UnimplementedTransportBuilder
+
 	adsStreamCh chan *stream
 }
 
@@ -111,6 +115,8 @@ func (b *transportBuilder) Build(si clients.ServerIdentifier) (clients.Transport
 }
 
 type transport struct {
+	clients.UnimplementedTransport
+
 	cc          *grpc.ClientConn
 	adsStreamCh chan *stream
 }
@@ -135,6 +141,8 @@ func (t *transport) Close() {
 }
 
 type stream struct {
+	clients.UnimplementedStream
+
 	stream grpc.ClientStream
 	recvCh chan struct{}
 }

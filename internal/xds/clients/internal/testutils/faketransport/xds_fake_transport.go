@@ -41,6 +41,8 @@ var _ clients.Stream = &stream{}
 
 // Builder implements clients.TransportBuilder.
 type Builder struct {
+	clients.UnimplementedTransportBuilder
+
 	mu                   sync.Mutex
 	activeTransports     map[string]*transport    // Tracks created transports for the fuzzer to interact with.
 	activeTransportsChan map[string]chan struct{} // Notifies when transport and stream are ready
@@ -111,6 +113,8 @@ func (b *Builder) Transport(ctx context.Context, serverURI string) (*ServerHandl
 
 // transport implements clients.Transport.
 type transport struct {
+	clients.UnimplementedTransport
+
 	mu              sync.Mutex
 	activeADSStream *stream
 	closed          bool
@@ -163,6 +167,8 @@ func (t *transport) Close() {
 
 // stream implements clients.Stream.
 type stream struct {
+	clients.UnimplementedStream
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
