@@ -162,7 +162,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "ListenerResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "ListenerResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -178,7 +178,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				VersionInfo: "1",
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "ListenerResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "ListenerResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -195,7 +195,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3routepb.RouteConfiguration{})},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "ListenerResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "ListenerResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -427,7 +427,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "RouteConfigResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "RouteConfigResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
@@ -443,7 +443,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "RouteConfigResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "RouteConfigResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
@@ -460,7 +460,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3clusterpb.Cluster{})},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "RouteConfigResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "RouteConfigResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
@@ -680,7 +680,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "ClusterResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "ClusterResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
@@ -696,7 +696,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 				VersionInfo: "1",
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "ClusterResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "ClusterResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
@@ -713,7 +713,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3endpointpb.ClusterLoadAssignment{})},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "ClusterResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "ClusterResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
@@ -991,7 +991,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "EndpointsResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "EndpointsResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
@@ -1007,7 +1007,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 				VersionInfo: "1",
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "EndpointsResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "EndpointsResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
@@ -1024,7 +1024,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3listenerpb.Listener{})},
 			},
-			wantErr: fmt.Sprintf("xds: resource %q of type %q has been removed", resourceName1, "EndpointsResource"),
+			wantErr: fmt.Sprintf("xds: resource not found: resource %q of type %q has been removed", resourceName1, "EndpointsResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",

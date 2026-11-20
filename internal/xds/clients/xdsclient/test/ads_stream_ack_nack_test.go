@@ -194,8 +194,8 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	}
 	gotResp = r.(*v3discoverypb.DiscoveryResponse)
 
-	wantNackErr := xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
-	if err := verifyListenerUpdate(ctx, lw.ambientErrCh, listenerUpdateErrTuple{ambientErr: wantNackErr}); err != nil {
+	const wantNackErr = "unexpected http connection manager resource type"
+	if err := verifyListenerUpdate(ctx, lw.ambientErrCh, listenerUpdateErrTuple{ambientErr: xdsclient.ErrNACKed}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -209,7 +209,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	if gotNonce, wantNonce := gotReq.GetResponseNonce(), gotResp.GetNonce(); gotNonce != wantNonce {
 		t.Errorf("Unexpected nonce in discovery request, got: %v, want: %v", gotNonce, wantNonce)
 	}
-	if gotErr := gotReq.GetErrorDetail(); gotErr == nil || !strings.Contains(gotErr.GetMessage(), wantNackErr.Error()) {
+	if gotErr := gotReq.GetErrorDetail(); gotErr == nil || !strings.Contains(gotErr.GetMessage(), wantNackErr) {
 		t.Fatalf("Unexpected error in discovery request, got: %v, want: %v", gotErr.GetMessage(), wantNackErr)
 	}
 
@@ -341,8 +341,8 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 	gotResp := r.(*v3discoverypb.DiscoveryResponse)
 
 	// Verify that the error is propagated to the watcher.
-	var wantNackErr = xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
-	if err := verifyListenerUpdate(ctx, lw.resourceErrCh, listenerUpdateErrTuple{resourceErr: wantNackErr}); err != nil {
+	const wantNackErr = "unexpected http connection manager resource type"
+	if err := verifyListenerUpdate(ctx, lw.resourceErrCh, listenerUpdateErrTuple{resourceErr: xdsclient.ErrNACKed}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -358,7 +358,7 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 	if gotNonce, wantNonce := gotReq.GetResponseNonce(), gotResp.GetNonce(); gotNonce != wantNonce {
 		t.Errorf("Unexpected nonce in discovery request, got: %v, want: %v", gotNonce, wantNonce)
 	}
-	if gotErr := gotReq.GetErrorDetail(); gotErr == nil || !strings.Contains(gotErr.GetMessage(), wantNackErr.Error()) {
+	if gotErr := gotReq.GetErrorDetail(); gotErr == nil || !strings.Contains(gotErr.GetMessage(), wantNackErr) {
 		t.Fatalf("Unexpected error in discovery request, got: %v, want: %v", gotErr.GetMessage(), wantNackErr)
 	}
 }

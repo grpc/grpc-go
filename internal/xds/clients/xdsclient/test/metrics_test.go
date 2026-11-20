@@ -621,7 +621,7 @@ func (s) TestResourceMetrics_Extended(t *testing.T) {
 
 	// Verify that resources missing from the authoritative update transition to
 	// the does_not_exist state.
-	if err := verifyResourceErrorType(ctx, lw.resourceErrCh, xdsresource.ErrorTypeResourceNotFound, ""); err != nil {
+	if err := verifyResourceErrorType(ctx, lw.resourceErrCh, xdsclient.ErrResourceNotFound, ""); err != nil {
 		t.Fatal(err)
 	}
 
