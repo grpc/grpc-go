@@ -219,7 +219,14 @@ func (w *clientStreamWrapper) RecvMsg(m any) error {
 		return nil
 	}
 	if err == nil {
-		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+		err = status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+		// The underlying stream returned a second message instead of an
+		// error, so it never finished the RPC. Terminate it here so the
+		// completion callback fires and the server observes cancellation.
+		if f, ok := w.ClientStream.(interface{ finish(error) }); ok {
+			f.finish(err)
+		}
+		return err
 	}
 	return err
 }

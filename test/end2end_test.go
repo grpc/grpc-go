@@ -3907,6 +3907,80 @@ func (s) TestUnaryRPC_ServerCallSendMsgTwice(t *testing.T) {
 	}
 }
 
+// Tests that when the server violates the unary contract by sending a second
+// response message, the client finishes the RPC instead of just returning the
+// cardinality violation error: the OnFinish callback fires and the server
+// observes stream termination.
+func (s) TestUnaryRPC_ExtraResponseFinishesRPC(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	serverDone := make(chan struct{})
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "UnaryCall",
+				Handler: func(_ any, stream grpc.ServerStream) error {
+					defer close(serverDone)
+					if err := stream.RecvMsg(&testpb.Empty{}); err != nil {
+						return err
+					}
+					if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+						return err
+					}
+					// Violate the client's unary contract with a second response.
+					if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+						return err
+					}
+					// Wait until the client terminates the stream.
+					<-stream.Context().Done()
+					return stream.Context().Err()
+				},
+				ClientStreams: false,
+				ServerStreams: false,
+			},
+		},
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+	}
+	defer cc.Close()
+
+	finished := make(chan error, 1)
+	err = cc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", &testpb.Empty{}, &testpb.Empty{},
+		grpc.OnFinish(func(err error) { finished <- err }))
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("cc.Invoke() = %v, want error with code %v", status.Code(err), codes.Internal)
+	}
+	select {
+	case finishErr := <-finished:
+		if status.Code(finishErr) != codes.Internal {
+			t.Errorf("OnFinish err = %v, want error with code %v", status.Code(finishErr), codes.Internal)
+		}
+	case <-time.After(time.Second):
+		t.Error("OnFinish was not called after Invoke returned the cardinality error")
+	}
+	select {
+	case <-serverDone:
+	case <-time.After(time.Second):
+		t.Error("server did not observe stream termination after the cardinality error")
+	}
+}
+
 // Tests the behavior for client-streaming RPC when client calls RecvMsg() twice.
 // Second call to RecvMsg should fail with io.EOF.
 func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
