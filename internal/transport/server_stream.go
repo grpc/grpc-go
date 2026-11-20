@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -32,6 +33,7 @@ import (
 
 // ServerStream implements streaming functionality for a gRPC server.
 type ServerStream struct {
+	internal.EnforceServerTransportStreamEmbedding
 	Stream // Embed for common stream functionality.
 
 	st      internalServerTransport
