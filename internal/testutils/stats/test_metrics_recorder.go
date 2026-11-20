@@ -46,7 +46,7 @@ type TestMetricsRecorder struct {
 	// mu protects data.
 	mu sync.Mutex
 	// data is the most recent update for each metric name.
-	data map[string]float64
+	data map[string]*MetricsData
 }
 
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
@@ -59,7 +59,7 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 		intGaugeCh:       testutils.NewChannelWithSize(10),
 		intUpDownCountCh: testutils.NewChannelWithSize(10),
 
-		data: make(map[string]float64),
+		data: make(map[string]*MetricsData),
 	}
 }
 
@@ -68,15 +68,31 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	data, ok := r.data[name]
-	return data, ok
+	md, ok := r.data[name]
+	if !ok {
+		return 0, false
+	}
+	switch md.Handle.Type {
+	case estats.MetricTypeFloatCount, estats.MetricTypeFloatHisto:
+		return md.FloatIncr, true
+	default:
+		return float64(md.IntIncr), true
+	}
+}
+
+// MetricsData returns the most recent data recorded for the named metric, or
+// nil if none has been recorded.
+func (r *TestMetricsRecorder) MetricsData(name string) *MetricsData {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.data[name]
 }
 
 // ClearMetrics clears the metrics data store of the test metrics recorder.
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data = make(map[string]float64)
+	r.data = make(map[string]*MetricsData)
 }
 
 // MetricsData represents data associated with a metric.
@@ -90,6 +106,26 @@ type MetricsData struct {
 
 	LabelKeys []string
 	LabelVals []string
+
+	// RecordCount is the number of times this metric has been recorded, across
+	// all label values.
+	RecordCount int
+}
+
+// record sends md on ch, first dropping a value not yet received if there is
+// one, and stores md as the most recent data for its metric, with RecordCount
+// set to the number of times the metric has been recorded.
+func (r *TestMetricsRecorder) record(ch *testutils.Channel, md MetricsData) {
+	ch.ReceiveOrFail()
+	ch.Send(md) // RecordCount is zero on the channel.
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if prev, ok := r.data[md.Handle.Name]; ok {
+		md.RecordCount = prev.RecordCount
+	}
+	md.RecordCount++
+	r.data[md.Handle.Name] = &md
 }
 
 // WaitForInt64Count waits for an int64 count metric to be recorded and verifies
@@ -125,33 +161,23 @@ func (r *TestMetricsRecorder) WaitForInt64CountIncr(ctx context.Context, incrWan
 // RecordInt64Count sends the metrics data to the intCountCh channel and updates
 // the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
-	r.intCountCh.ReceiveOrFail()
-	r.intCountCh.Send(MetricsData{
+	r.record(r.intCountCh, MetricsData{
 		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
 }
 
 // RecordInt64UpDownCount sends the metrics data to the intUpDownCountCh channel and updates
 // the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64UpDownCount(handle *estats.Int64UpDownCountHandle, incr int64, labels ...string) {
-	r.intUpDownCountCh.ReceiveOrFail()
-	r.intUpDownCountCh.Send(MetricsData{
+	r.record(r.intUpDownCountCh, MetricsData{
 		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
 }
 
 // WaitForFloat64Count waits for a float count metric to be recorded and
@@ -172,17 +198,12 @@ func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDa
 // RecordFloat64Count sends the metrics data to the floatCountCh channel and
 // updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
-	r.floatCountCh.ReceiveOrFail()
-	r.floatCountCh.Send(MetricsData{
+	r.record(r.floatCountCh, MetricsData{
 		Handle:    handle.Descriptor(),
 		FloatIncr: incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = incr
 }
 
 // WaitForInt64Histo waits for an int histo metric to be recorded and verifies
@@ -203,17 +224,12 @@ func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsData
 // RecordInt64Histo sends the metrics data to the intHistoCh channel and updates
 // the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
-	r.intHistoCh.ReceiveOrFail()
-	r.intHistoCh.Send(MetricsData{
+	r.record(r.intHistoCh, MetricsData{
 		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
 }
 
 // WaitForFloat64Histo waits for a float histo metric to be recorded and
@@ -234,17 +250,12 @@ func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDa
 // RecordFloat64Histo sends the metrics data to the floatHistoCh channel and
 // updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
-	r.floatHistoCh.ReceiveOrFail()
-	r.floatHistoCh.Send(MetricsData{
+	r.record(r.floatHistoCh, MetricsData{
 		Handle:    handle.Descriptor(),
 		FloatIncr: incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = incr
 }
 
 // WaitForInt64Gauge waits for a int gauge metric to be recorded and verifies
@@ -264,17 +275,12 @@ func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsData
 // RecordInt64Gauge sends the metrics data to the intGaugeCh channel and updates
 // the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
-	r.intGaugeCh.ReceiveOrFail()
-	r.intGaugeCh.Send(MetricsData{
+	r.record(r.intGaugeCh, MetricsData{
 		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
 }
 
 // To implement a estats.AsyncMetricsRecorder, which allows it to be used in async metrics:
@@ -282,17 +288,12 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 // RecordInt64AsyncGauge sends the metrics data to the intGaugeCh channel and updates
 // the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64AsyncGauge(handle *estats.Int64AsyncGaugeHandle, incr int64, labels ...string) {
-	r.intGaugeCh.ReceiveOrFail()
-	r.intGaugeCh.Send(MetricsData{
+	r.record(r.intGaugeCh, MetricsData{
 		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
 }
 
 // ReadFloat64Histo waits for a float64 histogram metric to be recorded and returns its data.
