@@ -32,4 +32,8 @@ var (
 	// AcceptCompressors is implemented by the grpc package and returns
 	// a call option that restricts the grpc-accept-encoding header for a call.
 	AcceptCompressors any // func(...string) grpc.CallOption
+
+	// WithHPACKNeverIndexMetadataKeys is implemented by the grpc package and
+	// returns a dial option to never index the given metadata keys in HPACK.
+	WithHPACKNeverIndexMetadataKeys any // func(...string) grpc.DialOption
 )
