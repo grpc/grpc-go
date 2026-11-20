@@ -20,6 +20,7 @@ package grpclog
 
 import (
 	"fmt"
+	"sync"
 )
 
 // componentData records the settings for a component.
@@ -27,7 +28,14 @@ type componentData struct {
 	name string
 }
 
-var cache = map[string]*componentData{}
+// cache stores previously created component loggers. It uses a sync.Map to
+// allow safe concurrent access from multiple goroutines without contention.
+// A sync.Map is used because, while static packages initialize component loggers
+// at package init() time, dynamic subsystems (such as xDS client streams and
+// authorities in internal/xds/clients/... as well as custom resolvers and
+// balancers) call Component() at runtime from concurrent goroutines, which
+// would cause data races and concurrent map read/write panics on a plain map.
+var cache sync.Map // map[string]*componentData
 
 func (c *componentData) InfoDepth(depth int, args ...any) {
 	args = append([]any{"[" + string(c.name) + "]"}, args...)
@@ -106,10 +114,10 @@ func (c *componentData) V(l int) bool {
 // returned. SetLoggerV2 will panic if it is called with a logger created by
 // Component.
 func Component(componentName string) DepthLoggerV2 {
-	if cData, ok := cache[componentName]; ok {
-		return cData
+	if cData, ok := cache.Load(componentName); ok {
+		return cData.(*componentData)
 	}
 	c := &componentData{componentName}
-	cache[componentName] = c
-	return c
+	cData, _ := cache.LoadOrStore(componentName, c)
+	return cData.(*componentData)
 }
