@@ -1652,10 +1652,14 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type ServerTransportStream interface {
+	internal.EnforceServerTransportStreamEmbedding
 	Method() string
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error
 	SetTrailer(md metadata.MD) error
+	// EnableCompression controls whether per-message compression is enabled
+	// for subsequent messages sent on this stream.
+	EnableCompression(enable bool)
 }
 
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in
