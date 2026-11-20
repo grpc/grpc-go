@@ -1393,9 +1393,6 @@ func (ac *addrConn) resetTransportAndUnlock() {
 				logger.Infof("Context cancellation detected; not recording this as a failed connection attempt.")
 			}
 		}
-		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
-		// to ensure one resolution request per pass instead of per subconn failure.
-		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		ac.mu.Lock()
 		if acCtx.Err() != nil {
 			// addrConn was torn down.
