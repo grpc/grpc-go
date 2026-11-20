@@ -41,6 +41,7 @@ import (
 type resourceState struct {
 	watchers          map[ResourceWatcher]bool       // Set of watchers for this resource.
 	cache             ResourceData                   // Most recent ACKed update for this resource.
+	raw               []byte                         // Raw bytes of the most recent ACKed update for this resource.
 	md                xdsresource.UpdateMetadata     // Metadata for the most recent update.
 	deletionIgnored   bool                           // True, if resource deletion was ignored for a prior update.
 	xdsChannelConfigs map[*xdsChannelWithConfig]bool // Set of xdsChannels where this resource is subscribed.
@@ -428,6 +429,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceChanged(resource, done) })
 			}
 		}
+		state.raw = uErr.Raw
 
 		// Set status to ACK, and clear error state. The metadata might be a
 		// NACK metadata because some other resources in the same response
@@ -498,6 +500,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		// removed. Metadata for the resource is still maintained, as this is
 		// required by CSDS.
 		state.cache = nil
+		state.raw = nil
 		state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 		for watcher := range state.watchers {
 			watcherCnt.Add(1)
@@ -542,6 +545,7 @@ func (a *authority) handleADSResourceDoesNotExist(rType ResourceType, resourceNa
 	}
 
 	state.cache = nil
+	state.raw = nil
 	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {
 		watcher := watcher
@@ -880,7 +884,7 @@ func (a *authority) resourceConfig() []*v3statuspb.ClientConfig_GenericXdsConfig
 		for name, state := range resourceStates {
 			var raw *anypb.Any
 			if state.cache != nil {
-				raw = &anypb.Any{TypeUrl: typeURL, Value: state.cache.Bytes()}
+				raw = &anypb.Any{TypeUrl: typeURL, Value: state.raw}
 			}
 			config := &v3statuspb.ClientConfig_GenericXdsConfig{
 				TypeUrl:      typeURL,

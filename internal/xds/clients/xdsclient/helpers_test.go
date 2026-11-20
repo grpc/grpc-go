@@ -194,17 +194,16 @@ func (l *listenerResourceData) Equal(other ResourceData) bool {
 	if (l == nil) != (other == nil) {
 		return false
 	}
-	return bytes.Equal(l.Resource.Raw, other.Bytes())
+	o, ok := other.(*listenerResourceData)
+	if !ok || o == nil {
+		return false
+	}
+	return bytes.Equal(l.Resource.Raw, o.Resource.Raw)
 }
 
 // ToJSON returns a JSON string representation of the resource data.
 func (l *listenerResourceData) ToJSON() string {
 	return pretty.ToJSON(l.Resource)
-}
-
-// Bytes returns the underlying raw protobuf form of the listener resource.
-func (l *listenerResourceData) Bytes() []byte {
-	return l.Resource.Raw
 }
 
 // ListenerUpdate contains information received in an LDS response, which is of

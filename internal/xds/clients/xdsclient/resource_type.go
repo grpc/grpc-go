@@ -117,7 +117,4 @@ type ResourceData interface {
 	// Equal returns true if the passed in resource data is equal to that of
 	// the receiver.
 	Equal(other ResourceData) bool
-
-	// Bytes returns the underlying raw bytes of the resource proto.
-	Bytes() []byte
 }

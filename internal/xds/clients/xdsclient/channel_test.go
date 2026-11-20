@@ -305,6 +305,29 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 						RouteConfigName: routeName,
 						Raw:             listener1.GetValue(),
 					}},
+					Raw: listener1.GetValue(),
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusACKed,
+				Version: "0",
+			},
+		},
+		{
+			desc:                   "one good wrapped resource",
+			resourceNamesToRequest: []string{listenerName1},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources:   []*anypb.Any{xdstestutils.MarshalAny(t, &v3discoverypb.Resource{Resource: listener1})},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName1: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener1.GetValue(),
+					}},
+					Raw: listener1.GetValue(),
 				},
 			},
 			wantMD: xdsresource.UpdateMetadata{
@@ -329,6 +352,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
+					Raw: listener2.GetValue(),
 				},
 			},
 			wantMD: xdsresource.UpdateMetadata{
@@ -365,6 +389,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
+					Raw: listener2.GetValue(),
 				},
 			},
 			wantMD: xdsresource.UpdateMetadata{
@@ -390,12 +415,14 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 						RouteConfigName: routeName,
 						Raw:             listener1.GetValue(),
 					}},
+					Raw: listener1.GetValue(),
 				},
 				listenerName2: {
 					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
+					Raw: listener2.GetValue(),
 				},
 			},
 			wantMD: xdsresource.UpdateMetadata{
@@ -417,12 +444,14 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 						RouteConfigName: routeName,
 						Raw:             listener1.GetValue(),
 					}},
+					Raw: listener1.GetValue(),
 				},
 				listenerName2: {
 					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
+					Raw: listener2.GetValue(),
 				},
 			},
 			wantMD: xdsresource.UpdateMetadata{
@@ -565,6 +594,7 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 					Raw:             listenerResource.GetValue(),
 				},
 			},
+			Raw: listenerResource.GetValue(),
 		},
 	}
 	wantMD := xdsresource.UpdateMetadata{
