@@ -40,7 +40,7 @@ import (
 
 // maxHeaderSize is the maximum length, in bytes, of a header key or value in a
 // mutation received from an external server.
-const maxHeaderSize = 16384
+const maxHeaderSize = 32768
 
 // HeaderMutationRules specifies the rules for what modifications an external
 // server may make to headers sent on the data plane RPC.
@@ -118,7 +118,7 @@ func HeaderMutationRulesFromProto(mr *v3mutationpb.HeaderMutationRules) (HeaderM
 // - The 'host' header.
 // - Headers with keys in the reserved 'grpc-' space.
 // - Headers with non-lowercase keys.
-// - Headers with keys or values exceeding 16384 bytes.
+// - Headers with keys or values exceeding 32768 bytes.
 // - Headers with an invalid gRPC header name or header value.
 //
 // If a mutation is disallowed by the mutation rules and DisallowIsError is

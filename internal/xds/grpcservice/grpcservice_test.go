@@ -284,6 +284,99 @@ func (s) TestParse(t *testing.T) {
 				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
 			},
 		},
+		{
+			// A 32 KiB value is accepted through the exported Parse API.
+			name: "initial_metadata_value_at_32k_accepted",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "key", Value: strings.Repeat("a", maxHeaderValueLen)},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{"key": {strings.Repeat("a", maxHeaderValueLen)}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
+			name: "initial_metadata_value_over_32k_rejected",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "key", Value: strings.Repeat("a", maxHeaderValueLen+1)},
+				}
+				return gs
+			}(),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: fmt.Sprintf("header value exceeds maximum allowed length of %d", maxHeaderValueLen),
+		},
+		{
+			name: "initial_metadata_key_at_32k_accepted",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: strings.Repeat("a", maxHeaderKeyLen), Value: "v"},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{strings.Repeat("a", maxHeaderKeyLen): {"v"}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
+			name: "initial_metadata_key_over_32k_rejected",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: strings.Repeat("a", maxHeaderKeyLen+1), Value: "v"},
+				}
+				return gs
+			}(),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: fmt.Sprintf("header key exceeds maximum allowed length of %d", maxHeaderKeyLen),
+		},
+		{
+			// raw_value takes precedence over the legacy value field, and is
+			// subject to the same 32 KiB limit.
+			name: "initial_metadata_raw_value_at_32k_accepted",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "key-bin", RawValue: []byte(strings.Repeat("a", maxHeaderValueLen))},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{"key-bin": {strings.Repeat("a", maxHeaderValueLen)}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
+			name: "initial_metadata_raw_value_over_32k_rejected",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "key-bin", RawValue: []byte(strings.Repeat("a", maxHeaderValueLen+1))},
+				}
+				return gs
+			}(),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: fmt.Sprintf("header value exceeds maximum allowed length of %d", maxHeaderValueLen),
+		},
 	}
 
 	for _, test := range tests {
