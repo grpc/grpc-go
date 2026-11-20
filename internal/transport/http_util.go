@@ -37,6 +37,7 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
 	imem "google.golang.org/grpc/internal/mem"
+	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/transport/readyreader"
 	"google.golang.org/grpc/mem"
 )
@@ -131,14 +132,6 @@ func encodeBinHeader(v []byte) string {
 	return base64.RawStdEncoding.EncodeToString(v)
 }
 
-func decodeBinHeader(v string) ([]byte, error) {
-	if len(v)%4 == 0 {
-		// Input was padded, or padding was not necessary.
-		return base64.StdEncoding.DecodeString(v)
-	}
-	return base64.RawStdEncoding.DecodeString(v)
-}
-
 func encodeMetadataHeader(k, v string) string {
 	if strings.HasSuffix(k, binHdrSuffix) {
 		return encodeBinHeader(([]byte)(v))
@@ -148,7 +141,7 @@ func encodeMetadataHeader(k, v string) string {
 
 func decodeMetadataHeader(k, v string) (string, error) {
 	if strings.HasSuffix(k, binHdrSuffix) {
-		b, err := decodeBinHeader(v)
+		b, err := imetadata.DecodeBinHeader(v)
 		return string(b), err
 	}
 	return v, nil

@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -109,10 +110,11 @@ func certProviderConfig(resolver CertProviderConfigResolver, instanceName, kind 
 }
 
 // tlsBundle is a credentials.Bundle providing client-side TLS transport
-// credentials whose server root CA certificates, and optionally client
-// identity certificates, come from certificate provider instances. The key
-// material is fetched from the providers on every handshake, so certificate
-// reloads are picked up. It carries no per-RPC credentials.
+// credentials whose server roots of trust (CA certificates or a SPIFFE bundle
+// map), and optionally client identity certificates, come from certificate
+// provider instances. The key material is fetched from the providers on every
+// handshake, so certificate reloads are picked up. It carries no per-RPC
+// credentials.
 type tlsBundle struct {
 	rootProvider     certprovider.Provider
 	identityProvider certprovider.Provider // nil when no identity certificate is configured
@@ -143,10 +145,25 @@ func (b *tlsBundle) ClientHandshake(ctx context.Context, authority string, rawCo
 	if err != nil {
 		return nil, nil, fmt.Errorf("credentials: failed to get root certificates: %v", err)
 	}
-	if rootKM.Roots == nil {
-		return nil, nil, errors.New("credentials: root certificate provider returned no root certificates")
+	cfg := &tls.Config{}
+	switch {
+	case rootKM.SPIFFEBundleMap != nil:
+		// A SPIFFE bundle map takes precedence over Roots. The roots
+		// to use depend on the server's trust domain, so the
+		// certificate chain and hostname are verified by the callback
+		// instead of crypto/tls.
+		host := serverName(authority)
+		if host == "" {
+			// An empty name would disable the hostname check.
+			return nil, nil, fmt.Errorf("credentials: authority %q has no server name to verify", authority)
+		}
+		cfg.InsecureSkipVerify = true
+		cfg.VerifyPeerCertificate = spiffe.VerifyPeerCertificateFunc(rootKM.SPIFFEBundleMap, host)
+	case rootKM.Roots != nil:
+		cfg.RootCAs = rootKM.Roots
+	default:
+		return nil, nil, errors.New("credentials: root certificate provider returned neither root certificates nor a SPIFFE bundle map")
 	}
-	cfg := &tls.Config{RootCAs: rootKM.Roots}
 	if b.identityProvider != nil {
 		identityKM, err := b.identityProvider.KeyMaterial(ctx)
 		if err != nil {
@@ -155,6 +172,17 @@ func (b *tlsBundle) ClientHandshake(ctx context.Context, authority string, rawCo
 		cfg.Certificates = identityKM.Certs
 	}
 	return credentials.NewTLS(cfg).ClientHandshake(ctx, authority, rawConn)
+}
+
+// serverName returns the host part of authority, which is the server name
+// that credentials.NewTLS verifies when using Roots.
+func serverName(authority string) string {
+	host, _, err := net.SplitHostPort(authority)
+	if err != nil {
+		// The authority has no port or cannot be parsed; use it as is.
+		return authority
+	}
+	return host
 }
 
 func (b *tlsBundle) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {

@@ -199,6 +199,104 @@ func TestGetRootsFromSPIFFEBundleMapFailures(t *testing.T) {
 	}
 }
 
+// rawCertsFromFile returns the DER encoding of each certificate in the PEM
+// file at the given testdata path.
+func rawCertsFromFile(t *testing.T, filePath string) [][]byte {
+	t.Helper()
+	var rawCerts [][]byte
+	data := loadFileBytes(t, testdata.Path(filePath))
+	for block, rest := pem.Decode(data); block != nil; block, rest = pem.Decode(rest) {
+		if block.Type != "CERTIFICATE" {
+			t.Fatalf("Unexpected PEM block type %q in %q", block.Type, filePath)
+		}
+		rawCerts = append(rawCerts, block.Bytes)
+	}
+	if len(rawCerts) == 0 {
+		t.Fatalf("No certificates found in %q", filePath)
+	}
+	return rawCerts
+}
+
+func TestVerifyPeerCertificateFunc(t *testing.T) {
+	// The bundle map holds the CA that signed the spiffe_end2end server
+	// certificates, for their trust domain example.com.
+	bundleMapFile := testdata.Path("spiffe_end2end/client_spiffebundle.json")
+	bundleMap, err := BundleMapFromBytes(loadFileBytes(t, bundleMapFile))
+	if err != nil {
+		t.Fatalf("BundleMapFromBytes(%v) failed with error: %v", bundleMapFile, err)
+	}
+	// The server certificate is valid for *.test.google.fr and 192.168.1.3.
+	serverCert := rawCertsFromFile(t, "spiffe_end2end/server_spiffe.pem")
+
+	tests := []struct {
+		name       string
+		rawCerts   [][]byte
+		serverName string
+		wantErr    string // Empty if verification must succeed.
+	}{
+		{
+			name:     "no_server_name",
+			rawCerts: serverCert,
+		},
+		{
+			name:     "chain_with_intermediate",
+			rawCerts: rawCertsFromFile(t, "spiffe_end2end/leaf_and_intermediate_chain.pem"),
+		},
+		{
+			name:       "matching_dns_name",
+			rawCerts:   serverCert,
+			serverName: "foo.test.google.fr",
+		},
+		{
+			name:       "matching_ip_address",
+			rawCerts:   serverCert,
+			serverName: "192.168.1.3",
+		},
+		{
+			name:       "mismatched_dns_name",
+			rawCerts:   serverCert,
+			serverName: "x.test.example.com",
+			wantErr:    "certificate is valid for",
+		},
+		{
+			name:       "mismatched_ip_address",
+			rawCerts:   serverCert,
+			serverName: "127.0.0.1",
+			wantErr:    "certificate is valid for",
+		},
+		{
+			// The certificate has a SPIFFE ID in the trust domain,
+			// but is signed by a different CA.
+			name:     "untrusted_ca",
+			rawCerts: rawCertsFromFile(t, "spiffe/server1_spiffe.pem"),
+			wantErr:  "x509 certificate Verify failed: x509: certificate signed by unknown authority",
+		},
+		{
+			name:     "unparsable_certificate",
+			rawCerts: [][]byte{[]byte("NOT_GOOD_DATA")},
+			wantErr:  "could not parse input certificate",
+		},
+		{
+			name:    "no_certificates",
+			wantErr: "no valid input certificates",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := VerifyPeerCertificateFunc(bundleMap, tc.serverName)(tc.rawCerts, nil)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("VerifyPeerCertificateFunc(%q) returned error: %v", tc.serverName, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("VerifyPeerCertificateFunc(%q) returned error %v, want error containing %q", tc.serverName, err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestIDFromCert(t *testing.T) {
 	cert := loadX509Cert(t, testdata.Path("x509/spiffe_cert.pem"))
 	uri, err := idFromCert(cert)

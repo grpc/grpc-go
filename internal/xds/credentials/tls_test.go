@@ -30,7 +30,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/testdata"
@@ -54,16 +56,26 @@ const (
 	tlsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials"
 )
 
-// testBootstrapConfig returns a bootstrap config with two certificate
-// provider instances: "root-instance" watching the CA certificate that signed
-// the test server's certificate, and "identity-instance" watching a client
-// certificate and key.
+// testBootstrapConfig returns a bootstrap config with these certificate
+// provider instances:
+//   - "root-instance": the CA certificate that issued x509/server1_cert.pem.
+//   - "identity-instance": an x509 client certificate and key.
+//   - "spiffe-root-instance": a SPIFFE bundle map with the CA that issued
+//     spiffe_end2end/server_spiffe.pem, for trust domain example.com.
+//   - "spiffe-identity-instance": a SPIFFE client certificate and key.
 func testBootstrapConfig(t *testing.T) *bootstrap.Config {
 	t.Helper()
+
+	// The file_watcher plugin ignores SPIFFE bundle maps unless this is
+	// set.
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 
 	rootCert := testdata.Path("x509/server_ca_cert.pem")
 	clientCert := testdata.Path("x509/client1_cert.pem")
 	clientKey := testdata.Path("x509/client1_key.pem")
+	spiffeBundleMap := testdata.Path("spiffe_end2end/client_spiffebundle.json")
+	spiffeClientCert := testdata.Path("spiffe_end2end/client_spiffe.pem")
+	spiffeClientKey := testdata.Path("spiffe_end2end/client.key")
 
 	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: json.RawMessage(`[{"server_uri": "passthrough:///unused", "channel_creds": [{"type": "insecure"}]}]`),
@@ -77,6 +89,14 @@ func testBootstrapConfig(t *testing.T) *bootstrap.Config {
 				"plugin_name": "file_watcher",
 				"config": {"certificate_file": %q, "private_key_file": %q}
 			}`, clientCert, clientKey)),
+			"spiffe-root-instance": json.RawMessage(fmt.Sprintf(`{
+				"plugin_name": "file_watcher",
+				"config": {"spiffe_trust_bundle_map_file": %q}
+			}`, spiffeBundleMap)),
+			"spiffe-identity-instance": json.RawMessage(fmt.Sprintf(`{
+				"plugin_name": "file_watcher",
+				"config": {"certificate_file": %q, "private_key_file": %q}
+			}`, spiffeClientCert, spiffeClientKey)),
 		},
 	})
 	if err != nil {
@@ -176,20 +196,21 @@ func (s) TestTLSCredsBuild_Errors(t *testing.T) {
 	}
 }
 
-// startTestTLSServer starts a TLS server that performs one handshake per
-// accepted connection. If mTLS is true, the server requires and verifies a
-// client certificate.
-func startTestTLSServer(t *testing.T, mTLS bool) net.Listener {
+// startTestTLSServer starts a TLS server with the given certificate and
+// returns its address. It accepts one connection and reports the result of the
+// server-side handshake on the returned channel. If clientCAFile is set, the
+// server requires a client certificate issued by that CA.
+func startTestTLSServer(t *testing.T, certFile, keyFile, clientCAFile string) (string, <-chan error) {
 	t.Helper()
 
-	serverCert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	serverCert, err := tls.LoadX509KeyPair(testdata.Path(certFile), testdata.Path(keyFile))
 	if err != nil {
 		t.Fatalf("Failed to load server certificate: %v", err)
 	}
 	// gRPC's TLS credentials enforce ALPN, so the server must advertise h2.
 	cfg := &tls.Config{Certificates: []tls.Certificate{serverCert}, NextProtos: []string{"h2"}}
-	if mTLS {
-		pem, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+	if clientCAFile != "" {
+		pem, err := os.ReadFile(testdata.Path(clientCAFile))
 		if err != nil {
 			t.Fatalf("Failed to read client CA certificate: %v", err)
 		}
@@ -205,25 +226,32 @@ func startTestTLSServer(t *testing.T, mTLS bool) net.Listener {
 	if err != nil {
 		t.Fatalf("Failed to start test TLS server: %v", err)
 	}
-	t.Cleanup(func() { lis.Close() })
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		close(stop)
+		lis.Close()
+		<-done
+	})
+	handshakeErr := make(chan error, 1)
 	go func() {
-		for {
-			conn, err := lis.Accept()
-			if err != nil {
-				return
-			}
-			go func() {
-				conn.(*tls.Conn).Handshake()
-				conn.Close()
-			}()
+		defer close(done)
+		conn, err := lis.Accept()
+		if err != nil {
+			handshakeErr <- err
+			return
 		}
+		defer conn.Close()
+		handshakeErr <- conn.(*tls.Conn).Handshake()
+		<-stop
 	}()
-	return lis
+	return lis.Addr().String(), handshakeErr
 }
 
-// clientHandshake dials the test server and performs a client-side TLS
-// handshake with credentials built from the given plugin config.
-func clientHandshake(t *testing.T, config *anypb.Any, bc *bootstrap.Config) error {
+// clientHandshake performs a client-side TLS handshake with the server at
+// addr, using credentials built from the given plugin config. The connection
+// stays open until the test ends, so that the server can finish its handshake.
+func clientHandshake(ctx context.Context, t *testing.T, config *anypb.Any, bc *bootstrap.Config, addr, authority string) error {
 	t.Helper()
 
 	bundle, cleanup, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(config, bc)
@@ -232,36 +260,172 @@ func clientHandshake(t *testing.T, config *anypb.Any, bc *bootstrap.Config) erro
 	}
 	defer cleanup()
 
-	mTLS := false
-	var cfg tlscredspb.TlsCredentials
-	if err := config.UnmarshalTo(&cfg); err == nil && cfg.GetIdentityCertificateProvider() != nil {
-		mTLS = true
-	}
-	lis := startTestTLSServer(t, mTLS)
-
-	rawConn, err := net.Dial("tcp", lis.Addr().String())
+	rawConn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatalf("Failed to dial test server: %v", err)
 	}
-	defer rawConn.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// The test server certificate is issued for *.test.example.com.
-	_, _, err = bundle.TransportCredentials().ClientHandshake(ctx, "x.test.example.com", rawConn)
+	t.Cleanup(func() { rawConn.Close() })
+	_, _, err = bundle.TransportCredentials().ClientHandshake(ctx, authority, rawConn)
 	return err
 }
 
-// Tests that TLS channel credentials backed by certificate provider instances
-// complete a TLS handshake, with and without an identity certificate.
+// Tests that TLS channel credentials verify the server certificate using the
+// CA certificates or the SPIFFE bundle map from the root certificate provider,
+// and present the identity certificate, if configured.
 func (s) TestTLSCredsHandshake(t *testing.T) {
 	bc := testBootstrapConfig(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-	if err := clientHandshake(t, tlsCredsConfig(t, "root-instance", ""), bc); err != nil {
-		t.Fatalf("ClientHandshake() with root-only TLS credentials failed: %v", err)
+	tests := []struct {
+		name       string
+		root       string // Root certificate provider instance.
+		identity   string // Identity certificate provider instance.
+		serverCert string
+		serverKey  string
+		// If set, the server requires a client certificate issued by
+		// this CA.
+		clientCA  string
+		authority string
+		wantErr   string // Empty if the handshake must succeed.
+	}{
+		{
+			// The server certificate is valid for
+			// *.test.example.com.
+			name:       "ca_roots",
+			root:       "root-instance",
+			serverCert: "x509/server1_cert.pem",
+			serverKey:  "x509/server1_key.pem",
+			authority:  "x.test.example.com",
+		},
+		{
+			name:       "ca_roots_mtls",
+			root:       "root-instance",
+			identity:   "identity-instance",
+			serverCert: "x509/server1_cert.pem",
+			serverKey:  "x509/server1_key.pem",
+			clientCA:   "x509/client_ca_cert.pem",
+			authority:  "x.test.example.com",
+		},
+		{
+			name:       "ca_roots_hostname_mismatch",
+			root:       "root-instance",
+			serverCert: "x509/server1_cert.pem",
+			serverKey:  "x509/server1_key.pem",
+			authority:  "foo.test.google.fr",
+			wantErr:    "certificate is valid for",
+		},
+		{
+			name:       "no_root_certificates",
+			root:       "identity-instance",
+			serverCert: "x509/server1_cert.pem",
+			serverKey:  "x509/server1_key.pem",
+			authority:  "x.test.example.com",
+			wantErr:    "neither root certificates nor a SPIFFE bundle map",
+		},
+		{
+			// The server certificate is valid for *.test.google.fr
+			// and 192.168.1.3.
+			name:       "spiffe",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			authority:  "foo.test.google.fr:443",
+		},
+		{
+			name:       "spiffe_mtls",
+			root:       "spiffe-root-instance",
+			identity:   "spiffe-identity-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			clientCA:   "spiffe_end2end/ca.pem",
+			authority:  "foo.test.google.fr:443",
+		},
+		{
+			name:       "spiffe_authority_without_port",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			authority:  "foo.test.google.fr",
+		},
+		{
+			name:       "spiffe_hostname_mismatch",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			authority:  "x.test.example.com:443",
+			wantErr:    "certificate is valid for",
+		},
+		{
+			name:       "spiffe_ip_authority",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			authority:  "192.168.1.3:443",
+		},
+		{
+			// IP addresses are not sent as SNI, but must still be
+			// verified.
+			name:       "spiffe_ip_authority_mismatch",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			authority:  "127.0.0.1:443",
+			wantErr:    "certificate is valid for",
+		},
+		{
+			// An empty server name must not disable the hostname
+			// check.
+			name:       "spiffe_empty_authority",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			authority:  "",
+			wantErr:    "has no server name to verify",
+		},
+		{
+			name:       "spiffe_authority_without_host",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe_end2end/server_spiffe.pem",
+			serverKey:  "spiffe_end2end/server.key",
+			authority:  ":443",
+			wantErr:    "has no server name to verify",
+		},
+		{
+			// The server certificate has a SPIFFE ID in trust
+			// domain example.com, but is issued by a different CA.
+			name:       "spiffe_untrusted_server_certificate",
+			root:       "spiffe-root-instance",
+			serverCert: "spiffe/server1_spiffe.pem",
+			serverKey:  "server1.key",
+			authority:  "foo.test.google.fr:443",
+			wantErr:    "certificate signed by unknown authority",
+		},
 	}
-	if err := clientHandshake(t, tlsCredsConfig(t, "root-instance", "identity-instance"), bc); err != nil {
-		t.Fatalf("ClientHandshake() with mTLS credentials failed: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr, serverErrCh := startTestTLSServer(t, tt.serverCert, tt.serverKey, tt.clientCA)
+			err := clientHandshake(ctx, t, tlsCredsConfig(t, tt.root, tt.identity), bc, addr, tt.authority)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("ClientHandshake() returned error %v, want error containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ClientHandshake() failed: %v", err)
+			}
+			// With TLS 1.3, the client finishes its handshake
+			// before the server verifies the client certificate.
+			select {
+			case err := <-serverErrCh:
+				if err != nil {
+					t.Fatalf("Server handshake failed: %v", err)
+				}
+			case <-ctx.Done():
+				t.Fatal("Timed out waiting for the server handshake")
+			}
+		})
 	}
 }
 
