@@ -351,6 +351,36 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 	checkHeaderAndTrailer(t, st.rw, wantHeader, wantTrailer)
 }
 
+func (s) TestHandlerTransport_HandleStreams_ClientAdvertisedCompressors(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		values []string
+		want   string
+	}{
+		{name: "absent"},
+		{name: "empty", values: []string{"", ""}},
+		{name: "single", values: []string{"gzip,zstd"}, want: "gzip,zstd"},
+		{name: "multiple", values: []string{"gzip", "zstd, deflate"}, want: "gzip,zstd, deflate"},
+		{name: "empty values", values: []string{"", "gzip", "", "zstd", ""}, want: "gzip,zstd"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			st := newHandleStreamTest(t, nil)
+			st.ht.req.Header["Grpc-Accept-Encoding"] = tt.values
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			st.ht.HandleStreams(ctx, func(s *ServerStream) {
+				go func() {
+					if got := s.clientAdvertisedCompressors; got != tt.want {
+						t.Errorf("clientAdvertisedCompressors = %q; want %q", got, tt.want)
+					}
+					st.bodyw.Close()
+					s.WriteStatus(status.New(codes.OK, ""))
+				}()
+			})
+		})
+	}
+}
+
 // Tests that codes.Unimplemented will close the body, per comment in handler_server.go.
 func (s) TestHandlerTransport_HandleStreams_Unimplemented(t *testing.T) {
 	handleStreamCloseBodyTest(t, codes.Unimplemented, "thingy is unimplemented")
