@@ -100,8 +100,8 @@ func buildSliceMap(endpointMap map[string]*endpointState, assignment *sharding.A
 		sm.fallbackPool[i] = i
 	}
 
-	// If no assignment has been received yet (startup case), return early with
-	// empty slices.
+	// If no assignment has been received (it's possible that an error has been
+	// received from the autosharding client), return early with empty slices.
 	if assignment == nil {
 		return sm
 	}
