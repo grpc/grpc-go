@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -437,7 +438,9 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		defer close(readerDone)
 
 		for {
-			buf := ht.bufferPool.Get(http2MaxFrameLen)
+			// The buffer doesn't need to be initialized since it is
+			// truncated to the number of bytes read into it.
+			buf := imem.GetUninitialized(ht.bufferPool, http2MaxFrameLen)
 			n, err := req.Body.Read(*buf)
 			if n > 0 {
 				*buf = (*buf)[:n]

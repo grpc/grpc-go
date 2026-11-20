@@ -24,23 +24,32 @@ import (
 	"net"
 	"syscall"
 
-	"google.golang.org/grpc/mem"
+	imem "google.golang.org/grpc/internal/mem"
 )
 
 // Reader is an optional interface that can be implemented by [net.Conn]
 // implementations to enable gRPC to perform non-memory-pinning reads.
 type Reader interface {
 	// ReadOnReady waits for data to arrive, fetches a buffer, and performs a
-	// read. When the underlying IO is readable, it allocates a buffer of size
-	// bufSize from the pool and reads up to bufSize bytes into the buffer.
+	// read. When the underlying IO is readable, it fetches an uninitialized
+	// buffer of size bufSize from the pool and reads up to bufSize bytes into
+	// the buffer.
 	//
 	// It returns a pointer to the buffer so it can be returned to the pool
-	// later, the number of bytes read, and an error.
+	// later, the number of bytes read, and an error. Only the first n bytes
+	// of the buffer are valid. The remaining bytes are unspecified and may
+	// contain data from previous users of the buffer.
 	//
 	// Callers should always process the n > 0 bytes returned before considering
 	// the error. Doing so correctly handles I/O errors that happen after
 	// reading some bytes, as well as both of the allowed EOF behaviors.
-	ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, err error)
+	//
+	// Implementations fetch the buffer by calling GetUninitialized directly,
+	// bypassing envconfig.EnableUninitializedBuffers. Readers used
+	// uninitialized buffers before the env var was introduced, and disabling
+	// the env var should restore the behavior of previous releases, not make
+	// readers start clearing buffers.
+	ReadOnReady(bufSize int, pool imem.UninitializedBufferPool) (b *[]byte, n int, err error)
 }
 
 // nonBlockingReader is optimized for non-memory-pinning reads using the RawConn
@@ -55,7 +64,7 @@ type nonBlockingReader struct {
 type readState struct {
 	// Request params.
 	bufSize int
-	pool    mem.BufferPool
+	pool    imem.UninitializedBufferPool
 
 	// Response params.
 	readError error
@@ -94,7 +103,10 @@ func NewNonBlocking(r io.Reader) Reader {
 	rr.doRead = func(fd uintptr) bool {
 		s := &rr.state
 
-		s.buf = s.pool.Get(s.bufSize)
+		// The buffer doesn't need to be initialized since callers only
+		// read the bytes that were read into it. See Reader for why the env
+		// var is bypassed.
+		s.buf = s.pool.GetUninitialized(s.bufSize)
 		s.bytesRead, s.readError = sysRead(fd, *s.buf)
 
 		if s.readError != nil {
@@ -106,7 +118,7 @@ func NewNonBlocking(r io.Reader) Reader {
 	return rr
 }
 
-func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
+func (c *nonBlockingReader) ReadOnReady(bufSize int, pool imem.UninitializedBufferPool) (*[]byte, int, error) {
 	c.state = readState{
 		pool:    pool,
 		bufSize: bufSize,
@@ -141,8 +153,11 @@ type blockingReader struct {
 	reader io.Reader
 }
 
-func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
-	buf := pool.Get(bufSize)
+func (c *blockingReader) ReadOnReady(bufSize int, pool imem.UninitializedBufferPool) (*[]byte, int, error) {
+	// The buffer doesn't need to be initialized since callers only read the
+	// bytes that were read into it. See Reader for why the env var is
+	// bypassed.
+	buf := pool.GetUninitialized(bufSize)
 	n, err := c.reader.Read(*buf)
 	if err != nil {
 		pool.Put(buf)
@@ -165,7 +180,7 @@ func New(r io.Reader) Reader {
 // A new bufReadyReader is created by calling [NewBuffered].
 type bufReadyReader struct {
 	buf       *[]byte
-	pool      mem.BufferPool
+	pool      imem.UninitializedBufferPool
 	bufSize   int
 	rd        Reader // reader provided by the caller
 	r, w      int    // buf read and write positions
@@ -174,8 +189,8 @@ type bufReadyReader struct {
 }
 
 // NewBuffered returns a new [io.Reader] with a buffer of the specified size
-// which is allocated from the provided pool.
-func NewBuffered(rd Reader, size int, pool mem.BufferPool) io.Reader {
+// which is fetched from the provided pool without being initialized.
+func NewBuffered(rd Reader, size int, pool imem.UninitializedBufferPool) io.Reader {
 	return &bufReadyReader{
 		rd:      rd,
 		pool:    pool,
@@ -247,6 +262,10 @@ type constBufferPool struct {
 }
 
 func (p *constBufferPool) Get(int) *[]byte {
+	return &p.buffer
+}
+
+func (p *constBufferPool) GetUninitialized(int) *[]byte {
 	return &p.buffer
 }
 

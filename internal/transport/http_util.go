@@ -333,7 +333,15 @@ func (w *bufWriter) Write(b []byte) (int, error) {
 		return n, toIOError(err)
 	}
 	if w.bufHandle == nil {
-		w.bufHandle = w.pool.Get(w.batchSize)
+		// The buffer doesn't need to be initialized since only the bytes
+		// written to it are flushed.
+		//
+		// GetUninitialized is called directly, bypassing
+		// envconfig.EnableUninitializedBuffers, because this call site used
+		// uninitialized buffers before the env var was introduced. Disabling
+		// the env var should restore the behavior of previous releases, not
+		// make this call site start clearing buffers.
+		w.bufHandle = w.pool.GetUninitialized(w.batchSize)
 	}
 	buf := *w.bufHandle
 	written := 0
@@ -545,7 +553,10 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 	var poolHandle *[]byte
 	useBufferPool := !mem.IsBelowBufferPoolingThreshold(int(fh.Length))
 	if useBufferPool {
-		poolHandle = f.pool.Get(int(fh.Length))
+		// The buffer doesn't need to be initialized since it is either
+		// completely overwritten by io.ReadFull below, or returned to the
+		// pool on failure.
+		poolHandle = imem.GetUninitialized(f.pool, int(fh.Length))
 		buf = *poolHandle
 		defer func() {
 			if err != nil {
@@ -606,7 +617,7 @@ func ioBufferPool(size int) *imem.SimpleBufferPool {
 	if ok {
 		return pool
 	}
-	pool = imem.NewDirtySimplePool()
+	pool = &imem.SimpleBufferPool{}
 	ioBufferPoolMap[size] = pool
 	return pool
 }

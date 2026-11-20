@@ -29,7 +29,6 @@ import (
 	core "google.golang.org/grpc/credentials/alts/internal"
 	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/transport/readyreader"
-	"google.golang.org/grpc/mem"
 )
 
 // ALTSRecordCrypto is the interface for gRPC ALTS record protocol.
@@ -74,20 +73,26 @@ const (
 )
 
 var (
-	protocols    = make(map[string]ALTSRecordFunc)
+	protocols = make(map[string]ALTSRecordFunc)
+	// Buffers are fetched from writeBufPool and readBufPool without
+	// initializing them, since they are always written to before being read.
+	//
+	// GetUninitialized is called directly on these pools, bypassing
+	// envconfig.EnableUninitializedBuffers, because ALTS used uninitialized
+	// buffers before the env var was introduced.
 	writeBufPool *imem.BinaryTieredBufferPool
 	// readBufPool pools buffers of at least `altsReadBufferInitialSize` size.
 	// Since the read buffer size is slightly larger than 32KB, using a regular
 	// BinaryTieredBufferPool results in allocating buffers of almost double the
 	// required length.
-	readBufPool = imem.NewDirtySimplePool()
+	readBufPool = &imem.SimpleBufferPool{}
 
 	// Compile-time check to ensure conn implements ReadyReader.
 	_ readyreader.Reader = &conn{}
 )
 
 func init() {
-	pool, err := imem.NewDirtyBinaryTieredBufferPool(
+	pool, err := imem.NewBinaryTieredBufferPool(
 		8,
 		12, // Go page size, 4KB
 		14, // 16KB (max HTTP/2 frame size used by gRPC)
@@ -158,7 +163,7 @@ func NewConnWithMaxFrameSize(c net.Conn, side core.Side, recordProtocol string, 
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
-	protectedHandle := readBufPool.Get(max(altsReadBufferInitialSize, len(protected)))
+	protectedHandle := readBufPool.GetUninitialized(max(altsReadBufferInitialSize, len(protected)))
 	protectedBuf := *protectedHandle
 	// Copy additional data from hanshaker service.
 	copy(protectedBuf, protected)
@@ -184,6 +189,10 @@ func (p *constBufferPool) Get(int) *[]byte {
 	return &p.buffer
 }
 
+func (p *constBufferPool) GetUninitialized(int) *[]byte {
+	return &p.buffer
+}
+
 func (p *constBufferPool) Put(*[]byte) {}
 
 // Read reads and decrypts a frame from the underlying connection, and copies the
@@ -196,7 +205,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 	return n, err
 }
 
-func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
+func (p *conn) ReadOnReady(bufSize int, pool imem.UninitializedBufferPool) (*[]byte, int, error) {
 	if len(p.buf) == 0 {
 		var framedMsg []byte
 		var protected []byte
@@ -235,7 +244,7 @@ func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, erro
 				// The new buffer must be able to hold the message length header
 				// and the entire message.
 				requiredCapacity := int(length) + MsgLenFieldSize
-				p.protectedHandle = readBufPool.Get(requiredCapacity)
+				p.protectedHandle = readBufPool.GetUninitialized(requiredCapacity)
 				protected = *p.protectedHandle
 				// Copy the contents of the old buffer and set the length of the
 				// new buffer to the number of bytes already read.
@@ -278,7 +287,7 @@ func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, erro
 		// Decrypt directly into the buffer, avoiding a copy from p.buf if
 		// possible.
 		if bufSize >= len(ciphertext) {
-			allocatedBuf := pool.Get(bufSize)
+			allocatedBuf := pool.GetUninitialized(bufSize)
 			dec, err := p.crypto.Decrypt((*allocatedBuf)[:0], ciphertext)
 			if err != nil {
 				pool.Put(allocatedBuf)
@@ -300,7 +309,7 @@ func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, erro
 		}
 	}
 
-	allocatedBuf := pool.Get(bufSize)
+	allocatedBuf := pool.GetUninitialized(bufSize)
 	n := copy(*allocatedBuf, p.buf)
 	p.buf = p.buf[n:]
 	p.dropProtectedIfEmtpy()
@@ -333,8 +342,7 @@ func (p *conn) Write(b []byte) (n int, err error) {
 		numOfFramesInMaxWriteBuf := altsWriteBufferMaxSize / frameLen
 		partialBSize = numOfFramesInMaxWriteBuf * p.payloadLengthLimit
 	}
-	// Get a writeBuf of the required length.
-	bufHandle := writeBufPool.Get(size)
+	bufHandle := writeBufPool.GetUninitialized(size)
 	defer writeBufPool.Put(bufHandle)
 	writeBuf := *bufHandle
 

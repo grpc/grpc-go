@@ -284,7 +284,7 @@ func (s) TestWriteBadConnection(t *testing.T) {
 }
 
 func (s) TestBufWriterSharedFlushAllocations(t *testing.T) {
-	pool := imem.NewDirtySimplePool()
+	pool := &imem.SimpleBufferPool{}
 	writer := newBufWriter(io.Discard, defaultWriteBufSize, pool)
 	payload := make([]byte, 128)
 
@@ -303,7 +303,7 @@ func (s) TestBufWriterSharedFlushAllocations(t *testing.T) {
 
 func (s) TestBufWriterSharedBufferOwnership(t *testing.T) {
 	const batchSize = 8
-	pool := imem.NewDirtySimplePool()
+	pool := &imem.SimpleBufferPool{}
 	var conn bytes.Buffer
 	writer := newBufWriter(&conn, batchSize, pool)
 
@@ -344,7 +344,7 @@ func (s) TestBufWriterSharedBufferOwnership(t *testing.T) {
 }
 
 func (s) TestBufWriterFlushErrorReleasesSharedBuffer(t *testing.T) {
-	pool := imem.NewDirtySimplePool()
+	pool := &imem.SimpleBufferPool{}
 	writer := newBufWriter(&badNetworkConn{}, 8, pool)
 
 	if _, err := writer.Write([]byte("abc")); err != nil {
@@ -375,7 +375,7 @@ func BenchmarkBufWriter(b *testing.B) {
 		name string
 		pool *imem.SimpleBufferPool
 	}{
-		{name: "Shared", pool: imem.NewDirtySimplePool()},
+		{name: "Shared", pool: &imem.SimpleBufferPool{}},
 		{name: "Unshared"},
 	} {
 		b.Run(test.name, func(b *testing.B) {
@@ -596,7 +596,7 @@ func (s) TestBufferedReader(t *testing.T) {
 			name:       "ready_reader",
 			reader:     &testReadyReader{},
 			bufSize:    10,
-			wantTypeOf: readyreader.NewBuffered(nil, 10, mem.DefaultBufferPool()),
+			wantTypeOf: readyreader.NewBuffered(nil, 10, nil),
 		},
 	}
 

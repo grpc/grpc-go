@@ -21,19 +21,13 @@ package envconfig
 import (
 	"os"
 	"testing"
-
-	"google.golang.org/grpc/internal/grpctest"
 )
 
-type s struct {
-	grpctest.Tester
-}
+// Tests in this package can't use the grpctest package: it depends on
+// internal/mem (through internal/leakcheck), which depends on this package,
+// resulting in an import cycle.
 
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
-func (s) TestUint64FromEnv(t *testing.T) {
+func TestUint64FromEnv(t *testing.T) {
 	var testCases = []struct {
 		name          string
 		val           string
@@ -72,7 +66,7 @@ func (s) TestUint64FromEnv(t *testing.T) {
 	}
 }
 
-func (s) TestBoolFromEnv(t *testing.T) {
+func TestBoolFromEnv(t *testing.T) {
 	var testCases = []struct {
 		val  string
 		def  bool
@@ -102,7 +96,7 @@ func (s) TestBoolFromEnv(t *testing.T) {
 	}
 }
 
-func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
+func TestGoroutineLabelsFromEnv(t *testing.T) {
 	var testCases = []struct {
 		name string
 		val  string
