@@ -465,7 +465,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// headers to the external processor server.
 		if i.config.processingModes.requestHeaderMode == modeSend {
 			if err = ocs.sendToProcessor(ocs.requestHeaders(outgoingMD, added)); err != nil {
-				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %w", err), newStream, opts...)
+				return nil, err
 			}
 		}
 
@@ -916,7 +916,9 @@ func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.Proce
 		if ocs.procStreamBypass.Load() {
 			return nil
 		}
-		return err
+		// The RPC context is done and the receive loop has not yet recorded
+		// the outcome. Never return the raw Send error (typically io.EOF).
+		return status.FromContextError(ocs.ctx.Err()).Err()
 	}
 	return nil
 }

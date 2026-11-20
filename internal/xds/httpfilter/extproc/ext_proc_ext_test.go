@@ -7043,3 +7043,222 @@ func (s) TestStreamingContextCanceledBeforeHalfClose(t *testing.T) {
 		t.Fatalf("stream.CloseSend() = %v, want nil", err)
 	}
 }
+
+// waitForCloseClientConn wraps a grpc.ClientConnInterface so that SendMsg on
+// streams waits for the external processor stream context to end and the
+// dataplane stream to be established on the backend before attempting the send.
+// When unblockRecv is non-nil, RecvMsg is gated on unblockRecv and SendMsg
+// invokes cancelRPC so that ocs.ctx.Done() wins the select in sendToProcessor.
+type waitForCloseClientConn struct {
+	grpc.ClientConnInterface
+	testCtx              context.Context
+	backendStreamStarted <-chan struct{}
+	unblockRecv          <-chan struct{}
+	cancelRPC            context.CancelFunc
+}
+
+func (w *waitForCloseClientConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	cs, err := w.ClientConnInterface.NewStream(ctx, desc, method, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &waitForCloseClientStream{
+		ClientStream:         cs,
+		testCtx:              w.testCtx,
+		backendStreamStarted: w.backendStreamStarted,
+		unblockRecv:          w.unblockRecv,
+		cancelRPC:            w.cancelRPC,
+	}, nil
+}
+
+type waitForCloseClientStream struct {
+	grpc.ClientStream
+	testCtx              context.Context
+	backendStreamStarted <-chan struct{}
+	unblockRecv          <-chan struct{}
+	cancelRPC            context.CancelFunc
+}
+
+func (w *waitForCloseClientStream) RecvMsg(m any) error {
+	if w.unblockRecv != nil {
+		select {
+		case <-w.unblockRecv:
+		case <-w.testCtx.Done():
+			return w.testCtx.Err()
+		}
+	}
+	return w.ClientStream.RecvMsg(m)
+}
+
+func (w *waitForCloseClientStream) SendMsg(m any) error {
+	select {
+	case <-w.backendStreamStarted:
+	case <-w.testCtx.Done():
+		return w.testCtx.Err()
+	}
+	if w.cancelRPC != nil {
+		w.cancelRPC()
+		return io.EOF
+	}
+	select {
+	case <-w.ClientStream.Context().Done():
+	case <-w.testCtx.Done():
+		return w.testCtx.Err()
+	}
+	return w.ClientStream.SendMsg(m)
+}
+
+// TestObservabilityRequestHeaderSendFailure tests the scenario in observability
+// mode with request header mode SEND where the external processor fails before
+// accepting the request headers. It verifies that:
+//   - With failure_mode_allow=true, the RPC continues on the existing dataplane
+//     stream and succeeds, and the backend receives exactly one call.
+//   - With failure_mode_allow=false, the RPC fails with Internal and the
+//     existing backend stream is canceled.
+//   - When the RPC context is canceled during the initial header send before
+//     the receive loop records the outcome, NewStream returns Canceled without
+//     creating a second dataplane stream.
+func (s) TestObservabilityRequestHeaderSendFailure(t *testing.T) {
+	tests := []struct {
+		name                string
+		failureModeAllow    bool
+		cancelRPCOnSend     bool
+		wantCode            codes.Code
+		wantBackendCanceled bool
+	}{
+		{
+			name:                "failure_mode_allow_true",
+			failureModeAllow:    true,
+			wantCode:            codes.OK,
+			wantBackendCanceled: false,
+		},
+		{
+			name:                "failure_mode_allow_false",
+			failureModeAllow:    false,
+			wantCode:            codes.Internal,
+			wantBackendCanceled: true,
+		},
+		{
+			name:                "rpc_canceled_during_send",
+			failureModeAllow:    true,
+			cancelRPCOnSend:     true,
+			wantCode:            codes.Canceled,
+			wantBackendCanceled: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			rpcCtx, cancelRPC := context.WithCancel(ctx)
+			defer cancelRPC()
+
+			extProcAddr, _ := startTestExtProcessor(t, func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				return status.Error(codes.Unavailable, "processor failed before accepting request headers")
+			})
+
+			backendStreamStarted := make(chan struct{})
+			backendStreamCanceled := make(chan struct{})
+			var unblockRecv chan struct{}
+			var cancelOnSend context.CancelFunc
+			if tc.cancelRPCOnSend {
+				unblockRecv = make(chan struct{})
+				cancelOnSend = cancelRPC
+			}
+			var backendCalls atomic.Int32
+
+			origCreate := internal.CreateExtProcChannel
+			internal.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+				cc, closeFunc, err := origCreate(cfg)
+				if err != nil {
+					return nil, nil, err
+				}
+				return &waitForCloseClientConn{
+					ClientConnInterface:  cc,
+					testCtx:              ctx,
+					backendStreamStarted: backendStreamStarted,
+					unblockRecv:          unblockRecv,
+					cancelRPC:            cancelOnSend,
+				}, closeFunc, nil
+			}
+			defer func() { internal.CreateExtProcChannel = origCreate }()
+
+			stub := stubserver.StartTestService(t, &stubserver.StubServer{
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+					if backendCalls.Add(1) == 1 {
+						close(backendStreamStarted)
+					}
+					if tc.wantBackendCanceled {
+						<-stream.Context().Done()
+						close(backendStreamCanceled)
+						return stream.Context().Err()
+					}
+					for {
+						in, err := stream.Recv()
+						if err == io.EOF {
+							return nil
+						}
+						if err != nil {
+							return err
+						}
+						if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.GetPayload()}); err != nil {
+							return err
+						}
+					}
+				},
+			})
+			defer stub.Stop()
+
+			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+				},
+				ObservabilityMode:    true,
+				FailureModeAllow:     tc.failureModeAllow,
+				DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+			}, stub.Address)
+			if err != nil {
+				t.Fatalf("Failed to dial: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			stream, err := client.FullDuplexCall(rpcCtx)
+			if unblockRecv != nil {
+				close(unblockRecv)
+			}
+			if status.Code(err) != tc.wantCode {
+				t.Fatalf("FullDuplexCall() error = %v, want code %v", err, tc.wantCode)
+			}
+			if tc.wantBackendCanceled {
+				select {
+				case <-backendStreamCanceled:
+				case <-ctx.Done():
+					t.Fatal("Timeout waiting for backend stream to be canceled")
+				}
+				if got := backendCalls.Load(); got != 1 {
+					t.Fatalf("Backend received %d calls, want 1", got)
+				}
+				return
+			}
+
+			if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+				t.Fatalf("stream.Send() failed: %v", err)
+			}
+			if _, err := stream.Recv(); err != nil {
+				t.Fatalf("stream.Recv() failed: %v", err)
+			}
+			if err := stream.CloseSend(); err != nil {
+				t.Fatalf("stream.CloseSend() failed: %v", err)
+			}
+			if _, err := stream.Recv(); err != io.EOF {
+				t.Fatalf("stream.Recv() = %v, want io.EOF", err)
+			}
+			if got := backendCalls.Load(); got != 1 {
+				t.Fatalf("Backend received %d calls, want 1", got)
+			}
+		})
+	}
+}

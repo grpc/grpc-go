@@ -90,7 +90,9 @@ type ClientInterceptor interface {
 	// function, passing the provided CallOption slice along with any new
 	// CallOption instances they wish to add. To intercept or override stream
 	// behavior, implementations may wrap the ClientStream returned by the
-	// delegate.
+	// delegate. The provided newStream function may be called at most once per
+	// NewStream invocation; subsequent calls will return an error with code
+	// Internal.
 	//
 	// Note: RPCInfo.Context is currently unused and will be nil.
 	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error)
