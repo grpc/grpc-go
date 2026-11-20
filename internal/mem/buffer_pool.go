@@ -85,9 +85,16 @@ type BinaryTieredBufferPool struct {
 // of 2), not the raw byte sizes. For example, to create a pool of 16KB buffers
 // (2^14 bytes), pass 14 as the argument.
 func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
+	return NewBinaryTieredBufferPoolWithFallback(&SimpleBufferPool{shouldZero: true}, powerOfTwoExponents...)
+}
+
+// NewBinaryTieredBufferPoolWithFallback returns a BufferPool similar to the one
+// returned by NewBinaryTieredBufferPool, except that buffers larger than the
+// largest tier are handled by the fallback pool.
+func NewBinaryTieredBufferPoolWithFallback(fallback bufferPool, powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
 	return newBinaryTiered(func(size int) bufferPool {
 		return newSizedBufferPool(size, true)
-	}, &SimpleBufferPool{shouldZero: true}, powerOfTwoExponents...)
+	}, fallback, powerOfTwoExponents...)
 }
 
 // NewDirtyBinaryTieredBufferPool returns a BufferPool backed by multiple
@@ -278,13 +285,21 @@ func newSizedBufferPool(size int, zero bool) *sizedBufferPool {
 // TieredBufferPool implements the BufferPool interface with multiple tiers of
 // buffer pools for different sizes of buffers.
 type TieredBufferPool struct {
-	sizedPools   []*sizedBufferPool
-	fallbackPool SimpleBufferPool
+	sizedPools []*sizedBufferPool
+	// fallbackPool handles buffers larger than the largest sized pool.
+	fallbackPool bufferPool
 }
 
 // NewTieredBufferPool returns a BufferPool implementation that uses multiple
 // underlying pools of the given pool sizes.
 func NewTieredBufferPool(poolSizes ...int) *TieredBufferPool {
+	return NewTieredBufferPoolWithFallback(&SimpleBufferPool{shouldZero: true}, poolSizes...)
+}
+
+// NewTieredBufferPoolWithFallback returns a BufferPool similar to the one
+// returned by NewTieredBufferPool, except that buffers larger than the largest
+// tier are handled by the fallback pool.
+func NewTieredBufferPoolWithFallback(fallback bufferPool, poolSizes ...int) *TieredBufferPool {
 	sort.Ints(poolSizes)
 	pools := make([]*sizedBufferPool, len(poolSizes))
 	for i, s := range poolSizes {
@@ -292,7 +307,7 @@ func NewTieredBufferPool(poolSizes ...int) *TieredBufferPool {
 	}
 	return &TieredBufferPool{
 		sizedPools:   pools,
-		fallbackPool: SimpleBufferPool{shouldZero: true},
+		fallbackPool: fallback,
 	}
 }
 
@@ -312,7 +327,7 @@ func (p *TieredBufferPool) getPool(size int) bufferPool {
 	})
 
 	if poolIdx == len(p.sizedPools) {
-		return &p.fallbackPool
+		return p.fallbackPool
 	}
 
 	return p.sizedPools[poolIdx]
@@ -355,9 +370,8 @@ func (p *SimpleBufferPool) Get(size int) *[]byte {
 
 	// If we're going to allocate, round up to the nearest page. This way if
 	// requests frequently arrive with small variation we don't allocate
-	// repeatedly if we get unlucky and they increase over time. By default we
-	// only allocate here if size > 1MiB. Because goPageSize is a power of 2, we
-	// can round up efficiently.
+	// repeatedly if we get unlucky and they increase over time. Because
+	// goPageSize is a power of 2, we can round up efficiently.
 	allocSize := (size + goPageSize - 1) & ^(goPageSize - 1)
 
 	b := make([]byte, size, allocSize)

@@ -58,6 +58,15 @@ func (s) TestBufferPool_Clears(t *testing.T) {
 			wantCleared: true,
 		},
 		{
+			name: "regular_custom_fallback",
+			factory: func() (*mem.BinaryTieredBufferPool, error) {
+				fallback := mem.NewTieredBufferPoolWithFallback(mem.NopBufferPool{}, 16)
+				return mem.NewBinaryTieredBufferPoolWithFallback(fallback, 3)
+			},
+			bufferSize:  10,
+			wantCleared: true,
+		},
+		{
 			name: "dirty_sized",
 			factory: func() (*mem.BinaryTieredBufferPool, error) {
 				return mem.NewDirtyBinaryTieredBufferPool(3)

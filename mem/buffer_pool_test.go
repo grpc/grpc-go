@@ -146,3 +146,50 @@ func TestBinaryBufferPool(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestDefaultBufferPool_LargeBufferCapacity(t *testing.T) {
+	const mib = 1 << 20
+	testCases := []struct {
+		requestSize  int
+		wantCapacity int
+	}{
+		{requestSize: 0, wantCapacity: 0},
+		{requestSize: 1 * mib, wantCapacity: 1 * mib},
+		// Above 1MiB there are four evenly spaced tiers for every doubling.
+		{requestSize: 1*mib + 1, wantCapacity: 1.25 * mib},
+		{requestSize: 1.25 * mib, wantCapacity: 1.25 * mib},
+		{requestSize: 1.25*mib + 1, wantCapacity: 1.5 * mib},
+		{requestSize: 1.5*mib + 1, wantCapacity: 1.75 * mib},
+		{requestSize: 1.75*mib + 1, wantCapacity: 2 * mib},
+		{requestSize: 2*mib + 1, wantCapacity: 2.5 * mib},
+	}
+
+	pool := mem.DefaultBufferPool()
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("requestSize=%d", tc.requestSize), func(t *testing.T) {
+			buf := pool.Get(tc.requestSize)
+			defer pool.Put(buf)
+			if cap(*buf) != tc.wantCapacity {
+				t.Errorf("Get(%d) returned buffer with capacity: %d, want %d", tc.requestSize, cap(*buf), tc.wantCapacity)
+			}
+			if len(*buf) != tc.requestSize {
+				t.Errorf("Get(%d) returned buffer with length: %d, want %d", tc.requestSize, len(*buf), tc.requestSize)
+			}
+		})
+	}
+}
+
+// Tests that a large buffer in the default pool isn't used for a request for a
+// much smaller buffer, which would also need to clear the large buffer.
+func (s) TestDefaultBufferPool_LargeBufferNotUsedForSmallRequest(t *testing.T) {
+	const mib = 1 << 20
+	pool := mem.DefaultBufferPool()
+	pool.Put(pool.Get(8 * mib))
+
+	const size = 1*mib + 1
+	buf := pool.Get(size)
+	defer pool.Put(buf)
+	if got, want := cap(*buf), int(1.25*mib); got != want {
+		t.Errorf("Get(%d) returned buffer with capacity: %d, want %d", size, got, want)
+	}
+}
