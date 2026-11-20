@@ -45,7 +45,10 @@ var customTestResourceType = xdsclient.ResourceType{
 	Decoder:                    customTestDecoder{},
 }
 
-type customTestDecoder struct{}
+type customTestDecoder struct {
+	// Decoder implementations may hold state that cannot be used as a map key.
+	state any
+}
 
 func (customTestDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	any := resource.ToAny()
@@ -124,6 +127,22 @@ func (w *customTestWatcher) AmbientError(err error, onDone func()) {
 // Tests that the xDS client can watch a custom resource type that is injected
 // via the config.
 func (s) TestCustomResourceWatch(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		state any
+	}{
+		{name: "comparable"},
+		{name: "slice", state: []byte("decoder state")},
+		{name: "map", state: map[string]string{"key": "value"}},
+		{name: "function", state: func() {}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testCustomResourceWatch(t, customTestDecoder{state: test.state})
+		})
+	}
+}
+
+func testCustomResourceWatch(t *testing.T, decoder xdsclient.Decoder) {
 	const authority = "my-authority"
 	resourceName := "xdstp://" + authority + "/" + customTestResourceType.TypeURL + "/my-resource"
 
@@ -154,8 +173,10 @@ func (s) TestCustomResourceWatch(t *testing.T) {
 			}
 			defer cleanup()
 
+			resourceType := customTestResourceType
+			resourceType.Decoder = decoder
 			resourceTypes := map[string]xdsclient.ResourceType{
-				customTestResourceType.TypeURL: customTestResourceType,
+				resourceType.TypeURL: resourceType,
 			}
 			si := clients.ServerIdentifier{
 				ServerURI:  mgmtServer.Address,
@@ -210,28 +231,40 @@ func (s) TestCustomResourceWatch(t *testing.T) {
 				Resp: &v3discoverypb.DiscoveryResponse{
 					TypeUrl:     customTestResourceType.TypeURL,
 					VersionInfo: "1",
+					Nonce:       "nonce-1",
 					Resources:   []*anypb.Any{resource},
 				},
 			}
 
+			// Verify the ACK or NACK acknowledges the received response.
+			v, err = mgmtServer.XDSRequestChan.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout when waiting for ACK or NACK DiscoveryRequest message: %v", err)
+			}
+			req = v.(*fakeserver.Request).Req.(*v3discoverypb.DiscoveryRequest)
+			if req.GetTypeUrl() != customTestResourceType.TypeURL {
+				t.Fatalf("DiscoveryRequest TypeUrl = %v, want %v", req.GetTypeUrl(), customTestResourceType.TypeURL)
+			}
+			if req.GetResponseNonce() != "nonce-1" {
+				t.Fatalf("DiscoveryRequest ResponseNonce = %q, want %q", req.GetResponseNonce(), "nonce-1")
+			}
 			if test.wantNACK != "" {
-				// Verify the NACK.
-				// We expect a new DiscoveryRequest with ErrorDetail set.
-				v, err = mgmtServer.XDSRequestChan.Receive(ctx)
-				if err != nil {
-					t.Fatalf("Timeout when waiting for NACK DiscoveryRequest message: %v", err)
-				}
-				req = v.(*fakeserver.Request).Req.(*v3discoverypb.DiscoveryRequest)
-				if req.GetTypeUrl() != customTestResourceType.TypeURL {
-					t.Fatalf("DiscoveryRequest TypeUrl = %v, want %v", req.GetTypeUrl(), customTestResourceType.TypeURL)
-				}
 				if req.GetErrorDetail() == nil {
 					t.Fatalf("DiscoveryRequest ErrorDetail is nil, want non-nil")
 				}
 				if !strings.Contains(req.GetErrorDetail().GetMessage(), test.wantNACK) {
 					t.Fatalf("DiscoveryRequest ErrorDetail = %v, want substring %q", req.GetErrorDetail().GetMessage(), test.wantNACK)
 				}
+				if req.GetVersionInfo() != "" {
+					t.Fatalf("DiscoveryRequest VersionInfo = %q, want empty", req.GetVersionInfo())
+				}
 				return
+			}
+			if req.GetErrorDetail() != nil {
+				t.Fatalf("DiscoveryRequest ErrorDetail = %v, want nil", req.GetErrorDetail())
+			}
+			if req.GetVersionInfo() != "1" {
+				t.Fatalf("DiscoveryRequest VersionInfo = %q, want %q", req.GetVersionInfo(), "1")
 			}
 
 			// Verify the update.
