@@ -157,10 +157,12 @@ type cdsBalancer struct {
 }
 
 // UpdateClientConnState receives the xdsConfig, ClusterSubscriber and the
-// xdsClient object from the xdsResolver. If an error is encountered, the
-// parent (clustermanager) sets the corresponding cluster’s picker to
-// transient_failure. Otherwise, the received configuration is processed and
-// forwarded to the appropriate child policy.
+// xdsClient object from the xdsResolver. If the cluster is missing from the
+// xdsConfig or has an error, the child policy is closed, TRANSIENT_FAILURE is
+// reported with an erroring picker, and the error is returned. For other
+// errors, the parent (clustermanager) sets the corresponding cluster's picker
+// to TRANSIENT_FAILURE. Otherwise, the received configuration is processed
+// and forwarded to the appropriate child policy.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(state.ResolverState)
@@ -228,10 +230,11 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 	}
 	// If the cluster resource has an error, close the child policy so that
 	// connections to the backends are not kept alive, report TRANSIENT_FAILURE,
-	// and return the error. The xDS dependency manager sets this error when the
-	// management server removes the cluster resource, when the resource is
-	// NACKed and there is no previous good update to fall back to, and when the
-	// aggregate cluster graph is invalid (for example, it has no leaf clusters).
+	// and return the error. The xDS dependency manager reports an error here
+	// when the cluster resource (or, for an aggregate cluster, any cluster in
+	// its graph) is removed by the management server or is NACKed without a
+	// previous good update, and when the aggregate cluster graph is invalid
+	// (for example, it exceeds the maximum depth or has no leaf clusters).
 	if clusterUpdate.Err != nil {
 		b.closeChildPolicyAndReportTF(clusterUpdate.Err)
 		return clusterUpdate.Err
