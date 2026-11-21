@@ -1036,21 +1036,33 @@ func (cs *clientStream) fireResponseTrailerReady() {
 // modified by the external processor if configured. It blocks until header
 // processing is complete, or returns nil if the response is trailers-only.
 func (cs *clientStream) Header() (metadata.MD, error) {
+	// If response headers are already processed and ready, return them
+	// immediately.
+	if cs.responseHeadersReady.HasFired() {
+		return cs.processedResponseHeader(), nil
+	}
 	if err := cs.initiateResponseHeaderProcessing(); err != nil {
 		return nil, err
 	}
 	// Wait for the response headers to be modified.
 	select {
 	case <-cs.responseHeadersReady.Done():
-		if cs.trailersOnly {
-			return nil, nil
-		}
-		return cs.responseHeader, nil
+		return cs.processedResponseHeader(), nil
 	case <-cs.procStreamFailed.Done():
 		return nil, cs.streamError()
 	case <-cs.ctx.Done():
 		return nil, cs.streamError()
 	}
+}
+
+// processedResponseHeader returns the processed response headers, or nil if
+// the response is trailers-only. It must only be called after
+// responseHeadersReady has fired.
+func (cs *clientStream) processedResponseHeader() metadata.MD {
+	if cs.trailersOnly {
+		return nil
+	}
+	return cs.responseHeader
 }
 
 // Trailer returns the trailer metadata received from the server, potentially

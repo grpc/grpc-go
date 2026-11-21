@@ -1010,6 +1010,142 @@ func (s) TestTrailersOnly(t *testing.T) {
 	}
 }
 
+// TestHeaderAfterContextCancel tests the scenario where the RPC context is
+// canceled after Recv() returns a message and Header() is called afterwards.
+// Verifies that Header() returns the already processed response headers
+// instead of a context error.
+func (s) TestHeaderAfterContextCancel(t *testing.T) {
+	const respHeaderModified = "resp-header-modified"
+
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		for {
+			req, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			var resp *v3procservicepb.ProcessingResponse
+			switch {
+			case req.GetResponseHeaders() != nil:
+				// Return a response instructing the filter to add
+				// "resp-header-modified: true".
+				resp = responseHeadersResponse(map[string]string{respHeaderModified: "true"}, nil)
+			case req.GetResponseBody() != nil:
+				// Echo the response body back as is.
+				resp = responseBodyResponse(req.GetResponseBody().GetBody())
+			default:
+				return fmt.Errorf("proc server got unexpected request %v", req)
+			}
+			if err := stream.Send(resp); err != nil {
+				return err
+			}
+		}
+	})
+	// Backend stub service sends a single response message and keeps the stream
+	// open until the client cancels the RPC.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+				return err
+			}
+			<-stream.Context().Done()
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+
+	// Cancel the RPC context after the response headers have been processed.
+	cancel()
+
+	headerMetadata, err := stream.Header()
+	if err != nil {
+		t.Fatalf("stream.Header() failed: %v", err)
+	}
+	if got := headerMetadata.Get(respHeaderModified); len(got) != 1 || got[0] != "true" {
+		t.Fatalf("Client received resp-header-modified = %v, want [true]", got)
+	}
+}
+
+// TestHeaderAfterContextCancelTrailersOnly tests the scenario where the backend
+// sends a Trailers-Only response and the RPC context is canceled after Recv()
+// returns, before Header() is called. Verifies that Header() returns (nil, nil)
+// instead of a context error.
+func (s) TestHeaderAfterContextCancelTrailersOnly(t *testing.T) {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseHeaders() == nil {
+			return fmt.Errorf("proc server got %v, want ResponseHeaders message", req)
+		}
+		return stream.Send(responseHeadersResponse(nil, nil))
+	})
+	// Backend stub service immediately returns an Aborted error to trigger
+	// Trailers-Only.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+			return status.Error(codes.Aborted, "intentional backend failure")
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+	if _, err := stream.Recv(); status.Code(err) != codes.Aborted {
+		t.Fatalf("stream.Recv() returned error: %v, want Aborted", err)
+	}
+
+	// Cancel the RPC context after the trailers-only response has been
+	// processed.
+	cancel()
+
+	// Verify that stream.Header() returns (nil, nil) for a trailers-only
+	// response.
+	if headerMetadata, err := stream.Header(); err != nil || headerMetadata != nil {
+		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
+	}
+}
+
 // TestDraining tests the scenario where the processor server signals
 // RequestDrain: true. Verifies that the filter correctly drains any pending
 // messages and then transitions to bypass mode, causing all subsequent client
