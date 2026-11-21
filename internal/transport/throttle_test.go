@@ -26,7 +26,7 @@ import (
 	"math"
 	"net"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,17 +36,31 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// writeTrackingConn is a net.Conn that tracks the number of in-progress calls
-// to Write.
+// writeTrackingConn is a net.Conn that tracks whether a call to Write is in
+// progress. It assumes a single writer.
 type writeTrackingConn struct {
 	net.Conn
-	writesInProgress atomic.Int32
+	mu      sync.Mutex
+	writing bool // Set while a call to Write is in progress.
 }
 
 func (c *writeTrackingConn) Write(b []byte) (int, error) {
-	c.writesInProgress.Add(1)
-	defer c.writesInProgress.Add(-1)
+	c.setWriting(true)
+	defer c.setWriting(false)
 	return c.Conn.Write(b)
+}
+
+func (c *writeTrackingConn) setWriting(w bool) {
+	c.mu.Lock()
+	c.writing = w
+	c.mu.Unlock()
+}
+
+// isWriting reports whether a call to Write is in progress.
+func (c *writeTrackingConn) isWriting() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.writing
 }
 
 // fakeServerHandshake performs the server side of the HTTP/2 connection
@@ -63,17 +77,30 @@ func fakeServerHandshake(conn net.Conn) (*http2.Framer, error) {
 }
 
 // countQueuedItems returns the number of items of type T currently queued in
-// the given control buffer.
-func countQueuedItems[T cbItem](cb *controlBuffer) int {
+// the given control buffer, in both list and consumerList.
+//
+// The consumer goroutine (loopy) accesses consumerList without holding cb.mu,
+// so conn must be the connection loopy writes to, and loopy must be blocked
+// writing to it. The test fails otherwise. While the count is taken, conn.mu
+// is held, which keeps loopy from returning from Write, and so from touching
+// consumerList.
+func countQueuedItems[T cbItem](t *testing.T, cb *controlBuffer, conn *writeTrackingConn) int {
+	t.Helper()
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if !conn.writing {
+		t.Fatal("Loopy is not blocked writing to the connection, cannot read consumerList")
+	}
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	n := 0
-	// The items are stored in a ring buffer, starting at index head and
+	// The items are stored in ring buffers, starting at index head and
 	// wrapping around to the start of buf past its end.
-	for i := range cb.list.count {
-		index := (cb.list.head + i) % len(cb.list.buf)
-		if _, ok := cb.list.buf[index].(T); ok {
-			n++
+	for _, l := range []*itemList[cbItem]{&cb.list, &cb.consumerList} {
+		for i := range l.count {
+			if _, ok := l.buf[(l.head+i)%len(l.buf)].(T); ok {
+				n++
+			}
 		}
 	}
 	return n
@@ -447,7 +474,7 @@ func (s) TestClientTransport_StreamCleanupDoesNotThrottleReads(t *testing.T) {
 	if _, err := ct.NewStream(ctx, &CallHdr{}, nil); err != nil {
 		t.Fatalf("NewStream() failed: %v", err)
 	}
-	for wConn.writesInProgress.Load() == 0 {
+	for !wConn.isWriting() {
 		if ctx.Err() != nil {
 			t.Fatal("Timeout when waiting for the client's writer to block")
 		}
@@ -472,7 +499,7 @@ func (s) TestClientTransport_StreamCleanupDoesNotThrottleReads(t *testing.T) {
 	// Verify that the test queued enough cleanupStream items to throttle
 	// reads, had they counted towards the limit, and that the client
 	// transport is still healthy.
-	numCleanups := countQueuedItems[*cleanupStream](ct.controlBuf)
+	numCleanups := countQueuedItems[*cleanupStream](t, ct.controlBuf, wConn)
 	if numCleanups < numStreams {
 		t.Fatalf("Number of queued cleanupStream items = %d, want at least %d", numCleanups, numStreams)
 	}
@@ -503,6 +530,9 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 		sConn.Close()
 		cConn.Close()
 	}()
+	// Track the server's writes, to count the queued pings while its writer
+	// is blocked.
+	wConn := &writeTrackingConn{Conn: sConn}
 
 	type result struct {
 		st  ServerTransport
@@ -510,7 +540,7 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 	}
 	resultCh := make(chan result, 1)
 	go func() {
-		st, err := NewServerTransport(sConn, &ServerConfig{
+		st, err := NewServerTransport(wConn, &ServerConfig{
 			MaxStreams: math.MaxUint32,
 			BufferPool: mem.DefaultBufferPool(),
 			// Disable write buffering, so that the server's writer
@@ -582,10 +612,10 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 
 	// Flood the server. Since the client is not reading anymore, the
 	// server's writer blocks when writing the first BDP ping, and the
-	// subsequent ones are queued. Use well over the limit as the number of
-	// rounds, so that the flood cannot complete if the server throttles
-	// reads at the limit.
-	numRounds := 2 * maxQueuedTransportResponseFrames
+	// subsequent ones are queued. Use well over the number of pings that
+	// can be queued as the number of rounds, so that the flood cannot
+	// complete if the server throttles reads at the limit.
+	numRounds := 4 * maxQueuedTransportResponseFrames
 	var roundsWritten int
 	var floodErr error
 	floodDone := make(chan struct{})
@@ -609,7 +639,8 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 
 	// Verify that the server stops reading from the connection before
 	// reading all the frames of the flood, and that it does not queue more
-	// pings than the limit.
+	// pings than the limit, both in the list of queued items and among the
+	// items taken by the writer.
 	for st.controlBuf.trfChan.Load() == nil {
 		select {
 		case <-floodDone:
@@ -624,7 +655,7 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 		t.Fatalf("Flood ended after %d of %d rounds (error: %v) while the server was throttling reads", roundsWritten, numRounds, floodErr)
 	case <-time.After(defaultTestShortTimeout):
 	}
-	if numPings := countQueuedItems[*ping](st.controlBuf); numPings > maxQueuedTransportResponseFrames {
-		t.Fatalf("Number of queued pings = %d, want <= %d", numPings, maxQueuedTransportResponseFrames)
+	if numPings := countQueuedItems[*ping](t, st.controlBuf, wConn); numPings > 2*maxQueuedTransportResponseFrames {
+		t.Fatalf("Number of queued pings = %d, want <= %d", numPings, 2*maxQueuedTransportResponseFrames)
 	}
 }

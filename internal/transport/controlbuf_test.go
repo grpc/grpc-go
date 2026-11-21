@@ -377,20 +377,25 @@ func (s) TestControlBuffer_ThrottleWithTimeout(t *testing.T) {
 		}
 	})
 
-	// Tests that consuming an item that does not count towards the limit
-	// does not stop the throttling, so throttleWithTimeout times out.
-	t.Run("UncountedItemConsumed", func(t *testing.T) {
+	// Tests that the items that the consumer has taken from the list of
+	// queued items, and has not consumed yet, do not count towards the
+	// limit.
+	t.Run("ItemsTakenByConsumer", func(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
-		cb := newControlBuffer(done, clientSide)
-		cb.put(&outgoingWindowUpdate{})
-		for range maxQueuedTransportResponseFrames {
-			cb.put(&ping{ack: true})
-		}
-		// Consume the outgoingWindowUpdate, the first item queued.
+		cb := newThrottledControlBuffer(done)
+		// Consuming an item makes the consumer take all the queued items.
 		if _, err := cb.get(false); err != nil {
 			t.Fatalf("cb.get(false) failed: %v", err)
 		}
+		for range maxQueuedTransportResponseFrames - 1 {
+			cb.put(&ping{ack: true})
+		}
+		// If it blocks instead, it times out with an error.
+		if err := cb.throttleWithTimeout(defaultTestTimeout); err != nil {
+			t.Fatalf("throttleWithTimeout() = %v, want <nil>", err)
+		}
+		cb.put(&ping{ack: true})
 		if err := cb.throttleWithTimeout(defaultTestShortTimeout); err == nil {
 			t.Fatal("throttleWithTimeout() = <nil>, want an error")
 		}
