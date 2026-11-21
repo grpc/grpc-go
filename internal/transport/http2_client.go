@@ -97,10 +97,10 @@ type http2Client struct {
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
 	goAway chan struct{}
-	// gracefulClose is closed by GracefulClose when the transport starts
-	// draining. It wakes NewStream callers that are blocked waiting for
-	// stream quota, so they fail fast instead of waiting for a long-lived
-	// stream to end.
+	// gracefulClose is closed when GracefulClose starts draining or Close
+	// transitions a reachable transport directly to closing. It wakes NewStream
+	// callers that are blocked waiting for stream quota, so they fail fast
+	// instead of waiting for a long-lived stream to end or Close to time out.
 	gracefulClose chan struct{}
 	keepaliveDone chan struct{} // Closed when the keepalive goroutine exits.
 	framer        *framer
@@ -875,6 +875,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 	firstTry := true
 	var ch chan struct{}
 	transportDrainRequired := false
+	var transportClosingErr error
 	checkForStreamQuota := func() bool {
 		if t.streamQuota <= 0 { // Can go negative if server decreases it.
 			if firstTry {
@@ -885,13 +886,19 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 		}
 
 		t.mu.Lock()
-		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
+		if t.state == draining || t.activeStreams == nil || t.nextID > MaxStreamID { // Can be niled from Close().
+			select {
+			case <-t.goAway:
+				transportClosingErr = errStreamDrain
+			default:
+				transportClosingErr = ErrConnClosing
+			}
 			t.mu.Unlock()
 			// The stream is not created, so leave streamQuota untouched.
 			// waitingStreams is left as is too: no more streams will be
-			// created on this transport, so it no longer matters. The caller
-			// is woken by goAway, gracefulClose or the transport context.
-			return false // Don't create a stream if the transport is already closed.
+			// created on this transport, so it no longer matters. Fail fast
+			// instead of returning to select with a nil or already-closed ch.
+			return false // Don't create a stream if the transport is draining, closed, or out of stream IDs.
 		}
 		if !firstTry {
 			t.waitingStreams--
@@ -948,6 +955,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 		}
 		if hdrListSizeErr != nil {
 			return nil, &NewStreamError{Err: hdrListSizeErr}
+		}
+		if transportClosingErr != nil {
+			return nil, &NewStreamError{Err: transportClosingErr, AllowTransparentRetry: true}
 		}
 		firstTry = false
 		select {
@@ -1069,6 +1079,9 @@ func (t *http2Client) Close(err error) {
 	// streams.
 	if t.state != draining {
 		t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo, Err: err})
+		// Since state was reachable (not draining or closing), neither
+		// GracefulClose nor handleGoAway has run, so gracefulClose is still open.
+		close(t.gracefulClose)
 	}
 	t.state = closing
 	streams := t.activeStreams
