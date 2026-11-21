@@ -130,13 +130,13 @@ func (il *itemList[T]) resize(capacity int) {
 }
 
 // maxQueuedTransportResponseFrames is the maximum number of "transport
-// response" frames that we will buffer in the list of a controlBuffer before
-// preventing new reads from occurring on the transport. See
+// response" frames that we will buffer in the producerList of a controlBuffer
+// before preventing new reads from occurring on the transport. See
 // cbItem.isTransportResponseFrame for the items that count towards this
 // limit.
 //
 // It is half of the configured limit, since the frames that the consumer has
-// taken from the list and not processed yet, which can be as many, are not
+// taken from producerList and not processed yet, which can be as many, are not
 // counted.
 var maxQueuedTransportResponseFrames = max(1, int(envconfig.ControlBufferThrottleLimit)/2)
 
@@ -439,9 +439,9 @@ type controlBuffer struct {
 	done     <-chan struct{} // Closed when the transport is done.
 	side     side            // Side of the transport owning this buffer.
 
-	// consumerList holds the control frames that the consumer took from list
-	// in a single critical section, and hasn't returned from get yet. It is
-	// only accessed by the consumer, without holding mu.
+	// consumerList holds the control frames that the consumer took from
+	// producerList in a single critical section, and hasn't returned from get
+	// yet. It is only accessed by the consumer, without holding mu.
 	consumerList itemList[cbItem]
 
 	// Mutex guards all the fields below, except closed and trfChan which can
@@ -449,16 +449,16 @@ type controlBuffer struct {
 	mu              sync.Mutex
 	consumerWaiting bool             // True when readers are blocked waiting for new data.
 	closed          atomic.Bool      // True when the controlbuf is finished.
-	list            itemList[cbItem] // List of queued control frames.
+	producerList    itemList[cbItem] // List of control frames queued by producers.
 
-	// transportResponseFrames counts the number of items queued in list that
-	// represent the response of an action initiated by the peer (as
+	// transportResponseFrames counts the number of items queued in producerList
+	// that represent the response of an action initiated by the peer (as
 	// determined by cbItem.isTransportResponseFrame for this side). The
 	// items in consumerList are not counted.
 	// trfChan is created when transportResponseFrames >=
 	// maxQueuedTransportResponseFrames and is closed and nilled when the
-	// consumer takes the items queued in list. Both fields are protected by
-	// mu.
+	// consumer takes the items queued in producerList. Both fields are
+	// protected by mu.
 	transportResponseFrames int
 	trfChan                 atomic.Pointer[chan struct{}]
 }
@@ -537,7 +537,7 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 		wakeUp = true
 		c.consumerWaiting = false
 	}
-	c.list.enqueue(it)
+	c.producerList.enqueue(it)
 	if it.isTransportResponseFrame(c.side) {
 		c.transportResponseFrames++
 		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
@@ -607,12 +607,12 @@ func (c *controlBuffer) getOnceLocked() (any, error) {
 	if c.closed.Load() {
 		return false, ErrConnClosing
 	}
-	if c.list.isEmpty() {
+	if c.producerList.isEmpty() {
 		return nil, nil
 	}
 	// Take all the queued frames by swapping the two lists. consumerList is
 	// empty here. The frames taken no longer count towards the limit.
-	c.list, c.consumerList = c.consumerList, c.list
+	c.producerList, c.consumerList = c.consumerList, c.producerList
 	if c.transportResponseFrames >= maxQueuedTransportResponseFrames {
 		// We are removing the frames that put us over the threshold;
 		// close and clear the throttling channel.
@@ -654,7 +654,7 @@ func (c *controlBuffer) finish() {
 	// There may be headers for streams in the control buffer.
 	// These streams need to be cleaned out since the transport
 	// is still not aware of these yet.
-	c.list.dequeueAll(discardItem)
+	c.producerList.dequeueAll(discardItem)
 
 	// In case throttle() or throttleWithTimeout() is currently in flight,
 	// it needs to be unblocked. Otherwise, the transport may not close,

@@ -77,7 +77,7 @@ func fakeServerHandshake(conn net.Conn) (*http2.Framer, error) {
 }
 
 // countQueuedItems returns the number of items of type T currently queued in
-// the given control buffer, in both list and consumerList.
+// the given control buffer, in both producerList and consumerList.
 //
 // The consumer goroutine (loopy) accesses consumerList without holding cb.mu,
 // so conn must be the connection loopy writes to, and loopy must be blocked
@@ -96,7 +96,7 @@ func countQueuedItems[T cbItem](t *testing.T, cb *controlBuffer, conn *writeTrac
 	n := 0
 	// The items are stored in ring buffers, starting at index head and
 	// wrapping around to the start of buf past its end.
-	for _, l := range []*itemList[cbItem]{&cb.list, &cb.consumerList} {
+	for _, l := range []*itemList[cbItem]{&cb.producerList, &cb.consumerList} {
 		for i := range l.count {
 			if _, ok := l.buf[(l.head+i)%len(l.buf)].(T); ok {
 				n++
