@@ -157,10 +157,12 @@ type cdsBalancer struct {
 }
 
 // UpdateClientConnState receives the xdsConfig, ClusterSubscriber and the
-// xdsClient object from the xdsResolver. If an error is encountered, the
-// parent (clustermanager) sets the corresponding cluster’s picker to
-// transient_failure. Otherwise, the received configuration is processed and
-// forwarded to the appropriate child policy.
+// xdsClient object from the xdsResolver. If the cluster is missing from the
+// xdsConfig or has an error, the child policy is closed, TRANSIENT_FAILURE is
+// reported with an erroring picker, and the error is returned. For other
+// errors, the parent (clustermanager) sets the corresponding cluster's picker
+// to TRANSIENT_FAILURE. Otherwise, the received configuration is processed
+// and forwarded to the appropriate child policy.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(state.ResolverState)
@@ -222,10 +224,19 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 		if b.lbCfg.IsDynamic {
 			return nil
 		}
-		return b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster %q in XDSConfig", clusterName))
+		err := b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster %q in XDSConfig", clusterName))
+		b.closeChildPolicyAndReportTF(err)
+		return err
 	}
-	// If the cluster resource has an error, return the error.
+	// If the cluster resource has an error, close the child policy so that
+	// connections to the backends are not kept alive, report TRANSIENT_FAILURE,
+	// and return the error. The xDS dependency manager reports an error here
+	// when the cluster resource (or, for an aggregate cluster, any cluster in
+	// its graph) is removed by the management server or is NACKed without a
+	// previous good update, and when the aggregate cluster graph is invalid
+	// (for example, it exceeds the maximum depth or has no leaf clusters).
 	if clusterUpdate.Err != nil {
+		b.closeChildPolicyAndReportTF(clusterUpdate.Err)
 		return clusterUpdate.Err
 	}
 
