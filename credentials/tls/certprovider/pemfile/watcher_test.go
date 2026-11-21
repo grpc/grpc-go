@@ -19,6 +19,7 @@
 package pemfile
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/fileutil"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/testdata"
@@ -616,6 +618,50 @@ func (s) TestProvider_UpdateFailureRoot_MissingFile(t *testing.T) {
 	defer sc()
 	if _, err := distCh.Receive(sCtx); err == nil {
 		t.Fatal("new key material pushed to distributor when underlying files did not change")
+	}
+
+	// The provider should return key material corresponding to the old state.
+	km2, err := prov.KeyMaterial(ctx)
+	if err != nil {
+		t.Fatalf("provider.KeyMaterial() failed: %v", err)
+	}
+	if err := compareKeyMaterial(km1, km2); err != nil {
+		t.Fatalf("expected provider to not update key material: %v", err)
+	}
+}
+
+func (s) TestProvider_UpdateFailureRoot_OversizedFile(t *testing.T) {
+	dir, prov, distCh, cancel := initializeProvider(t, "Oversized root file being read", false)
+	defer cancel()
+
+	// Make sure the provider is healthy and returns key material.
+	ctx, cc := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cc()
+	km1, err := prov.KeyMaterial(ctx)
+	if err != nil {
+		t.Fatalf("provider.KeyMaterial() failed: %v", err)
+	}
+
+	// Replace the root file with one larger than the maximum config file
+	// size. The contents are the valid CA cert repeated, so the file would
+	// still parse if it were read in full; the watcher must reject it on
+	// size alone and keep the old key material.
+	caCert, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile() failed: %v", err)
+	}
+	oversized := bytes.Repeat(caCert, fileutil.MaxConfigFileSize/len(caCert)+2)
+	if err := os.WriteFile(path.Join(dir, rootFile), oversized, os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile() failed: %v", err)
+	}
+
+	// Since the oversized file cannot be read, no update should be pushed.
+	// The window is generous on purpose: parsing an 8 MiB bundle takes
+	// ~600ms, so a short window would miss a late push from unfixed code.
+	sCtx, sc := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer sc()
+	if _, err := distCh.Receive(sCtx); err == nil {
+		t.Fatal("new key material pushed to distributor when the root file exceeded the maximum size")
 	}
 
 	// The provider should return key material corresponding to the old state.

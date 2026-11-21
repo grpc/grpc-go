@@ -24,11 +24,13 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/authz/audit"
+	"google.golang.org/grpc/internal/fileutil"
 )
 
 const (
@@ -124,6 +126,22 @@ func (s) TestNewFileWatcher(t *testing.T) {
 				i.Close()
 			}
 		})
+	}
+}
+
+func (s) TestNewFileWatcher_OversizedPolicyFile(t *testing.T) {
+	// Write the file directly instead of createTmpPolicyFile, which logs
+	// the whole policy contents.
+	dir, err := os.MkdirTemp("", "OversizedPolicyFile")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp() failed: %v", err)
+	}
+	file := path.Join(dir, "policy.json")
+	if err := os.WriteFile(file, make([]byte, fileutil.MaxConfigFileSize+1), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
+	}
+	if _, err := authz.NewFileWatcher(file, time.Second); err == nil || !strings.Contains(err.Error(), "exceeds maximum size") {
+		t.Fatalf("NewFileWatcher() returned err: %v, want err containing %q", err, "exceeds maximum size")
 	}
 }
 

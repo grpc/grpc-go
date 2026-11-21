@@ -29,6 +29,7 @@ import (
 	gcplogging "cloud.google.com/go/logging"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/fileutil"
 )
 
 const envProjectID = "GOOGLE_CLOUD_PROJECT"
@@ -128,7 +129,7 @@ func parseObservabilityConfig() (*config, error) {
 		if envconfig.ObservabilityConfig != "" {
 			logger.Warning("Ignoring GRPC_GCP_OBSERVABILITY_CONFIG and using GRPC_GCP_OBSERVABILITY_CONFIG_FILE contents.")
 		}
-		content, err := os.ReadFile(f)
+		content, err := fileutil.ReadFile(f)
 		if err != nil {
 			return nil, fmt.Errorf("error reading observability configuration file %q: %v", f, err)
 		}

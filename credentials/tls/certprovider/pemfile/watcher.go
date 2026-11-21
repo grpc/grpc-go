@@ -32,13 +32,13 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/credentials/spiffe"
+	"google.golang.org/grpc/internal/fileutil"
 )
 
 const defaultCertRefreshDuration = 1 * time.Hour
@@ -161,12 +161,12 @@ func (w *watcher) updateIdentityDistributor() {
 		return
 	}
 
-	certFileContents, err := os.ReadFile(w.opts.CertFile)
+	certFileContents, err := fileutil.ReadFile(w.opts.CertFile)
 	if err != nil {
 		logger.Warningf("certFile (%s) read failed: %v", w.opts.CertFile, err)
 		return
 	}
-	keyFileContents, err := os.ReadFile(w.opts.KeyFile)
+	keyFileContents, err := fileutil.ReadFile(w.opts.KeyFile)
 	if err != nil {
 		logger.Warningf("keyFile (%s) read failed: %v", w.opts.KeyFile, err)
 		return
@@ -208,7 +208,7 @@ func (w *watcher) updateRootDistributor() {
 }
 
 func (w *watcher) maybeUpdateSPIFFEBundleMap() {
-	spiffeBundleMapContents, err := os.ReadFile(w.opts.SPIFFEBundleMapFile)
+	spiffeBundleMapContents, err := fileutil.ReadFile(w.opts.SPIFFEBundleMapFile)
 	if err != nil {
 		logger.Warningf("spiffeBundleMapFile (%s) read failed: %v", w.opts.SPIFFEBundleMapFile, err)
 		return
@@ -227,7 +227,7 @@ func (w *watcher) maybeUpdateSPIFFEBundleMap() {
 }
 
 func (w *watcher) maybeUpdateRootFile() {
-	rootFileContents, err := os.ReadFile(w.opts.RootFile)
+	rootFileContents, err := fileutil.ReadFile(w.opts.RootFile)
 	if err != nil {
 		logger.Warningf("rootFile (%s) read failed: %v", w.opts.RootFile, err)
 		return
