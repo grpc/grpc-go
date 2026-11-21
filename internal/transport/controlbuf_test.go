@@ -19,12 +19,15 @@
 package transport
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	imem "google.golang.org/grpc/internal/mem"
+	"google.golang.org/grpc/mem"
 )
 
 // TestOutStream_DataQueue verifies that the intrusive queue of data frames in
@@ -564,5 +567,174 @@ func (s) TestControlBuffer_ThrottleStress(t *testing.T) {
 				t.Errorf("Throttling channel is set after consuming all frames, want nil")
 			}
 		})
+	}
+}
+
+// TestControlBuffer_FinishWithConsumerList verifies that after finish() is
+// called from another goroutine while consumerList is non-empty, get() returns
+// ErrConnClosing, and finish() does not touch consumerList.
+func (s) TestControlBuffer_FinishWithConsumerList(t *testing.T) {
+	done := make(chan struct{})
+	defer close(done)
+	cb := newControlBuffer(done, clientSide)
+
+	// Enqueue two items and consume one so consumerList still holds one item.
+	cb.put(&ping{ack: true})
+	cb.put(&ping{ack: true})
+	if it, err := cb.get(false); err != nil || it == nil {
+		t.Fatalf("cb.get(false) = (%v, %v), want non-nil item and nil error", it, err)
+	}
+	if cb.consumerList.isEmpty() {
+		t.Fatal("cb.consumerList is empty after consuming one of two items, want non-empty")
+	}
+
+	// Finish the control buffer from another goroutine.
+	finishDone := make(chan struct{})
+	go func() {
+		close(finishDone)
+		cb.finish()
+	}()
+	select {
+	case <-finishDone:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout waiting for cb.finish() to return")
+	}
+
+	// finish() must not touch consumerList, which is owned by the consumer.
+	if cb.consumerList.isEmpty() {
+		t.Fatal("cb.consumerList is empty after finish(), want remaining item intact")
+	}
+
+	// Both non-blocking and blocking get() must hit the non-empty consumerList
+	// fast path and return ErrConnClosing.
+	for _, block := range []bool{false, true} {
+		if it, err := cb.get(block); err != ErrConnClosing || it != nil {
+			t.Fatalf("cb.get(%v) = (%v, %v), want (nil, %v)", block, it, err, ErrConnClosing)
+		}
+	}
+}
+
+type putTrackingBufferPool struct {
+	mu      sync.Mutex
+	putBufs []*[]byte
+}
+
+func (p *putTrackingBufferPool) Get(length int) *[]byte {
+	b := make([]byte, length)
+	return &b
+}
+
+func (p *putTrackingBufferPool) Put(b *[]byte) {
+	p.mu.Lock()
+	p.putBufs = append(p.putBufs, b)
+	p.mu.Unlock()
+}
+
+// TestLoopyWriter_ShutdownWithConsumerList verifies shutdown behavior when
+// finish() is called from another goroutine while loopy holds a non-empty
+// consumerList batch:
+//   - loopy's next get() returns ErrConnClosing,
+//   - clientHeaders left in consumerList have onOrphaned(ErrConnClosing) called,
+//   - unprocessed dataFrame buffers left in consumerList are freed.
+func (s) TestLoopyWriter_ShutdownWithConsumerList(t *testing.T) {
+	done := make(chan struct{})
+	defer close(done)
+	cb := newControlBuffer(done, clientSide)
+
+	var wire bytes.Buffer
+	fr := newFramer(&wire, defaultWriteBufSize, defaultReadBufSize, false, defaultClientMaxHeaderListSize, mem.DefaultBufferPool())
+	loopy := newLoopyWriter(clientSide, fr, cb, nil, nil, nil, nil, mem.DefaultBufferPool())
+
+	pool := &putTrackingBufferPool{}
+	// Allocate buffers larger than mem's pooling threshold so mem.NewBuffer
+	// tracks them in pool instead of returning an unpooled SliceBuffer.
+	bufSize := imem.BufferPoolingThreshold + 1
+	unprocessedBuf := pool.Get(bufSize)
+	processingBuf := pool.Get(bufSize)
+	processingData := mem.BufferSlice{mem.NewBuffer(processingBuf, pool)}
+	defer processingData.Free()
+
+	inFirstItem := make(chan struct{})
+	finishReturned := make(chan struct{})
+	var orphanedErr error
+	orphanedCalled := false
+
+	// Enqueue all items before starting loopy so its first get(true) swaps the
+	// entire batch into consumerList.
+	if err := cb.put(&clientHeaders{
+		streamID:   1,
+		initStream: func(uint32) error { return nil },
+		onWrite: func() {
+			// Pause loopy while consumerList still holds the remaining items,
+			// so the test goroutine can call finish().
+			close(inFirstItem)
+			<-finishReturned
+		},
+		onOrphaned: func(err error) {
+			t.Errorf("Unexpected onOrphaned(%v) on first clientHeaders", err)
+		},
+	}); err != nil {
+		t.Fatalf("cb.put(first clientHeaders) failed: %v", err)
+	}
+	if err := cb.put(&clientHeaders{
+		streamID:   3,
+		initStream: func(uint32) error { return nil },
+		onOrphaned: func(err error) {
+			orphanedCalled = true
+			orphanedErr = err
+		},
+	}); err != nil {
+		t.Fatalf("cb.put(second clientHeaders) failed: %v", err)
+	}
+	if err := cb.put(&dataFrame{
+		streamID: 1,
+		data:     mem.BufferSlice{mem.NewBuffer(unprocessedBuf, pool)},
+	}); err != nil {
+		t.Fatalf("cb.put(unprocessed dataFrame) failed: %v", err)
+	}
+	if err := cb.put(&dataFrame{
+		streamID:   1,
+		processing: true,
+		data:       processingData,
+	}); err != nil {
+		t.Fatalf("cb.put(processing dataFrame) failed: %v", err)
+	}
+
+	loopyErrCh := make(chan error, 1)
+	go func() {
+		loopyErrCh <- loopy.run()
+	}()
+
+	// Wait until loopy has swapped the batch into consumerList and is handling
+	// the first item, then finish the control buffer from this goroutine.
+	select {
+	case <-inFirstItem:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout waiting for loopy to start handling the first item")
+	}
+	cb.finish()
+	close(finishReturned)
+
+	select {
+	case err := <-loopyErrCh:
+		if err != ErrConnClosing {
+			t.Fatalf("loopy.run() = %v, want %v", err, ErrConnClosing)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout waiting for loopy.run() to exit")
+	}
+
+	if !cb.consumerList.isEmpty() {
+		t.Fatal("cb.consumerList is not empty after loopy exited")
+	}
+	if !orphanedCalled || orphanedErr != ErrConnClosing {
+		t.Fatalf("Second clientHeaders onOrphaned called=%v with err=%v, want called=true with err=%v", orphanedCalled, orphanedErr, ErrConnClosing)
+	}
+
+	pool.mu.Lock()
+	putBufs := append([]*[]byte(nil), pool.putBufs...)
+	pool.mu.Unlock()
+	if len(putBufs) != 1 || putBufs[0] != unprocessedBuf {
+		t.Fatalf("Freed buffers = %v, want only unprocessed buffer %p", putBufs, unprocessedBuf)
 	}
 }
