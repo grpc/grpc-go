@@ -464,3 +464,31 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 	cc.Connect()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
+
+// Tests that calling ExitIdle on the lazy balancer after it has been closed
+// doesn't build the child balancer. This can happen when the idle picker is
+// used concurrently with the lazy balancer being closed.
+func (s) TestExitIdleAfterClose(t *testing.T) {
+	childBuilt := false
+	childBuilder := func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+		childBuilt = true
+		return balancer.Get(pickfirst.Name).Build(cc, opts)
+	}
+	lb := lazy.NewBalancer(testutils.NewBalancerClientConn(t), balancer.BuildOptions{}, childBuilder)
+	ccs := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "localhost:1234"}}},
+			},
+		},
+	}
+	if err := lb.UpdateClientConnState(ccs); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) failed: %v", ccs, err)
+	}
+	lb.Close()
+	lb.ExitIdle()
+
+	if childBuilt {
+		t.Fatal("Child balancer was built after the lazy balancer was closed.")
+	}
+}

@@ -158,7 +158,14 @@ func (b *BinaryTieredBufferPool) Get(size int) *[]byte {
 }
 
 func (b *BinaryTieredBufferPool) poolForGet(size int) bufferPool {
-	if size == 0 || size > b.maxPoolCap {
+	if size == 0 {
+		// A zero-length request needs no pooled storage. Routing it to the
+		// fallback pool would clear the entire capacity of whatever buffer
+		// happens to be pooled there. Match poolForPut, which already
+		// discards zero-capacity buffers via NopBufferPool.
+		return NopBufferPool{}
+	}
+	if size > b.maxPoolCap {
 		return b.fallbackPool
 	}
 

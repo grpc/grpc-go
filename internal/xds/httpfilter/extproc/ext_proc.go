@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
-	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
@@ -258,18 +257,6 @@ type clientFilter struct {
 
 func (*clientFilter) Close() {}
 
-// sharesChannel reports whether two GrpcService configs may share a channel
-// to the external processor server: the same target with the same channel
-// and call credential identities. Timeout and initial metadata are applied
-// per-RPC and do not affect sharing; call credentials do, because Dial
-// attaches them to the channel.
-func sharesChannel(a, b *grpcservice.Config) bool {
-	targetEqual := a.TargetURI == b.TargetURI
-	channelCredsEqual := a.ChannelCredentials.Equal(b.ChannelCredentials)
-	callCredsEqual := slices.EqualFunc(a.CallCredentials, b.CallCredentials, (*xdscreds.CallCreds).Equal)
-	return targetEqual && channelCredsEqual && callCredsEqual
-}
-
 // getProcChannel returns an existing refcounted client for a channel-sharing
 // compatible GrpcService config if present and its refcount is incremented
 // successfully.
@@ -277,7 +264,7 @@ func (cf *clientFilter) getProcChannel(server *grpcservice.Config) *grpcsync.Ref
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
-		return sharesChannel(e.server, server) && e.rc.TryIncrement()
+		return httpfilter.SharesChannel(e.server, server) && e.rc.TryIncrement()
 	}); i != -1 {
 		return cf.procChannels[i].rc
 	}
@@ -292,7 +279,7 @@ func (cf *clientFilter) storeProcChannel(entry *procChannelEntry) *grpcsync.RefC
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
-		return sharesChannel(e.server, entry.server) && e.rc.TryIncrement()
+		return httpfilter.SharesChannel(e.server, entry.server) && e.rc.TryIncrement()
 	}); i != -1 {
 		return cf.procChannels[i].rc
 	}
@@ -429,6 +416,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		metricsRecorder:        i.metricsRecorder,
 		target:                 i.target,
 		clientHeadersStartTime: timeNow(),
+		defaultWindowSize:      iextproc.DefaultFlowControlWindowSize,
 		// Construct request attributes once during stream initialization to capture
 		// the original, unmutated request metadata and RPC info. For streaming
 		// RPCs, where stream creation and message transmission are separable,
@@ -500,8 +488,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		downstreamToSidestreamPositiveUpdateCh: make(chan struct{}, 1),
 		upstreamToSidestreamPositiveUpdateCh:   make(chan struct{}, 1),
 	}
-	cs.downstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
-	cs.upstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
+	cs.downstreamToSidestreamWindow.Store(cs.defaultWindowSize)
+	cs.upstreamToSidestreamWindow.Store(cs.defaultWindowSize)
 
 	// When request header processing is "Send", defer creating the dataplane
 	// stream until the external processor responds, because gRPC transmits
@@ -559,6 +547,7 @@ type commonStream struct {
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
 	clientHeadersStartTime time.Time // holds the start time of client headers processing for metrics and relative timestamp calculations
+	defaultWindowSize      int64     // initial flow control window size captured at stream creation
 
 	// onFinish stores OnFinishCallOption callbacks to execute if calling the
 	// delegate (newStream) fails or if the RPC fails before delegating.
@@ -645,10 +634,10 @@ func (cs *commonStream) newProcessingRequest(isClientMessage bool) *v3procservic
 		}
 		if !cs.config.observabilityMode {
 			req.FlowControlInit = &v3procservicepb.ProcessingRequest_FlowControlInit{
-				InitialWindowDownstreamToSidestream: iextproc.DefaultFlowControlWindowSize,
-				InitialWindowUpstreamToSidestream:   iextproc.DefaultFlowControlWindowSize,
-				InitialWindowSidestreamToUpstream:   iextproc.DefaultFlowControlWindowSize,
-				InitialWindowSidestreamToDownstream: iextproc.DefaultFlowControlWindowSize,
+				InitialWindowDownstreamToSidestream: cs.defaultWindowSize,
+				InitialWindowUpstreamToSidestream:   cs.defaultWindowSize,
+				InitialWindowSidestreamToUpstream:   cs.defaultWindowSize,
+				InitialWindowSidestreamToDownstream: cs.defaultWindowSize,
 			}
 		}
 	}
@@ -775,19 +764,23 @@ func (ocs *observabilityClientStream) Trailer() metadata.MD {
 	return nil
 }
 
+// CloseSend forwards the half-close to the external processor (if request body
+// processing is enabled) and to the dataplane stream. It always returns nil, as
+// required by the grpc.ClientStream contract; any failure is reported by
+// RecvMsg instead.
 func (ocs *observabilityClientStream) CloseSend() error {
-	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
-		return fatalErr
+	if _, ok := ocs.procStreamErr.Load().(error); ok {
+		return nil
 	}
 	startTime := timeNow()
 	if !ocs.procStreamBypass.Load() && ocs.config.processingModes.requestBodyMode == modeSend {
 		if err := ocs.sendToProcessor(ocs.halfClose()); err != nil {
-			return err
+			return nil
 		}
 	}
-	err := ocs.dataplaneStream.CloseSend()
+	ocs.dataplaneStream.CloseSend()
 	ocs.recordMetric(clientHalfCloseDurationMetric, timeSince(startTime).Seconds())
-	return ocs.streamError(err)
+	return nil
 }
 
 func (ocs *observabilityClientStream) Context() context.Context {
@@ -1096,6 +1089,10 @@ func (cs *clientStream) Trailer() metadata.MD {
 	}
 }
 
+// CloseSend forwards the half-close to the external processor, or directly to
+// the dataplane stream if the external processor is bypassed or request body
+// processing is disabled. It always returns nil, as required by the
+// grpc.ClientStream contract; any failure is reported by RecvMsg instead.
 func (cs *clientStream) CloseSend() error {
 	if cs.discardRequests.Load() {
 		return nil
@@ -1107,22 +1104,21 @@ func (cs *clientStream) CloseSend() error {
 
 	s, err := cs.bypassProcStreamForClientMsg()
 	if err != nil {
-		return err
+		return nil
 	}
 	if s != nil {
 		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
-		err = s.CloseSend()
-		return err
+		s.CloseSend()
+		return nil
 	}
 	// If external processor stream is active, client CloseSend is sent to the
 	// processor server as request message with `EndOfStreamWithoutMessage` set.
-	s, err = cs.sendClientReqToProcServer(cs.halfClose())
+	s, _ = cs.sendClientReqToProcServer(cs.halfClose())
 	if s != nil {
 		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
-		err = s.CloseSend()
-		return err
+		s.CloseSend()
 	}
-	return err
+	return nil
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -1176,7 +1172,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 		// standalone processing request with window update and clear the pending
 		// update.
 		if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
-			if cs.pendingRespWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+			if cs.pendingRespWindowUpdate.Add(bodySize) >= cs.defaultWindowSize/2 {
 				if err := cs.sendClientWindowUpdate(); err != nil {
 					return err
 				}
@@ -1456,7 +1452,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			// standalone processing request with window update and clear the pending
 			// update.
 			if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
-				if cs.pendingReqWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+				if cs.pendingReqWindowUpdate.Add(bodySize) >= cs.defaultWindowSize/2 {
 					if err := cs.sendClientWindowUpdate(); err != nil {
 						return
 					}

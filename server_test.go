@@ -28,13 +28,24 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/status"
 )
 
 type emptyServiceServer any
 
 type testServer struct{}
+
+type namedBufferPool struct {
+	mem.BufferPool
+	name string
+}
+
+func (p *namedBufferPool) String() string {
+	return p.name
+}
 
 func errorDesc(err error) string {
 	if s, ok := status.FromError(err); ok {
@@ -173,6 +184,42 @@ func (s) TestStreamContext(t *testing.T) {
 	stream, ok := s.(*transport.ServerStream)
 	if !ok || expectedStream != stream {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, stream, ok, expectedStream)
+	}
+}
+
+// TestServerBufferPool verifies that a server without an explicit pool option
+// uses the default buffer pool in effect when NewServer is called, and that
+// an explicit pool option takes precedence.
+func (s) TestServerBufferPool(t *testing.T) {
+	originalPool := mem.DefaultBufferPool()
+	defaultPool := &namedBufferPool{BufferPool: originalPool, name: "default"}
+	explicitPool := &namedBufferPool{BufferPool: originalPool, name: "explicit"}
+	setPool := internal.SetDefaultBufferPool.(func(mem.BufferPool))
+	t.Cleanup(func() { setPool(originalPool) })
+	setPool(defaultPool)
+
+	for _, test := range []struct {
+		name string
+		opts []ServerOption
+		want mem.BufferPool
+	}{
+		{
+			name: "default",
+			want: defaultPool,
+		},
+		{
+			name: "explicit",
+			opts: []ServerOption{bufferPool(explicitPool)},
+			want: explicitPool,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := NewServer(test.opts...)
+			defer server.Stop()
+			if got := server.opts.bufferPool; got != test.want {
+				t.Errorf("NewServer with %s pool: opts.bufferPool = %v (%T), want %v (%T)", test.name, got, got, test.want, test.want)
+			}
+		})
 	}
 }
 
