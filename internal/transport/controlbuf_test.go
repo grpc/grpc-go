@@ -19,6 +19,8 @@
 package transport
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -435,4 +437,87 @@ func (s) TestControlBuffer_ThrottleWithTimeout(t *testing.T) {
 		cb.finish()
 		waitForNilError(t, errCh)
 	})
+}
+
+// TestControlBuffer_ThrottleStress runs many producers that call throttle()
+// and then put a transport response frame, concurrently with a consumer that
+// drains the control buffer. The throttling limit is set very low so that the
+// number of queued transport response frames crosses it constantly, which
+// exercises producers creating the throttling channel, throttle() waiting on
+// it, and the consumer closing it concurrently. The test fails if a producer
+// gets stuck in throttle(), or if the throttling state doesn't match the
+// number of queued frames once everything has been consumed.
+func (s) TestControlBuffer_ThrottleStress(t *testing.T) {
+	const (
+		numProducers      = 8
+		framesPerProducer = 10000
+	)
+	for _, limit := range []int{1, 2, 4} {
+		t.Run(fmt.Sprintf("limit=%d", limit), func(t *testing.T) {
+			origLimit := maxQueuedTransportResponseFrames
+			maxQueuedTransportResponseFrames = limit
+			defer func() { maxQueuedTransportResponseFrames = origLimit }()
+
+			done := make(chan struct{})
+			closeDone := sync.OnceFunc(func() { close(done) })
+			defer closeDone()
+			cb := newControlBuffer(done, clientSide)
+			it := &ping{ack: true} // A transport response frame.
+
+			var wg sync.WaitGroup
+			for range numProducers {
+				wg.Go(func() {
+					for range framesPerProducer {
+						cb.throttle()
+						if err := cb.put(it); err != nil {
+							return // Only happens if the test timed out.
+						}
+					}
+				})
+			}
+			producersDone := make(chan struct{})
+			go func() {
+				wg.Wait()
+				close(producersDone)
+			}()
+
+			consumerDone := make(chan struct{})
+			go func() {
+				defer close(consumerDone)
+				for range numProducers * framesPerProducer {
+					if _, err := cb.get(true); err != nil {
+						return // Only happens if the test timed out.
+					}
+				}
+			}()
+
+			timer := time.NewTimer(defaultTestTimeout)
+			defer timer.Stop()
+			for _, ch := range []chan struct{}{producersDone, consumerDone} {
+				select {
+				case <-ch:
+				case <-timer.C:
+					cb.mu.Lock()
+					queued := cb.transportResponseFrames
+					cb.mu.Unlock()
+					// Unblock the producers and the consumer before failing.
+					cb.finish()
+					closeDone()
+					<-producersDone
+					<-consumerDone
+					t.Fatalf("Timed out with %d transport response frames queued; producers stuck in throttle()?", queued)
+				}
+			}
+
+			cb.mu.Lock()
+			got := cb.transportResponseFrames
+			cb.mu.Unlock()
+			if got != 0 {
+				t.Errorf("transportResponseFrames = %d after consuming all frames, want 0", got)
+			}
+			if cb.trfChan.Load() != nil {
+				t.Errorf("Throttling channel is set after consuming all frames, want nil")
+			}
+		})
+	}
 }
