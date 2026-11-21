@@ -301,6 +301,12 @@ func constructRequest(ctx context.Context, opts Options) (*http.Request, error) 
 	return req, nil
 }
 
+// maxSTSResponseSize bounds how much of a token exchange HTTP response
+// sendRequest reads into memory. Token responses are small JSON documents,
+// so anything past this is either a misbehaving endpoint or a bad actor
+// trying to exhaust memory.
+const maxSTSResponseSize = 1 << 20 // 1 MiB
+
 func sendRequest(client httpDoer, req *http.Request) ([]byte, error) {
 	// http.Client returns a non-nil error only if it encounters an error
 	// caused by client policy (such as CheckRedirect), or failure to speak
@@ -314,10 +320,13 @@ func sendRequest(client httpDoer, req *http.Request) ([]byte, error) {
 	// When the http.Client returns a non-nil error, it is the
 	// responsibility of the caller to read the response body till an EOF is
 	// encountered and to close it.
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSTSResponseSize+1))
 	resp.Body.Close()
 	if err != nil {
 		return nil, err
+	}
+	if len(body) > maxSTSResponseSize {
+		return nil, fmt.Errorf("STS response exceeds %d bytes", maxSTSResponseSize)
 	}
 
 	if resp.StatusCode == http.StatusOK {

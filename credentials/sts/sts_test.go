@@ -683,6 +683,15 @@ func (s) TestSendRequest(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "oversized response body",
+			resp: &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(strings.Repeat("a", maxSTSResponseSize+1))),
+			},
+			wantErr: true,
+		},
+		{
 			name: "good case",
 			resp: makeGoodResponse(),
 		},
