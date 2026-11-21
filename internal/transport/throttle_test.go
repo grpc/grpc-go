@@ -76,15 +76,16 @@ func fakeServerHandshake(conn net.Conn) (*http2.Framer, error) {
 	return fr, nil
 }
 
-// countQueuedItems returns the number of items of type T currently queued in
-// the given control buffer, in both producerList and consumerList.
+// countQueuedItemsMatching returns the number of items currently queued in the
+// given control buffer, in both producerList and consumerList, for which match
+// returns true.
 //
 // The consumer goroutine (loopy) accesses consumerList without holding cb.mu,
 // so conn must be the connection loopy writes to, and loopy must be blocked
 // writing to it. The test fails otherwise. While the count is taken, conn.mu
 // is held, which keeps loopy from returning from Write, and so from touching
 // consumerList.
-func countQueuedItems[T cbItem](t *testing.T, cb *controlBuffer, conn *writeTrackingConn) int {
+func countQueuedItemsMatching(t *testing.T, cb *controlBuffer, conn *writeTrackingConn, match func(cbItem) bool) int {
 	t.Helper()
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
@@ -98,12 +99,22 @@ func countQueuedItems[T cbItem](t *testing.T, cb *controlBuffer, conn *writeTrac
 	// wrapping around to the start of buf past its end.
 	for _, l := range []*itemList[cbItem]{&cb.producerList, &cb.consumerList} {
 		for i := range l.count {
-			if _, ok := l.buf[(l.head+i)%len(l.buf)].(T); ok {
+			if match(l.buf[(l.head+i)%len(l.buf)]) {
 				n++
 			}
 		}
 	}
 	return n
+}
+
+// countQueuedItems returns the number of items of type T currently queued in
+// the given control buffer, in both producerList and consumerList.
+func countQueuedItems[T cbItem](t *testing.T, cb *controlBuffer, conn *writeTrackingConn) int {
+	t.Helper()
+	return countQueuedItemsMatching(t, cb, conn, func(it cbItem) bool {
+		_, ok := it.(T)
+		return ok
+	})
 }
 
 // newClientTransportOverConn creates a client transport that uses conn as its
@@ -222,8 +233,9 @@ func (s) TestClientTransport_ServerFloodWithoutReading(t *testing.T) {
 			}()
 
 			// Use a small throttle timeout to keep the test fast.
+			wConn := &writeTrackingConn{Conn: cConn}
 			closeErrCh := make(chan error, 1)
-			ct, cleanup := newClientTransportOverConn(ctx, t, cConn, 100*time.Millisecond, func(info GoAwayInfo) {
+			ct, cleanup := newClientTransportOverConn(ctx, t, wConn, 100*time.Millisecond, func(info GoAwayInfo) {
 				select {
 				case closeErrCh <- info.Err:
 				default:
@@ -252,6 +264,17 @@ func (s) TestClientTransport_ServerFloodWithoutReading(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("Timeout when waiting for the client to close the connection")
 			}
+			// Verify that the number of queued items that count towards the
+			// limit never exceeded the limit, across both producerList and
+			// consumerList. Check this before closing sConn unblocks the writer
+			// and discards them.
+			queued := countQueuedItemsMatching(t, ct.controlBuf, wConn, func(it cbItem) bool {
+				return it.isTransportResponseFrame(ct.controlBuf.side)
+			})
+			if queued > 2*maxQueuedTransportResponseFrames {
+				t.Fatalf("Number of queued transport response frames = %d, want <= %d", queued, 2*maxQueuedTransportResponseFrames)
+			}
+
 			// While closing, the client waits for up to
 			// goAwayLoopyWriterTimeout for its writer to write a
 			// GOAWAY frame, which it cannot do since the server is
@@ -265,22 +288,6 @@ func (s) TestClientTransport_ServerFloodWithoutReading(t *testing.T) {
 			}
 			if st := stream.Status(); st.Code() != codes.Unavailable || !strings.Contains(st.Message(), wantErr) {
 				t.Fatalf("Stream status = %v, want code %v and message containing %q", st, codes.Unavailable, wantErr)
-			}
-
-			// Verify that the number of queued items that count
-			// towards the limit never exceeded the limit. The
-			// count is not reset when the control buffer is
-			// finished upon the writer exiting.
-			select {
-			case <-ct.writerDone:
-			case <-ctx.Done():
-				t.Fatal("Timeout when waiting for the client's writer to exit")
-			}
-			ct.controlBuf.mu.Lock()
-			queued := ct.controlBuf.transportResponseFrames
-			ct.controlBuf.mu.Unlock()
-			if queued > maxQueuedTransportResponseFrames {
-				t.Fatalf("Number of queued transport response frames = %d, want <= %d", queued, maxQueuedTransportResponseFrames)
 			}
 		})
 	}

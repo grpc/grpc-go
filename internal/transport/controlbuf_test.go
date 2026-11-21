@@ -403,6 +403,51 @@ func (s) TestControlBuffer_ThrottleWithTimeout(t *testing.T) {
 		}
 	})
 
+	// Tests that consuming counted frames already in the consumer's batch
+	// does not lift throttling, and that throttling is lifted only when the
+	// batch is drained and the next get swaps in producerList.
+	t.Run("ThrottlingLiftedOnNextSwap", func(t *testing.T) {
+		done := make(chan struct{})
+		defer close(done)
+		cb := newControlBuffer(done, clientSide)
+
+		// Put a batch of counted frames and take it into consumerList by
+		// consuming the first frame.
+		const batchSize = 3
+		for range batchSize {
+			cb.put(&ping{ack: true})
+		}
+		if it, err := cb.get(false); err != nil || it == nil {
+			t.Fatalf("cb.get(false) = (%v, %v), want non-nil item and nil error", it, err)
+		}
+
+		// Fill producerList to the limit so the control buffer is throttled.
+		for range maxQueuedTransportResponseFrames {
+			cb.put(&ping{ack: true})
+		}
+		errCh := ensureThrottleWithTimeoutBlocks(t, cb)
+
+		// Consuming the remaining counted frames from consumerList does not
+		// swap producerList, so throttling must remain active.
+		for range batchSize - 1 {
+			if it, err := cb.get(false); err != nil || it == nil {
+				t.Fatalf("cb.get(false) = (%v, %v), want non-nil item and nil error", it, err)
+			}
+		}
+		select {
+		case err := <-errCh:
+			t.Fatalf("throttleWithTimeout() = %v while draining consumerList, want it to remain blocked", err)
+		case <-time.After(defaultTestShortTimeout):
+		}
+
+		// consumerList is now empty, so the next get swaps in producerList and
+		// lifts throttling.
+		if it, err := cb.get(false); err != nil || it == nil {
+			t.Fatalf("cb.get(false) = (%v, %v), want non-nil item and nil error", it, err)
+		}
+		waitForNilError(t, errCh)
+	})
+
 	// Tests that throttleWithTimeout returns nil when an item that counts
 	// towards the limit is consumed, which stops the throttling.
 	t.Run("CountedItemConsumed", func(t *testing.T) {

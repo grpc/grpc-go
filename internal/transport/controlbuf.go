@@ -579,14 +579,28 @@ func (c *controlBuffer) get(block bool) (any, error) {
 	}
 	for {
 		c.mu.Lock()
-		frame, err := c.getOnceLocked()
-		if frame != nil || err != nil || !block {
-			// If we read a frame or an error, we can return to the caller. The
-			// call to getOnceLocked() returns a nil frame and a nil error if
-			// there is nothing to read, and in that case, if the caller asked
-			// us not to block, we can return now as well.
+		if c.closed.Load() {
 			c.mu.Unlock()
-			return frame, err
+			return nil, ErrConnClosing
+		}
+		if !c.producerList.isEmpty() {
+			// Take all the queued frames by swapping the two lists.
+			// consumerList is empty here. The frames taken no longer count
+			// towards the limit.
+			c.producerList, c.consumerList = c.consumerList, c.producerList
+			if c.transportResponseFrames >= maxQueuedTransportResponseFrames {
+				// We are removing the frames that put us over the threshold;
+				// close and clear the throttling channel.
+				ch := c.trfChan.Swap(nil)
+				close(*ch)
+			}
+			c.transportResponseFrames = 0
+			c.mu.Unlock()
+			return c.consumerList.dequeue(), nil
+		}
+		if !block {
+			c.mu.Unlock()
+			return nil, nil
 		}
 		c.consumerWaiting = true
 		c.mu.Unlock()
@@ -598,29 +612,6 @@ func (c *controlBuffer) get(block bool) (any, error) {
 			return nil, errors.New("transport closed by client")
 		}
 	}
-}
-
-// Callers must not use this method, but should instead use get().
-//
-// Caller must hold c.mu.
-func (c *controlBuffer) getOnceLocked() (any, error) {
-	if c.closed.Load() {
-		return false, ErrConnClosing
-	}
-	if c.producerList.isEmpty() {
-		return nil, nil
-	}
-	// Take all the queued frames by swapping the two lists. consumerList is
-	// empty here. The frames taken no longer count towards the limit.
-	c.producerList, c.consumerList = c.consumerList, c.producerList
-	if c.transportResponseFrames >= maxQueuedTransportResponseFrames {
-		// We are removing the frames that put us over the threshold;
-		// close and clear the throttling channel.
-		ch := c.trfChan.Swap(nil)
-		close(*ch)
-	}
-	c.transportResponseFrames = 0
-	return c.consumerList.dequeue(), nil
 }
 
 // discardItem releases the resources held by a control frame that will not be

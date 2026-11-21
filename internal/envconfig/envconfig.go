@@ -133,8 +133,9 @@ var (
 	Enable8KBDefaultHeaderListSize = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE", false)
 
 	// ControlBufferThrottleLimit is the maximum number of control frames that can
-	// be queued in the control buffer before throttling is applied. The value
-	// must be between 1 and 100,000, and is set to 10,000 by default.
+	// be queued in the control buffer before throttling is applied. Throttling
+	// may begin once half of this limit is queued. The value must be between 1
+	// and 100,000, and is set to 10,000 by default.
 	//
 	// This environment variable serves as an escape hatch to increase the
 	// throttling limit if unforeseen issues arise, and it will be removed in a
