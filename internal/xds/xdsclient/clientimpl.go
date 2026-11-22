@@ -134,7 +134,7 @@ func (mr *metricsReporter) ReportMetric(metric any) {
 	}
 }
 
-func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout time.Duration) (*clientImpl, error) {
+func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout, minLoadReportingInterval time.Duration) (*clientImpl, error) {
 	gConfig, err := BuildXDSClientConfig(config, metricsRecorder, target, watchExpiryTimeout)
 	if err != nil {
 		return nil, err
@@ -144,8 +144,9 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 		return nil, err
 	}
 	lrsC, err := lrsclient.New(lrsclient.Config{
-		Node:             gConfig.Node,
-		TransportBuilder: gConfig.TransportBuilder,
+		Node:                     gConfig.Node,
+		TransportBuilder:         gConfig.TransportBuilder,
+		MinLoadReportingInterval: minLoadReportingInterval,
 	})
 	if err != nil {
 		return nil, err

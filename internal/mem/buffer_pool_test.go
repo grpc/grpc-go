@@ -18,7 +18,9 @@
 
 package mem
 
-import "testing"
+import (
+	"testing"
+)
 
 var defaultBufferPoolSizeExponents = []uint8{
 	8,
@@ -126,5 +128,23 @@ func TestNewBinaryTieredBufferPool_Duplicates(t *testing.T) {
 	}
 	if len(pool.sizedPools) != 6 {
 		t.Errorf("sized buffer pool count = %d, want %d", len(pool.sizedPools), 6)
+	}
+}
+
+// TestBinaryTieredBufferPool_GetZero verifies that a zero-length request does
+// not route to the fallback pool. The fallback clears the entire capacity of
+// the buffer it holds, so after a large buffer was pooled there, Get(0) would
+// pay to clear it.
+func TestBinaryTieredBufferPool_GetZero(t *testing.T) {
+	pool, err := NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
+	if err != nil {
+		t.Fatalf("NewBinaryTieredBufferPool() error = %v", err)
+	}
+
+	// Routing check: poolForGet(0) must be the no-op pool, matching
+	// poolForPut, which already discards zero-capacity buffers via
+	// NopBufferPool.
+	if _, ok := pool.poolForGet(0).(NopBufferPool); !ok {
+		t.Errorf("poolForGet(0) = %T, want NopBufferPool", pool.poolForGet(0))
 	}
 }

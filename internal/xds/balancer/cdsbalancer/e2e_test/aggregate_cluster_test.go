@@ -1339,8 +1339,33 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cc, cleanup := setupAndDial(t, bootstrapContents)
-	defer cleanup()
+	// Create an xDS client talking to the above management server, configured
+	// with a short minimum load reporting interval, to quickly receive load
+	// reports.
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsClient, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name:                     t.Name(),
+		MinLoadReportingInterval: defaultTestMinLoadReportingInterval,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
+	}
+	defer xdsClose()
+
+	r, err := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))(xdsClient)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	cc.Connect()
 
 	client := testgrpc.NewTestServiceClient(cc)
 

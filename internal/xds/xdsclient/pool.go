@@ -70,6 +70,11 @@ type OptionsForTesting struct {
 	// If unspecified, uses the default value used in non-test code.
 	StreamBackoffAfterFailure func(int) time.Duration
 
+	// MinLoadReportingInterval is the lower bound on the interval at which
+	// load reports are sent to the LRS server. If unspecified, uses the
+	// default value used in non-test code.
+	MinLoadReportingInterval time.Duration
+
 	// MetricsRecorder is the metrics recorder the xDS Client will use. If
 	// unspecified, uses a no-op MetricsRecorder.
 	MetricsRecorder estats.MetricsRecorder
@@ -104,7 +109,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClientWithConfig(name string, metricsRecorder estats.MetricsRecorder, config *bootstrap.Config) (XDSClient, func(), error) {
-	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, config)
+	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, 0, config)
 }
 
 // NewClient returns an xDS client with the given name from the pool. If the
@@ -115,7 +120,7 @@ func (p *Pool) NewClientWithConfig(name string, metricsRecorder estats.MetricsRe
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, nil)
+	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, 0, nil)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -142,7 +147,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.WatchExpiryTimeout, opts.Config)
+	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.WatchExpiryTimeout, opts.MinLoadReportingInterval, opts.Config)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -277,7 +282,10 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, watchExpiryTimeout time.Duration, bConfig *bootstrap.Config) (*clientImpl, func(), error) {
+//
+// A minLoadReportingInterval of zero results in the LRS client using its
+// default.
+func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, watchExpiryTimeout, minLoadReportingInterval time.Duration, bConfig *bootstrap.Config) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -305,7 +313,7 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 		return nil, nil, fmt.Errorf("failed to read xDS bootstrap config from env vars: bootstrap environment variables (%q or %q) not defined and fallback config not set", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
 	}
 
-	c, err := newClientImpl(config, metricsRecorder, name, watchExpiryTimeout)
+	c, err := newClientImpl(config, metricsRecorder, name, watchExpiryTimeout, minLoadReportingInterval)
 	if err != nil {
 		return nil, nil, err
 	}

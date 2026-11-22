@@ -244,7 +244,7 @@ type xdsResolver struct {
 	// i.e ResolveNow() and Close(), are guaranteed to execute in the context of
 	// this serializer's callback. We use the serializer because these shared
 	// states are accessed by each RPC when it is committed, and so
-	// serializer is preffered over a mutex.
+	// serializer is preferred over a mutex.
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 

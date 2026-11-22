@@ -25,6 +25,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -55,6 +56,11 @@ import (
 const (
 	testKey1 = "test-key1"
 	testKey2 = "test-key2"
+
+	// The LRS client clamps the load reporting interval sent by the server to
+	// a minimum of 1s by default. Tests lower the minimum, to be able to use
+	// short load reporting intervals.
+	defaultTestMinLoadReportingInterval = time.Millisecond
 )
 
 var (
@@ -80,6 +86,28 @@ func (wl *wrappedListener) Accept() (net.Conn, error) {
 	}
 	wl.newConnChan.Send(struct{}{})
 	return c, err
+}
+
+// createXDSClientForLoadReporting creates an xDS client with the given
+// bootstrap contents, which allows the LRS server to request short load
+// reporting intervals.
+func createXDSClientForLoadReporting(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
+	t.Helper()
+
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name:                     t.Name(),
+		MinLoadReportingInterval: defaultTestMinLoadReportingInterval,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(close)
+	return client
 }
 
 // Tests a load reporting scenario where the xDS client is reporting loads to
@@ -143,7 +171,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	client := createXDSClient(t, bc)
+	client := createXDSClientForLoadReporting(t, bc)
 
 	serverCfg1, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer1.Address})
 	if err != nil {
@@ -281,7 +309,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	client := createXDSClient(t, bc)
+	client := createXDSClientForLoadReporting(t, bc)
 
 	// Call the load reporting API, and ensure that an LRS stream is created.
 	serverConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
