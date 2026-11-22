@@ -5418,7 +5418,7 @@ func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T
 }
 
 // TestFlowControl_DownstreamToSidestream_BypassUnblocks tests the scenario
-// where bypass (RequestDrain) is triggered while a downstream send is blocked
+// where bypass is triggered while a downstream send is blocked
 // on window depletion. Verifies that the blocked send immediately unblocks and
 // subsequent messages bypass the external processor directly to the data plane
 // server.
@@ -5453,7 +5453,7 @@ func (s) TestFlowControl_DownstreamToSidestream_BypassUnblocks(t *testing.T) {
 			return err
 		}
 
-		// Wait for signal to trigger bypass via RequestDrain: true
+		// Wait for signal to trigger bypass via RequestDrainRequests: true
 		<-sendDrain
 		if err := stream.Send(&v3procservicepb.ProcessingResponse{RequestDrainRequests: true}); err != nil {
 			return err
@@ -6163,7 +6163,7 @@ func (s) TestFlowControl_UpstreamToSidestream_PartialWindowUpdate(t *testing.T) 
 }
 
 // TestFlowControl_UpstreamToSidestream_BypassUnblocks tests the scenario
-// where flow control bypass (RequestDrain) is triggered while server response
+// where flow control bypass is triggered while server response
 // forwarding is blocked on upstream to sidestream window depletion. Verifies
 // that the blocked response immediately unblocks and bypasses the external
 // processor to the downstream client.
@@ -6198,7 +6198,7 @@ func (s) TestFlowControl_UpstreamToSidestream_BypassUnblocks(t *testing.T) {
 			return err
 		}
 
-		// Wait for signal to trigger bypass via RequestDrain: true.
+		// Wait for signal to trigger bypass via RequestDrainResponses: true.
 		<-sendDrain
 		if err := stream.Send(&v3procservicepb.ProcessingResponse{RequestDrainResponses: true}); err != nil {
 			return err
