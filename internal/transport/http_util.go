@@ -36,7 +36,6 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/envconfig"
 	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/transport/readyreader"
 	"google.golang.org/grpc/mem"
@@ -428,11 +427,9 @@ func bufferedReader(r io.Reader, bufSize int) io.Reader {
 	if bufSize <= 0 {
 		return r
 	}
-	if envconfig.EnableHTTPFramerReadBufferPooling {
-		if rr := readyreader.NewNonBlocking(r); rr != nil {
-			readPool := ioBufferPool(bufSize)
-			return readyreader.NewBuffered(rr, bufSize, readPool)
-		}
+	if rr := readyreader.NewNonBlocking(r); rr != nil {
+		readPool := ioBufferPool(bufSize)
+		return readyreader.NewBuffered(rr, bufSize, readPool)
 	}
 	return bufio.NewReaderSize(r, bufSize)
 }

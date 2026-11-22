@@ -50,7 +50,7 @@ func equalApproximate(a, b float64) error {
 	return nil
 }
 
-func testWRRNext(t *testing.T, newWRR func() WRR) {
+func (s) TestRandomWRRNext(t *testing.T) {
 	tests := []struct {
 		name    string
 		weights []int64
@@ -78,7 +78,7 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := newWRR()
+			w := NewRandom()
 			if len(tt.weights) == 0 {
 				if next := w.Next(); next != nil {
 					t.Fatalf("w.Next returns non nil value:%v when there is no item", next)
@@ -113,14 +113,6 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 			}
 		})
 	}
-}
-
-func (s) TestRandomWRRNext(t *testing.T) {
-	testWRRNext(t, NewRandom)
-}
-
-func (s) TestEdfWrrNext(t *testing.T) {
-	testWRRNext(t, NewEDF)
 }
 
 func BenchmarkRandomWRRNext(b *testing.B) {

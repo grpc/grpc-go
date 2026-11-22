@@ -99,10 +99,31 @@ func (s *Stream) readTo(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// waitForPendingData polls the stream's inbound flow control every millisecond
+// until it reports n bytes of received but unread data. A stream can't receive
+// more than its window until the application reads, so pending data equal to
+// the window means the sender is blocked on stream-level flow control.
+func (s *Stream) waitForPendingData(ctx context.Context, n uint32) error {
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		s.fc.mu.Lock()
+		pending := s.fc.pendingData
+		s.fc.mu.Unlock()
+		if pending == n {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for %d bytes of pending data, got %d: %v", n, pending, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 type testStreamHandler struct {
-	t           *http2Server
-	notify      chan struct{}
-	getNotified chan struct{}
+	t      *http2Server
+	notify chan struct{}
 }
 
 type hType int
@@ -285,50 +306,14 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *ServerStream)
 		req = expectedRequestLarge
 		resp = expectedResponseLarge
 	}
-	var (
-		mu    sync.Mutex
-		total int
-	)
-	s.wq.replenish = func(n int) {
-		mu.Lock()
-		total += n
-		mu.Unlock()
-		s.wq.realReplenish(n)
-	}
-	getTotal := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return total
-	}
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		for {
-			select {
-			// Prevent goroutine from leaking.
-			case <-done:
-				return
-			default:
-			}
-			if getTotal() == defaultWindowSize {
-				// Signal the client to start reading and
-				// thereby send window update.
-				close(h.notify)
-				return
-			}
-			runtime.Gosched()
-		}
-	}()
 	p := make([]byte, len(req))
 
 	// Let the other side run out of stream-level window before
 	// starting to read and thereby sending a window update.
-	timer := time.NewTimer(time.Second * 10)
-	select {
-	case <-h.getNotified:
-		timer.Stop()
-	case <-timer.C:
-		t.Errorf("Server timed-out.")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := s.waitForPendingData(ctx, defaultWindowSize); err != nil {
+		t.Errorf("Server: %v", err)
 		return
 	}
 	_, err := s.readTo(p)
@@ -348,9 +333,7 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *ServerStream)
 		t.Errorf("server Write got %v, want <nil>", err)
 		return
 	}
-	// Read one more time to ensure that everything remains fine and
-	// that the goroutine, that we launched earlier to signal client
-	// to read, gets enough time to process.
+	// Read one more time to ensure that everything remains fine.
 	_, err = s.readTo(p)
 	if err != nil {
 		t.Errorf("s.Read(_) = _, %v, want _, nil", err)
@@ -510,8 +493,6 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 				wg.Done()
 			}()
 		case delayRead:
-			h.notify = make(chan struct{})
-			h.getNotified = make(chan struct{})
 			s.mu.Lock()
 			close(s.ready)
 			s.mu.Unlock()
@@ -792,7 +773,7 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 // as a protocol error and preserves maxStreamID.
 func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
 	serverTransport := &http2Server{
-		controlBuf: newControlBuffer(make(<-chan struct{}), true),
+		controlBuf: newControlBuffer(make(<-chan struct{}), serverSide),
 	}
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -990,9 +971,6 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	defer cancel()
 	defer server.stop()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
-	server.mu.Lock()
-	ready := server.ready
-	server.mu.Unlock()
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -1004,49 +982,6 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 		t.Fatalf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 		return
 	}
-	// Wait for server's handler to be initialized
-	select {
-	case <-ready:
-	case <-ctx.Done():
-		t.Fatalf("Client timed out waiting for server handler to be initialized.")
-	}
-	server.mu.Lock()
-	serviceHandler := server.h
-	server.mu.Unlock()
-	var (
-		mu    sync.Mutex
-		total int
-	)
-	s.wq.replenish = func(n int) {
-		mu.Lock()
-		total += n
-		mu.Unlock()
-		s.wq.realReplenish(n)
-	}
-	getTotal := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return total
-	}
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		for {
-			select {
-			// Prevent goroutine from leaking in case of error.
-			case <-done:
-				return
-			default:
-			}
-			if getTotal() == defaultWindowSize {
-				// unblock server to be able to read and
-				// thereby send stream level window update.
-				close(serviceHandler.getNotified)
-				return
-			}
-			runtime.Gosched()
-		}
-	}()
 	// This write will cause client to run out of stream level,
 	// flow control and the other side won't send a window update
 	// until that happens.
@@ -1057,10 +992,8 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 
 	// Wait for the other side to run out of stream level flow control before
 	// reading and thereby sending a window update.
-	select {
-	case <-serviceHandler.notify:
-	case <-ctx.Done():
-		t.Fatalf("Client timed out")
+	if err := s.waitForPendingData(ctx, defaultWindowSize); err != nil {
+		t.Fatalf("Client: %v", err)
 	}
 	if _, err := s.readTo(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
 		t.Fatalf("s.Read(_) = _, %v, want _, <nil>", err)
@@ -2919,7 +2852,7 @@ func newTestHTTP2Client(cs *ClientStream) *http2Client {
 		activeStreams: map[uint32]*ClientStream{
 			1: cs,
 		},
-		controlBuf: newControlBuffer(make(<-chan struct{}), false),
+		controlBuf: newControlBuffer(make(<-chan struct{}), clientSide),
 	}
 }
 
@@ -4083,7 +4016,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			activeStreams: map[uint32]*ClientStream{
 				0: ts,
 			},
-			controlBuf: newControlBuffer(make(<-chan struct{}), false),
+			controlBuf: newControlBuffer(make(<-chan struct{}), clientSide),
 		}
 	}
 

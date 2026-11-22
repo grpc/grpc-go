@@ -67,6 +67,87 @@ func Test(t *testing.T) {
 
 var logger = grpclog.Component("endpoint-sharding-test")
 
+// TestEndpointShardingIgnoreEmptyEndpoints verifies that empty endpoints
+// do not affect round robin RPCs or prevent TransientFailure after all backends
+// stop.
+func (s) TestEndpointShardingIgnoreEmptyEndpoints(t *testing.T) {
+	backend1 := stubserver.StartTestService(t, nil)
+	t.Cleanup(backend1.Stop)
+	backend2 := stubserver.StartTestService(t, nil)
+	t.Cleanup(backend2.Stop)
+	cc, _ := newEndpointShardingClient(t, []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: backend1.Address}}},
+		{},
+		{Addresses: []resolver.Address{{Addr: backend2.Address}}},
+		{Addresses: []resolver.Address{}},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: backend1.Address}, {Addr: backend2.Address}}); err != nil {
+		t.Fatalf("CheckRoundRobinRPCs() failed: %v", err)
+	}
+	backend1.Stop()
+	backend2.Stop()
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+}
+
+// TestEndpointShardingUpdateToAllEmptyEndpoints verifies that an update with
+// only empty endpoints returns ErrBadResolverState and makes RPCs fail with
+// Unavailable after the channel enters TransientFailure.
+func (s) TestEndpointShardingUpdateToAllEmptyEndpoints(t *testing.T) {
+	backend := stubserver.StartTestService(t, nil)
+	t.Cleanup(backend.Stop)
+	cc, mr := newEndpointShardingClient(t, []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: backend.Address}}},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("Initial EmptyCall() failed: %v", err)
+	}
+	state := resolver.State{
+		Endpoints: []resolver.Endpoint{{}, {Addresses: []resolver.Address{}}},
+	}
+	if err := mr.CC().UpdateState(state); err != balancer.ErrBadResolverState {
+		t.Fatalf("UpdateState() returned %v, want %v", err, balancer.ErrBadResolverState)
+	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() returned error %v, want code %v", err, codes.Unavailable)
+	}
+}
+
+func newEndpointShardingClient(t *testing.T, endpoints []resolver.Endpoint) (*grpc.ClientConn, *manual.Resolver) {
+	t.Helper()
+	name := t.Name()
+	balancer.Register(endpointShardingTestBalancerBuilder{name: name})
+	mr := manual.NewBuilderWithScheme("e2e-test")
+	t.Cleanup(mr.Close)
+	mr.InitialState(resolver.State{Endpoints: endpoints})
+	cc, err := grpc.NewClient(mr.Scheme()+":///",
+		grpc.WithResolvers(mr),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{%q:{}}]}`, name)),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create new client: %v", err)
+	}
+	t.Cleanup(func() { cc.Close() })
+	return cc, mr
+}
+
+type endpointShardingTestBalancerBuilder struct {
+	name string
+}
+
+func (b endpointShardingTestBalancerBuilder) Name() string { return b.name }
+
+func (endpointShardingTestBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return endpointsharding.NewBalancer(cc, opts, balancer.Get(pickfirst.Name).Build, endpointsharding.Options{})
+}
+
 func init() {
 	balancer.Register(fakePetioleBuilder{})
 }

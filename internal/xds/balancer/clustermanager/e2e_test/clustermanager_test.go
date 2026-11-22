@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/hierarchy"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -372,28 +371,50 @@ func (s) TestConfigUpdate_NewClusterNotUsedBeforePickerUpdate(t *testing.T) {
 	backend2 := stubserver.StartTestService(t, nil)
 	defer backend2.Stop()
 
-	// Register a child policy that wraps pick_first and blocks in
-	// UpdateClientConnState until the test unblocks it.
-	const blockingPolicyName = "blocking_pick_first_new_cluster_not_used_before_picker_update"
+	// Register a child policy that wraps pick_first and connects to the backend
+	// specified in its LB config. The cluster_manager forwards the same
+	// endpoints to all its children, so the backend for each child is
+	// specified in the service config instead. If blockUpdates is set, the
+	// policy blocks in UpdateClientConnState until the test unblocks it.
+	type fixedBackendConfig struct {
+		serviceconfig.LoadBalancingConfig
+		Backend      string `json:"backend"`
+		BlockUpdates bool   `json:"blockUpdates"`
+	}
+	const childPolicyName = "fixed_backend_pick_first_new_cluster_not_used_before_picker_update"
 	pfBuilder := balancer.Get(pickfirst.Name)
 	updateReceived := make(chan struct{}, 1)
 	unblockCh := make(chan struct{})
 	var unblockOnce sync.Once
 	unblock := func() { unblockOnce.Do(func() { close(unblockCh) }) }
-	stub.Register(blockingPolicyName, stub.BalancerFuncs{
+	stub.Register(childPolicyName, stub.BalancerFuncs{
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+			cfg := &fixedBackendConfig{}
+			if err := json.Unmarshal(lbCfg, cfg); err != nil {
+				return nil, err
+			}
+			return cfg, nil
 		},
 		Init: func(bd *stub.BalancerData) {
 			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			select {
-			case updateReceived <- struct{}{}:
-			default:
+			cfg, ok := ccs.BalancerConfig.(*fixedBackendConfig)
+			if !ok {
+				return fmt.Errorf("unexpected balancer config with type: %T", ccs.BalancerConfig)
 			}
-			<-unblockCh
-			return bd.ChildBalancer.UpdateClientConnState(ccs)
+			if cfg.BlockUpdates {
+				select {
+				case updateReceived <- struct{}{}:
+				default:
+				}
+				<-unblockCh
+			}
+			return bd.ChildBalancer.UpdateClientConnState(balancer.ClientConnState{
+				ResolverState: resolver.State{
+					Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: cfg.Backend}}}},
+				},
+			})
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.ExitIdle()
@@ -407,10 +428,6 @@ func (s) TestConfigUpdate_NewClusterNotUsedBeforePickerUpdate(t *testing.T) {
 		cluster1 = "cluster1"
 		cluster2 = "cluster2"
 	)
-	endpoints := []resolver.Endpoint{
-		hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: backend1.Address}}}, []string{cluster1}),
-		hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: backend2.Address}}}, []string{cluster2}),
-	}
 	parseSC := func(sc string) *serviceconfig.ParseResult {
 		t.Helper()
 		pr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(sc)
@@ -419,20 +436,21 @@ func (s) TestConfigUpdate_NewClusterNotUsedBeforePickerUpdate(t *testing.T) {
 		}
 		return pr
 	}
+	cluster1Child := fmt.Sprintf(`{"childPolicy": [{%q: {"backend": %q}}]}`, childPolicyName, backend1.Address)
+	cluster2Child := fmt.Sprintf(`{"childPolicy": [{%q: {"backend": %q, "blockUpdates": true}}]}`, childPolicyName, backend2.Address)
 
 	// Initial state: only cluster1 exists and all RPCs are routed to it.
 	sc1 := parseSC(fmt.Sprintf(`{
   "loadBalancingConfig": [{
     "xds_cluster_manager_experimental": {
       "children": {
-        %q: {"childPolicy": [{"pick_first": {}}]}
+        %q: %s
       }
     }
   }]
-}`, cluster1))
+}`, cluster1, cluster1Child))
 	r := manual.NewBuilderWithScheme("cluster-manager-e2e")
 	r.InitialState(iresolver.SetConfigSelector(resolver.State{
-		Endpoints:     endpoints,
 		ServiceConfig: sc1,
 	}, &fixedClusterConfigSelector{cluster: cluster1}))
 
@@ -459,16 +477,15 @@ func (s) TestConfigUpdate_NewClusterNotUsedBeforePickerUpdate(t *testing.T) {
   "loadBalancingConfig": [{
     "xds_cluster_manager_experimental": {
       "children": {
-        %q: {"childPolicy": [{"pick_first": {}}]},
-        %q: {"childPolicy": [{%q: {}}]}
+        %q: %s,
+        %q: %s
       }
     }
   }]
-}`, cluster1, cluster2, blockingPolicyName))
+}`, cluster1, cluster1Child, cluster2, cluster2Child))
 	updateDone := make(chan struct{})
 	go func() {
 		r.UpdateState(iresolver.SetConfigSelector(resolver.State{
-			Endpoints:     endpoints,
 			ServiceConfig: sc2,
 		}, &fixedClusterConfigSelector{cluster: cluster2}))
 		close(updateDone)
