@@ -1144,6 +1144,11 @@ func (s) TestHeaderAfterContextCancelTrailersOnly(t *testing.T) {
 	if headerMetadata, err := stream.Header(); err != nil || headerMetadata != nil {
 		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
 	}
+
+	// Verify response trailers were received from backend.
+	if trailerMetadata := stream.Trailer(); trailerMetadata == nil {
+		t.Fatalf("stream.Trailer() = nil, want metadata")
+	}
 }
 
 // TestDraining tests the scenario where the processor server signals
