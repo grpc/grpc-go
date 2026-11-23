@@ -625,6 +625,29 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if len(res) != 1 || !bytes.Equal(res[0], []byte("56789")) {
 					t.Fatalf("Peek(5) after Reset = %v, want [[56789]]", res)
 				}
+				r.Reset(nil)
+				if r.Remaining() != 0 {
+					t.Fatalf("Remaining() after Reset(nil) = %v, want 0", r.Remaining())
+				}
+				if _, err := r.ReadByte(); err != io.EOF {
+					t.Fatalf("ReadByte() after Reset(nil) returned error %v, want %v", err, io.EOF)
+				}
+			},
+		},
+		{
+			name:    "empty_buffers",
+			buffers: [][]byte{nil, []byte("01"), nil, nil, []byte("2"), nil},
+			operations: func(t *testing.T, r *mem.Reader) {
+				if b, err := r.ReadByte(); b != '0' || err != nil {
+					t.Fatalf("ReadByte() = (%q, %v), want ('0', <nil>)", b, err)
+				}
+				buf := make([]byte, 4)
+				if n, err := r.Read(buf); string(buf[:n]) != "12" || err != nil {
+					t.Fatalf("Read() = (%q, %v), want (\"12\", <nil>)", buf[:n], err)
+				}
+				if _, err := r.ReadByte(); err != io.EOF {
+					t.Fatalf("ReadByte() at the end returned error %v, want %v", err, io.EOF)
+				}
 			},
 		},
 		{
