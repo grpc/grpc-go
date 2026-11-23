@@ -185,7 +185,7 @@ func (r *Reader) Read(buf []byte) (n int, _ error) {
 
 // ReadByte reads a single byte.
 func (r *Reader) ReadByte() (byte, error) {
-	if r.len == 0 {
+	if len(r.cur) == 0 {
 		return 0, io.EOF
 	}
 
@@ -197,26 +197,28 @@ func (r *Reader) ReadByte() (byte, error) {
 // fill sets cur to the data of the first non-empty buffer and frees the empty
 // buffers before it.
 func (r *Reader) fill() {
-	r.cur = nil
-	// There may be any number of empty buffers in the slice, clear them all until a
-	// non-empty buffer is reached. This is guaranteed to exit since r.len is not 0.
 	for len(r.data) > 0 {
-		r.cur = r.data[0].ReadOnlyData()
-		if len(r.cur) > 0 {
+		if data := r.data[0].ReadOnlyData(); len(data) > 0 {
+			r.cur = data
 			return
 		}
 		r.data[0].Free()
 		r.data = r.data[1:]
 	}
+	r.cur = nil
 }
 
 // advance marks the first n bytes of cur as read.
 func (r *Reader) advance(n int) {
 	r.cur = r.cur[n:]
 	r.len -= n
-	if len(r.cur) > 0 {
-		return
+	if len(r.cur) == 0 {
+		r.freeFirstBuffer()
 	}
+}
+
+// freeFirstBuffer frees the first buffer and fills from the next non-empty buffer.
+func (r *Reader) freeFirstBuffer() {
 	r.data[0].Free()
 	r.data = r.data[1:]
 	r.fill()

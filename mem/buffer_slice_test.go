@@ -625,6 +625,13 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if len(res) != 1 || !bytes.Equal(res[0], []byte("56789")) {
 					t.Fatalf("Peek(5) after Reset = %v, want [[56789]]", res)
 				}
+				r.Reset(nil)
+				if r.Remaining() != 0 {
+					t.Fatalf("Remaining() after Reset(nil) = %v, want 0", r.Remaining())
+				}
+				if _, err := r.ReadByte(); err != io.EOF {
+					t.Fatalf("ReadByte() after Reset(nil) returned error %v, want %v", err, io.EOF)
+				}
 			},
 		},
 		{
