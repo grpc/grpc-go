@@ -369,10 +369,39 @@ func TestRLSKey(t *testing.T) {
 }
 
 func TestMapToStringNoCollision(t *testing.T) {
-	a := map[string]string{"k1": "v1,k2=v2"}
-	b := map[string]string{"k1": "v1", "k2": "v2"}
-	if mapToString(a) == mapToString(b) {
-		t.Fatalf("mapToString(%v) == mapToString(%v) = %q, want distinct strings", a, b, mapToString(a))
+	tests := []struct {
+		name string
+		a    map[string]string
+		b    map[string]string
+	}{
+		{
+			name: "comma_and_equals_in_value",
+			a:    map[string]string{"k1": "v1,k2=v2"},
+			b:    map[string]string{"k1": "v1", "k2": "v2"},
+		},
+		{
+			name: "equals_in_key_and_value",
+			a:    map[string]string{"a=b": "c"},
+			b:    map[string]string{"a": "b=c"},
+		},
+		{
+			name: "colon_in_key_and_value",
+			a:    map[string]string{"a:b": "c"},
+			b:    map[string]string{"a": "b:c"},
+		},
+		{
+			name: "empty_map_and_single_empty_entry",
+			a:    map[string]string{},
+			b:    map[string]string{"": ""},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if mapToString(test.a) == mapToString(test.b) {
+				t.Fatalf("mapToString(%v) == mapToString(%v) = %q, want distinct strings", test.a, test.b, mapToString(test.a))
+			}
+		})
 	}
 }
 
