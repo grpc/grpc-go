@@ -40,10 +40,12 @@ type BufferPool interface {
 
 const (
 	// defaultBufferPoolMaxSize is the maximum size of a buffer pooled by the
-	// default buffer pool (2MiB + 4KiB). The extra 4KiB accounts for framing
-	// overhead on 2MiB payloads rounded up to a 4KiB page boundary by the
-	// fallback pool.
-	defaultBufferPoolMaxSize = 2<<20 + 4<<10
+	// default buffer pool (2MiB + 8KiB). The extra 8KiB of headroom keeps
+	// payloads slightly larger than 2MiB poolable. The fallback pool rounds
+	// allocations up to a multiple of the 4KiB page size, so this value must
+	// remain a multiple of 4KiB so that every buffer handed out for a request
+	// within the limit can be returned to the pool on Put.
+	defaultBufferPoolMaxSize = 2<<20 + 8<<10
 )
 
 var (
@@ -73,7 +75,7 @@ func init() {
 // created with NewBufferPool that uses a set of default sizes optimized for
 // expected workflows.
 //
-// Buffers larger than 2MiB+4KiB are not pooled.
+// Very large buffers may not be pooled.
 func DefaultBufferPool() BufferPool {
 	return defaultBufferPool
 }
