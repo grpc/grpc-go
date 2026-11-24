@@ -91,7 +91,7 @@ var (
 	// the env variable "GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES"
 	// to "false".
 	//
-	// This env varible will be removed in release v1.82.0.
+	// This env variable will be removed in release v1.82.0.
 	CaseSensitiveBalancerRegistries = boolFromEnv("GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES", true)
 
 	// XDSAuthorityRewrite indicates whether xDS authority rewriting is enabled.
