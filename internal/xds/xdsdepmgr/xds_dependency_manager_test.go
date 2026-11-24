@@ -1758,3 +1758,103 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Tests the case where an aggregate cluster has children whose endpoint or
+// child resources are not yet resolved (EDS, LogicalDNS, and nested aggregate
+// clusters) alongside a child cluster that receives a CDS resource error.
+// Verifies that the XDSConfig update reports the error for the root aggregate
+// cluster and does not include incomplete configurations (with nil
+// EndpointConfig or AggregateConfig) for the unresolved child clusters.
+func (s) TestAggregateClusterChildError_WithUnresolvedChildren(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+	replaceDNSResolver(t)
+
+	watcher := newTestWatcher()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Configure the root aggregate cluster, a nested aggregate cluster, an EDS
+	// child cluster (without its EDS resource), and a LogicalDNS child cluster
+	// (without resolving DNS), leaving "err-cluster" unconfigured initially so
+	// the CDS updates for the other children are cached first.
+	aggCluster := makeAggregateClusterResource(defaultTestClusterName, []string{"child-agg-cluster", "eds-cluster", "dns-cluster", "err-cluster"})
+	childAggCluster := makeAggregateClusterResource("child-agg-cluster", []string{"eds-cluster"})
+	edsCluster := e2e.DefaultCluster("eds-cluster", defaultTestEDSServiceName, e2e.SecurityLevelNone)
+	dnsCluster := makeLogicalDNSClusterResource("dns-cluster", "localhost", 8081)
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)},
+		Clusters:       []*v3clusterpb.Cluster{aggCluster, childAggCluster, edsCluster, dnsCluster},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	unsubscribe := dm.SubscribeToCluster("eds-cluster")
+	defer unsubscribe()
+
+	// Defer closing the watcher last so it executes first (before unsubscribe()
+	// and dm.Close()), unblocking any Update() call holding dm.mu.
+	defer watcher.close()
+
+	// Verify that no configuration is pushed yet, because the child clusters
+	// are still waiting on EDS, DNS, and CDS resolution.
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case update := <-watcher.updateCh:
+		t.Fatalf("Received unexpected update from dependency manager: %+v", update)
+	case err := <-watcher.errorCh:
+		t.Fatalf("Received unexpected error from dependency manager: %v", err)
+	}
+
+	// Configure "err-cluster" with an invalid LRS config so it is NACKed,
+	// triggering a cluster resource error for the aggregate cluster.
+	errCluster := e2e.DefaultCluster("err-cluster", "err-eds-service", e2e.SecurityLevelNone)
+	errCluster.LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+	resources.Clusters = append(resources.Clusters, errCluster)
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	wantErr := fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))
+	wantXdsConfig := &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: defaultTestRouteConfigName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*xdsresource.Route{{
+					Prefix:           newStringP("/"),
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+					ActionType:       xdsresource.RouteActionRoute,
+				}},
+			}},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
+		},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			defaultTestClusterName: {
+				Err: wantErr,
+			},
+		},
+	}
+
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
