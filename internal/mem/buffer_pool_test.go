@@ -28,6 +28,8 @@ var defaultBufferPoolSizeExponents = []uint8{
 	14, // 16KB (max HTTP/2 frame size used by gRPC)
 	15, // 32KB (default buffer size for io.Copy)
 	20, // 1MB
+	21, // 2MB
+	22, // 4MB (default max receive message size)
 }
 
 func TestNewBinaryTieredBufferPool_WordSize(t *testing.T) {
@@ -149,18 +151,14 @@ func TestBinaryTieredBufferPool_GetZero(t *testing.T) {
 	}
 }
 
-func TestBufferPoolWithFallback_PoolSelection(t *testing.T) {
-	fallback := NewTieredBufferPoolWithFallback(NopBufferPool{}, 12, 16)
-	pool, err := NewBinaryTieredBufferPoolWithFallback(fallback, 3) // 8 bytes
+func TestBinaryTieredBufferPoolWithFallback_PoolSelection(t *testing.T) {
+	pool, err := NewBinaryTieredBufferPoolWithFallback(NopBufferPool{}, 3, 4) // 8 and 16 bytes
 	if err != nil {
 		t.Fatalf("Failed to create buffer pool: %v", err)
 	}
 
 	tierSize := func(p bufferPool, size int) int {
 		t.Helper()
-		if tp, ok := p.(*TieredBufferPool); ok {
-			p = tp.getPool(size)
-		}
 		switch p := p.(type) {
 		case *sizedBufferPool:
 			return p.defaultSize
@@ -171,26 +169,39 @@ func TestBufferPoolWithFallback_PoolSelection(t *testing.T) {
 		return 0
 	}
 
-	tests := []struct {
+	getTests := []struct {
 		size     int
 		wantTier int // 0 if the buffer must not be pooled.
 	}{
 		{size: 0, wantTier: 0},
+		{size: 1, wantTier: 8},
 		{size: 8, wantTier: 8},
-		{size: 9, wantTier: 12},
-		{size: 12, wantTier: 12},
-		{size: 13, wantTier: 16},
+		{size: 9, wantTier: 16},
 		{size: 16, wantTier: 16},
 		{size: 17, wantTier: 0},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range getTests {
 		if got := tierSize(pool.poolForGet(tt.size), tt.size); got != tt.wantTier {
 			t.Errorf("poolForGet(%d) returned pool with buffers of capacity %d, want %d", tt.size, got, tt.wantTier)
 		}
-		bufCap := max(tt.size, tt.wantTier)
-		if got := tierSize(pool.poolForPut(bufCap), bufCap); got != tt.wantTier {
-			t.Errorf("poolForPut(%d) returned pool with buffers of capacity %d, want %d", bufCap, got, tt.wantTier)
+	}
+
+	putTests := []struct {
+		bufCap   int
+		wantTier int // 0 if the buffer must not be pooled.
+	}{
+		{bufCap: 0, wantTier: 0},
+		{bufCap: 7, wantTier: 0},
+		{bufCap: 8, wantTier: 8},
+		{bufCap: 15, wantTier: 8},
+		{bufCap: 16, wantTier: 16},
+		{bufCap: 17, wantTier: 0},
+	}
+
+	for _, tt := range putTests {
+		if got := tierSize(pool.poolForPut(tt.bufCap), tt.bufCap); got != tt.wantTier {
+			t.Errorf("poolForPut(%d) returned pool with buffers of capacity %d, want %d", tt.bufCap, got, tt.wantTier)
 		}
 	}
 }

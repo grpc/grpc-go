@@ -285,21 +285,13 @@ func newSizedBufferPool(size int, zero bool) *sizedBufferPool {
 // TieredBufferPool implements the BufferPool interface with multiple tiers of
 // buffer pools for different sizes of buffers.
 type TieredBufferPool struct {
-	sizedPools []*sizedBufferPool
-	// fallbackPool handles buffers larger than the largest sized pool.
-	fallbackPool bufferPool
+	sizedPools   []*sizedBufferPool
+	fallbackPool SimpleBufferPool
 }
 
 // NewTieredBufferPool returns a BufferPool implementation that uses multiple
 // underlying pools of the given pool sizes.
 func NewTieredBufferPool(poolSizes ...int) *TieredBufferPool {
-	return NewTieredBufferPoolWithFallback(&SimpleBufferPool{shouldZero: true}, poolSizes...)
-}
-
-// NewTieredBufferPoolWithFallback returns a BufferPool similar to the one
-// returned by NewTieredBufferPool, except that buffers larger than the largest
-// tier are handled by the fallback pool.
-func NewTieredBufferPoolWithFallback(fallback bufferPool, poolSizes ...int) *TieredBufferPool {
 	sort.Ints(poolSizes)
 	pools := make([]*sizedBufferPool, len(poolSizes))
 	for i, s := range poolSizes {
@@ -307,7 +299,7 @@ func NewTieredBufferPoolWithFallback(fallback bufferPool, poolSizes ...int) *Tie
 	}
 	return &TieredBufferPool{
 		sizedPools:   pools,
-		fallbackPool: fallback,
+		fallbackPool: SimpleBufferPool{shouldZero: true},
 	}
 }
 
@@ -327,7 +319,7 @@ func (p *TieredBufferPool) getPool(size int) bufferPool {
 	})
 
 	if poolIdx == len(p.sizedPools) {
-		return p.fallbackPool
+		return &p.fallbackPool
 	}
 
 	return p.sizedPools[poolIdx]

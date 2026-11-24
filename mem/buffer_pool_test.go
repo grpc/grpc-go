@@ -155,13 +155,13 @@ func (s) TestDefaultBufferPool_LargeBufferCapacity(t *testing.T) {
 	}{
 		{requestSize: 0, wantCapacity: 0},
 		{requestSize: 1 * mib, wantCapacity: 1 * mib},
-		// Above 1MiB there are four evenly spaced tiers for every doubling.
-		{requestSize: 1*mib + 1, wantCapacity: 1.25 * mib},
-		{requestSize: 1.25 * mib, wantCapacity: 1.25 * mib},
-		{requestSize: 1.25*mib + 1, wantCapacity: 1.5 * mib},
-		{requestSize: 1.5*mib + 1, wantCapacity: 1.75 * mib},
-		{requestSize: 1.75*mib + 1, wantCapacity: 2 * mib},
-		{requestSize: 2*mib + 1, wantCapacity: 2.5 * mib},
+		{requestSize: 1*mib + 1, wantCapacity: 2 * mib},
+		{requestSize: 2 * mib, wantCapacity: 2 * mib},
+		{requestSize: 2*mib + 1, wantCapacity: 4 * mib},
+		{requestSize: 4 * mib, wantCapacity: 4 * mib},
+		// Buffers larger than 4MiB are not pooled and are allocated with exact capacity.
+		{requestSize: 4*mib + 1, wantCapacity: 4*mib + 1},
+		{requestSize: 8 * mib, wantCapacity: 8 * mib},
 	}
 
 	pool := mem.DefaultBufferPool()
@@ -179,17 +179,25 @@ func (s) TestDefaultBufferPool_LargeBufferCapacity(t *testing.T) {
 	}
 }
 
-// Tests that a large buffer in the default pool isn't used for a request for a
-// much smaller buffer, which would also need to clear the large buffer.
-func (s) TestDefaultBufferPool_LargeBufferNotUsedForSmallRequest(t *testing.T) {
+// Tests that buffers larger than 4MiB are not pooled by the default buffer
+// pool and therefore are not reused for subsequent requests.
+func (s) TestDefaultBufferPool_LargeBufferNotPooled(t *testing.T) {
 	const mib = 1 << 20
 	pool := mem.DefaultBufferPool()
-	pool.Put(pool.Get(8 * mib))
 
-	const size = 1*mib + 1
+	largeBuf := pool.Get(8 * mib)
+	pool.Put(largeBuf)
+
+	buf2 := pool.Get(8 * mib)
+	defer pool.Put(buf2)
+	if unsafe.SliceData(*buf2) == unsafe.SliceData(*largeBuf) {
+		t.Errorf("Get(%d) reused a buffer larger than 4MiB", 8*mib)
+	}
+
+	const size = 4*mib + 1
 	buf := pool.Get(size)
 	defer pool.Put(buf)
-	if got, want := cap(*buf), int(1.25*mib); got != want {
+	if got, want := cap(*buf), size; got != want {
 		t.Errorf("Get(%d) returned buffer with capacity: %d, want %d", size, got, want)
 	}
 }
