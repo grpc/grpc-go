@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	grpcinternal "google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -8719,5 +8720,82 @@ func (s) TestBidirectionalDraining_EndOfStreamDuringRequestDrain(t *testing.T) {
 	}
 	if _, err := stream.Recv(); err != io.EOF {
 		t.Fatalf("stream.Recv() returned error: %v, want io.EOF", err)
+	}
+}
+
+// TestOnFinishCalledOnce verifies that when dataplane stream creation fails
+// under ext_proc in either SKIP or SEND request header mode, an OnFinish
+// callback installed via WithDefaultCallOptions is executed exactly once per
+// RPC and channelz call counters remain balanced.
+func (s) TestOnFinishCalledOnce(t *testing.T) {
+	channelz.TurnOn()
+
+	modes := []v3procfilterpb.ProcessingMode_HeaderSendMode{
+		v3procfilterpb.ProcessingMode_SKIP,
+		v3procfilterpb.ProcessingMode_SEND,
+	}
+	for _, mode := range modes {
+		t.Run(mode.String(), func(t *testing.T) {
+			extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				for {
+					req, err := stream.Recv()
+					if err != nil {
+						return nil
+					}
+					if req.GetRequestHeaders() != nil {
+						if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+							return err
+						}
+					}
+				}
+			})
+			stub := stubserver.StartTestService(t, nil)
+			defer stub.Stop()
+
+			var onFinishCount atomic.Int32
+			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode:   mode,
+					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SKIP,
+				},
+			}, stub.Address, grpc.WithDefaultCallOptions(grpc.OnFinish(func(error) { onFinishCount.Add(1) })))
+			if err != nil {
+				t.Fatalf("setupTestClient() failed: %v", err)
+			}
+			defer cc.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			for i := 1; i <= 2; i++ {
+				before := onFinishCount.Load()
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.UseCompressor("unregistered-compressor")); status.Code(err) != codes.Internal {
+					t.Fatalf("RPC #%d: EmptyCall() returned code %v, want %v (err: %v)", i, status.Code(err), codes.Internal, err)
+				}
+				if got := onFinishCount.Load() - before; got != 1 {
+					t.Fatalf("RPC #%d: OnFinish called %d times, want 1", i, got)
+				}
+			}
+
+			chans, _ := channelz.GetTopChannels(0, 0)
+			var found bool
+			for _, ch := range chans {
+				if tgt := ch.ChannelMetrics.Target.Load(); tgt != nil && *tgt == "xds:///test-service" {
+					found = true
+					started := ch.ChannelMetrics.CallsStarted.Load()
+					succeeded := ch.ChannelMetrics.CallsSucceeded.Load()
+					failed := ch.ChannelMetrics.CallsFailed.Load()
+					if started != 2 || succeeded != 0 || failed != 2 {
+						t.Fatalf("channelz metrics = (started:%d, succeeded:%d, failed:%d), want (2, 0, 2)", started, succeeded, failed)
+					}
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("dataplane channel not found in channelz")
+			}
+		})
 	}
 }

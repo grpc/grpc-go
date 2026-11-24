@@ -258,23 +258,50 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 var emptyMethodConfig = serviceconfig.MethodConfig{}
 
-// endOfClientStream performs cleanup actions required for both successful and
-// failed streams. This includes incrementing channelz stats and invoking all
-// registered OnFinish call options.
-func endOfClientStream(cc *ClientConn, err error, opts ...CallOption) {
-	if channelz.IsOn() {
-		if err != nil {
-			cc.incrCallsFailed()
-		} else {
-			cc.incrCallsSucceeded()
-		}
-	}
-
+// endOfClientStream invokes all registered OnFinish call options.
+func endOfClientStream(err error, opts ...CallOption) {
 	for _, o := range opts {
-		if o, ok := o.(OnFinishCallOption); ok {
+		if o, ok := o.(OnFinishCallOption); ok && o.OnFinish != nil {
 			o.OnFinish(err)
 		}
 	}
+}
+
+// wrapOnFinishCallOptions replaces all OnFinishCallOption entries in opts with
+// a single per-RPC OnFinishCallOption that runs channelz call accounting,
+// idleness OnCallEnd, and every registered OnFinish callback at most once.
+func wrapOnFinishCallOptions(cc *ClientConn, opts []CallOption) []CallOption {
+	var callbacks []func(error)
+	newOpts := make([]CallOption, 1, len(opts)+1)
+	for _, o := range opts {
+		if of, ok := o.(OnFinishCallOption); ok {
+			if of.OnFinish != nil {
+				callbacks = append(callbacks, of.OnFinish)
+			}
+			continue
+		}
+		newOpts = append(newOpts, o)
+	}
+	var finished atomic.Bool
+	newOpts[0] = OnFinish(func(err error) {
+		if !finished.CompareAndSwap(false, true) {
+			return
+		}
+		if channelz.IsOn() {
+			if err != nil {
+				cc.incrCallsFailed()
+			} else {
+				cc.incrCallsSucceeded()
+			}
+		}
+		cc.idlenessMgr.OnCallEnd()
+		cbs := callbacks
+		callbacks = nil
+		for _, f := range cbs {
+			f(err)
+		}
+	})
+	return newOpts[:len(newOpts):len(newOpts)]
 }
 
 // clientInterceptor is structurally identical to the ClientInterceptor defined
@@ -290,21 +317,19 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if channelz.IsOn() {
 		cc.incrCallsStarted()
 	}
-	defer func() {
-		if err != nil {
-			// Ensure cleanup when stream creation fails.
-			endOfClientStream(cc, err, opts...)
-		}
-	}()
 
 	// Start tracking the RPC for idleness purposes. This is where a stream is
 	// created for both streaming and unary RPCs, and hence is a good place to
 	// track active RPC count.
 	cc.idlenessMgr.OnCallBegin()
 
-	// Add a calloption, to decrement the active call count, that gets executed
-	// when the RPC completes.
-	opts = append([]CallOption{OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() })}, opts...)
+	opts = wrapOnFinishCallOptions(cc, opts)
+	defer func() {
+		if err != nil {
+			// Ensure cleanup when stream creation fails.
+			endOfClientStream(err, opts...)
+		}
+	}()
 
 	if md, added, ok := metadataFromOutgoingContextRaw(ctx); ok {
 		// validate md
@@ -1255,7 +1280,7 @@ func (cs *clientStream) finish(err error) {
 	// endOfClientStream if the call fails. Invoking it here as well would
 	// run the cleanup twice for the same call.
 	if attemptCreated {
-		endOfClientStream(cs.cc, err, cs.opts...)
+		endOfClientStream(err, cs.opts...)
 	}
 	cs.cancel()
 }

@@ -22,13 +22,20 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -239,5 +246,114 @@ func (s) TestDefaultStreamInterceptor(t *testing.T) {
 	}
 	if iStream.closeSendCount != 1 {
 		t.Fatalf("CloseSend called %v times on user interceptor stream, want 1 times", iStream.closeSendCount)
+	}
+}
+
+type onFinishTestConfigSelector struct {
+	interceptor any
+}
+
+func (cs *onFinishTestConfigSelector) SelectConfig(iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
+	return &iresolver.RPCConfig{Interceptor: cs.interceptor}, nil
+}
+
+type doubleOnFinishInterceptor struct {
+	concurrentCalls int
+}
+
+func (d doubleOnFinishInterceptor) NewStream(_ context.Context, _ iresolver.RPCInfo, _ func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	err := status.Error(codes.Internal, "interceptor failure")
+	n := max(d.concurrentCalls, 1)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for range n {
+		go func() {
+			defer wg.Done()
+			for _, o := range opts {
+				if of, ok := o.(grpc.OnFinishCallOption); ok && of.OnFinish != nil {
+					of.OnFinish(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	return nil, err
+}
+
+func (doubleOnFinishInterceptor) Close() {}
+
+// TestOnFinishCalledOncePerRPC verifies that OnFinish callbacks (including
+// WithDefaultCallOptions, per-call OnFinish, and nil OnFinish) execute at most
+// once per RPC under concurrent invocations, concurrent RPCs, and interceptor
+// double-finish paths, while keeping channelz call counts balanced.
+func (s) TestOnFinishCalledOncePerRPC(t *testing.T) {
+	channelz.TurnOn()
+
+	r := manual.NewBuilderWithScheme("onfinish-once-test")
+
+	var defaultOnFinishCount atomic.Int32
+	target := r.Scheme() + ":///test"
+	cc, err := grpc.NewClient(
+		target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultCallOptions(
+			grpc.OnFinish(nil),
+			grpc.OnFinish(func(error) { defaultOnFinishCount.Add(1) }),
+		),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	cc.Connect()
+	r.UpdateState(iresolver.SetConfigSelector(resolver.State{
+		Addresses:     []resolver.Address{{Addr: "localhost:1234"}},
+		ServiceConfig: r.CC().ParseServiceConfig("{}"),
+	}, &onFinishTestConfigSelector{
+		interceptor: doubleOnFinishInterceptor{concurrentCalls: 5},
+	}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	const numRPCs = 5
+	var wg sync.WaitGroup
+	wg.Add(numRPCs)
+	for i := range numRPCs {
+		go func(id int) {
+			defer wg.Done()
+			var perCallCount atomic.Int32
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.OnFinish(func(error) { perCallCount.Add(1) })); status.Code(err) != codes.Internal {
+				t.Errorf("RPC #%d: EmptyCall() returned code %v, want %v (err: %v)", id, status.Code(err), codes.Internal, err)
+			}
+			if got := perCallCount.Load(); got != 1 {
+				t.Errorf("RPC #%d: per-call OnFinish called %d times, want 1", id, got)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if got := defaultOnFinishCount.Load(); got != numRPCs {
+		t.Fatalf("default OnFinish called %d times across %d RPCs, want %d", got, numRPCs, numRPCs)
+	}
+
+	chans, _ := channelz.GetTopChannels(0, 0)
+	var found bool
+	for _, ch := range chans {
+		if tgt := ch.ChannelMetrics.Target.Load(); tgt != nil && *tgt == target {
+			found = true
+			started := ch.ChannelMetrics.CallsStarted.Load()
+			succeeded := ch.ChannelMetrics.CallsSucceeded.Load()
+			failed := ch.ChannelMetrics.CallsFailed.Load()
+			if started != numRPCs || succeeded != 0 || failed != numRPCs {
+				t.Fatalf("channelz metrics = (started:%d, succeeded:%d, failed:%d), want (%d, 0, %d)", started, succeeded, failed, numRPCs, numRPCs)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("channel %q not found in channelz", target)
 	}
 }
