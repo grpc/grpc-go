@@ -105,15 +105,6 @@ func assertNoNewStreamOpened(t *testing.T, lrsServer *fakeserver.Server) {
 	}
 }
 
-func assertStreamNotClosed(t *testing.T, lrsServer *fakeserver.Server) {
-	t.Helper()
-	shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer shortCancel()
-	if _, err := lrsServer.LRSStreamCloseChan.Receive(shortCtx); err != context.DeadlineExceeded {
-		t.Fatalf("LRSStreamCloseChan.Receive() = %v, want context.DeadlineExceeded (expected stream to remain open)", err)
-	}
-}
-
 // TestReportLoad_SubsequentResponse_Clusters tests that receiving subsequent
 // LoadStatsResponse messages updates the cluster set reported by the client on
 // the active stream.
