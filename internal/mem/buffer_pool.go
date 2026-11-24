@@ -85,16 +85,9 @@ type BinaryTieredBufferPool struct {
 // of 2), not the raw byte sizes. For example, to create a pool of 16KB buffers
 // (2^14 bytes), pass 14 as the argument.
 func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
-	return NewBinaryTieredBufferPoolWithFallback(&SimpleBufferPool{shouldZero: true}, powerOfTwoExponents...)
-}
-
-// NewBinaryTieredBufferPoolWithFallback returns a BufferPool similar to the one
-// returned by NewBinaryTieredBufferPool, except that buffers larger than the
-// largest tier are handled by the fallback pool.
-func NewBinaryTieredBufferPoolWithFallback(fallback bufferPool, powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
 	return newBinaryTiered(func(size int) bufferPool {
 		return newSizedBufferPool(size, true)
-	}, fallback, powerOfTwoExponents...)
+	}, &SimpleBufferPool{shouldZero: true}, powerOfTwoExponents...)
 }
 
 // NewDirtyBinaryTieredBufferPool returns a BufferPool backed by multiple
@@ -362,8 +355,9 @@ func (p *SimpleBufferPool) Get(size int) *[]byte {
 
 	// If we're going to allocate, round up to the nearest page. This way if
 	// requests frequently arrive with small variation we don't allocate
-	// repeatedly if we get unlucky and they increase over time. Because
-	// goPageSize is a power of 2, we can round up efficiently.
+	// repeatedly if we get unlucky and they increase over time. By default we
+	// only allocate here if size > 1MiB. Because goPageSize is a power of 2, we
+	// can round up efficiently.
 	allocSize := (size + goPageSize - 1) & ^(goPageSize - 1)
 
 	b := make([]byte, size, allocSize)
@@ -372,5 +366,40 @@ func (p *SimpleBufferPool) Get(size int) *[]byte {
 
 // Put returns a buffer to the pool.
 func (p *SimpleBufferPool) Put(buf *[]byte) {
+	p.pool.Put(buf)
+}
+
+// MaxSizeBufferPool wraps a bufferPool and enforces a maximum buffer size that
+// will be served from or returned to the wrapped pool. Buffers larger than
+// maxSize are allocated directly without pooling and discarded on Put.
+type MaxSizeBufferPool struct {
+	pool    bufferPool
+	maxSize int
+}
+
+// NewMaxSizeBufferPool returns a BufferPool that delegates to pool for buffers
+// up to maxSize bytes and uses NopBufferPool for larger buffers.
+func NewMaxSizeBufferPool(pool bufferPool, maxSize int) *MaxSizeBufferPool {
+	return &MaxSizeBufferPool{
+		pool:    pool,
+		maxSize: maxSize,
+	}
+}
+
+// Get returns a buffer with specified length from the wrapped pool if length is
+// at most maxSize, or allocates a new unpooled buffer otherwise.
+func (p *MaxSizeBufferPool) Get(length int) *[]byte {
+	if length > p.maxSize {
+		return NopBufferPool{}.Get(length)
+	}
+	return p.pool.Get(length)
+}
+
+// Put returns a buffer to the wrapped pool if its capacity is at most maxSize;
+// otherwise the buffer is discarded.
+func (p *MaxSizeBufferPool) Put(buf *[]byte) {
+	if cap(*buf) > p.maxSize {
+		return
+	}
 	p.pool.Put(buf)
 }

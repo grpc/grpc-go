@@ -38,6 +38,14 @@ type BufferPool interface {
 	Put(*[]byte)
 }
 
+const (
+	// defaultBufferPoolMaxSize is the maximum size of a buffer pooled by the
+	// default buffer pool (2MiB + 4KiB). The extra 4KiB accounts for framing
+	// overhead on 2MiB payloads rounded up to a 4KiB page boundary by the
+	// fallback pool.
+	defaultBufferPoolMaxSize = 2<<20 + 4<<10
+)
+
 var (
 	defaultBufferPoolSizeExponents = []uint8{
 		8,
@@ -45,18 +53,16 @@ var (
 		14, // 16KB (max HTTP/2 frame size used by gRPC)
 		15, // 32KB (default buffer size for io.Copy)
 		20, // 1MB
-		21, // 2MB
-		22, // 4MB (default max receive message size)
 	}
 	defaultBufferPool BufferPool
 )
 
 func init() {
-	var err error
-	defaultBufferPool, err = mem.NewBinaryTieredBufferPoolWithFallback(mem.NopBufferPool{}, defaultBufferPoolSizeExponents...)
+	pool, err := NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create default buffer pool: %v", err))
 	}
+	defaultBufferPool = mem.NewMaxSizeBufferPool(pool, defaultBufferPoolMaxSize)
 
 	internal.SetDefaultBufferPool = func(pool BufferPool) {
 		defaultBufferPool = pool
@@ -67,7 +73,7 @@ func init() {
 // created with NewBufferPool that uses a set of default sizes optimized for
 // expected workflows.
 //
-// Buffers larger than 4MiB are not pooled.
+// Buffers larger than 2MiB+4KiB are not pooled.
 func DefaultBufferPool() BufferPool {
 	return defaultBufferPool
 }

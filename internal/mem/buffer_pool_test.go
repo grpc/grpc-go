@@ -28,8 +28,6 @@ var defaultBufferPoolSizeExponents = []uint8{
 	14, // 16KB (max HTTP/2 frame size used by gRPC)
 	15, // 32KB (default buffer size for io.Copy)
 	20, // 1MB
-	21, // 2MB
-	22, // 4MB (default max receive message size)
 }
 
 func TestNewBinaryTieredBufferPool_WordSize(t *testing.T) {
@@ -151,57 +149,75 @@ func TestBinaryTieredBufferPool_GetZero(t *testing.T) {
 	}
 }
 
-func TestBinaryTieredBufferPoolWithFallback_PoolSelection(t *testing.T) {
-	pool, err := NewBinaryTieredBufferPoolWithFallback(NopBufferPool{}, 3, 4) // 8 and 16 bytes
-	if err != nil {
-		t.Fatalf("Failed to create buffer pool: %v", err)
-	}
+type spyBufferPool struct {
+	getCalls []int
+	putCaps  []int
+}
 
-	tierSize := func(p bufferPool, size int) int {
-		t.Helper()
-		switch p := p.(type) {
-		case *sizedBufferPool:
-			return p.defaultSize
-		case NopBufferPool:
-			return 0
-		}
-		t.Fatalf("Unexpected pool of type %T for buffers of size %d", p, size)
-		return 0
-	}
+func (s *spyBufferPool) Get(length int) *[]byte {
+	s.getCalls = append(s.getCalls, length)
+	b := make([]byte, length)
+	return &b
+}
+
+func (s *spyBufferPool) Put(buf *[]byte) {
+	s.putCaps = append(s.putCaps, cap(*buf))
+}
+
+func TestMaxSizeBufferPool(t *testing.T) {
+	const maxSize = 1024
+	spy := &spyBufferPool{}
+	pool := NewMaxSizeBufferPool(spy, maxSize)
 
 	getTests := []struct {
-		size     int
-		wantTier int // 0 if the buffer must not be pooled.
+		size       int
+		wantPooled bool
 	}{
-		{size: 0, wantTier: 0},
-		{size: 1, wantTier: 8},
-		{size: 8, wantTier: 8},
-		{size: 9, wantTier: 16},
-		{size: 16, wantTier: 16},
-		{size: 17, wantTier: 0},
+		{size: 0, wantPooled: true},
+		{size: maxSize - 1, wantPooled: true},
+		{size: maxSize, wantPooled: true},
+		{size: maxSize + 1, wantPooled: false},
+		{size: maxSize * 2, wantPooled: false},
 	}
 
 	for _, tt := range getTests {
-		if got := tierSize(pool.poolForGet(tt.size), tt.size); got != tt.wantTier {
-			t.Errorf("poolForGet(%d) returned pool with buffers of capacity %d, want %d", tt.size, got, tt.wantTier)
+		prevCalls := len(spy.getCalls)
+		buf := pool.Get(tt.size)
+		if len(*buf) != tt.size {
+			t.Errorf("Get(%d) returned buffer with length %d, want %d", tt.size, len(*buf), tt.size)
+		}
+		if cap(*buf) < tt.size {
+			t.Errorf("Get(%d) returned buffer with capacity %d, want >= %d", tt.size, cap(*buf), tt.size)
+		}
+		gotPooled := len(spy.getCalls) == prevCalls+1
+		if gotPooled != tt.wantPooled {
+			t.Errorf("Get(%d) delegated to wrapped pool = %t, want %t", tt.size, gotPooled, tt.wantPooled)
+		}
+		if !tt.wantPooled && cap(*buf) != tt.size {
+			t.Errorf("Get(%d) unpooled buffer capacity = %d, want %d", tt.size, cap(*buf), tt.size)
 		}
 	}
 
 	putTests := []struct {
-		bufCap   int
-		wantTier int // 0 if the buffer must not be pooled.
+		length     int
+		capacity   int
+		wantPooled bool
 	}{
-		{bufCap: 0, wantTier: 0},
-		{bufCap: 7, wantTier: 0},
-		{bufCap: 8, wantTier: 8},
-		{bufCap: 15, wantTier: 8},
-		{bufCap: 16, wantTier: 16},
-		{bufCap: 17, wantTier: 0},
+		{length: 0, capacity: 0, wantPooled: true},
+		{length: maxSize, capacity: maxSize, wantPooled: true},
+		{length: 1, capacity: maxSize, wantPooled: true},
+		{length: maxSize + 1, capacity: maxSize + 1, wantPooled: false},
+		// Even when len <= maxSize, Put must check cap.
+		{length: 1, capacity: maxSize + 1, wantPooled: false},
 	}
 
 	for _, tt := range putTests {
-		if got := tierSize(pool.poolForPut(tt.bufCap), tt.bufCap); got != tt.wantTier {
-			t.Errorf("poolForPut(%d) returned pool with buffers of capacity %d, want %d", tt.bufCap, got, tt.wantTier)
+		prevCalls := len(spy.putCaps)
+		buf := make([]byte, tt.length, tt.capacity)
+		pool.Put(&buf)
+		gotPooled := len(spy.putCaps) == prevCalls+1
+		if gotPooled != tt.wantPooled {
+			t.Errorf("Put(len=%d, cap=%d) delegated to wrapped pool = %t, want %t", tt.length, tt.capacity, gotPooled, tt.wantPooled)
 		}
 	}
 }
