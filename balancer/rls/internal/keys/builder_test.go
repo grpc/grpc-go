@@ -368,6 +368,9 @@ func TestRLSKey(t *testing.T) {
 	}
 }
 
+// TestMapToStringNoCollision verifies that distinct maps containing delimiter
+// characters (such as ',', '=', and ':') or empty keys/values serialize to
+// distinct cache key strings.
 func TestMapToStringNoCollision(t *testing.T) {
 	tests := []struct {
 		name string
@@ -395,7 +398,6 @@ func TestMapToStringNoCollision(t *testing.T) {
 			b:    map[string]string{"": ""},
 		},
 	}
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if mapToString(test.a) == mapToString(test.b) {
