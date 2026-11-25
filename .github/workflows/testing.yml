@@ -71,7 +71,7 @@ jobs:
           - type: tests
             goversion: '1.27'
             goarch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
             display_name: 'tests (arm, latest)'
 
           - type: tests
