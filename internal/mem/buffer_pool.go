@@ -368,3 +368,38 @@ func (p *SimpleBufferPool) Get(size int) *[]byte {
 func (p *SimpleBufferPool) Put(buf *[]byte) {
 	p.pool.Put(buf)
 }
+
+// MaxSizeBufferPool wraps a bufferPool and enforces a maximum buffer size that
+// will be served from or returned to the wrapped pool. Buffers larger than
+// maxSize are allocated directly without pooling and discarded on Put.
+type MaxSizeBufferPool struct {
+	pool    bufferPool
+	maxSize int
+}
+
+// NewMaxSizeBufferPool returns a BufferPool that delegates to pool for buffers
+// up to maxSize bytes and uses NopBufferPool for larger buffers.
+func NewMaxSizeBufferPool(pool bufferPool, maxSize int) *MaxSizeBufferPool {
+	return &MaxSizeBufferPool{
+		pool:    pool,
+		maxSize: maxSize,
+	}
+}
+
+// Get returns a buffer with specified length from the wrapped pool if length is
+// at most maxSize, or allocates a new unpooled buffer otherwise.
+func (p *MaxSizeBufferPool) Get(length int) *[]byte {
+	if length > p.maxSize {
+		return NopBufferPool{}.Get(length)
+	}
+	return p.pool.Get(length)
+}
+
+// Put returns a buffer to the wrapped pool if its capacity is at most maxSize;
+// otherwise the buffer is discarded.
+func (p *MaxSizeBufferPool) Put(buf *[]byte) {
+	if cap(*buf) > p.maxSize {
+		return
+	}
+	p.pool.Put(buf)
+}

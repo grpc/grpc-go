@@ -146,3 +146,23 @@ func TestBinaryBufferPool(t *testing.T) {
 		})
 	}
 }
+
+// Tests that the default buffer pool does not pool very large buffers. The
+// size used is well above the default pool's limit so that small adjustments
+// to the limit do not require changing this test.
+func (s) TestDefaultBufferPool_VeryLargeBuffersNotPooled(t *testing.T) {
+	const largeSize = 3<<20 + 1
+	pool := mem.DefaultBufferPool()
+
+	buf1 := pool.Get(largeSize)
+	if got := cap(*buf1); got != largeSize {
+		t.Fatalf("Get(%d) returned buffer with capacity %d, want %d", largeSize, got, largeSize)
+	}
+
+	pool.Put(buf1)
+	buf2 := pool.Get(largeSize)
+	defer pool.Put(buf2)
+	if unsafe.SliceData(*buf2) == unsafe.SliceData(*buf1) {
+		t.Fatalf("Get(%d) reused a discarded buffer", largeSize)
+	}
+}

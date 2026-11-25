@@ -38,6 +38,16 @@ type BufferPool interface {
 	Put(*[]byte)
 }
 
+const (
+	// defaultBufferPoolMaxSize is the maximum size of a buffer pooled by the
+	// default buffer pool (2MiB + 8KiB). The extra 8KiB of headroom keeps
+	// payloads slightly larger than 2MiB poolable. The fallback pool rounds
+	// allocations up to a multiple of the 4KiB page size, so this value must
+	// remain a multiple of 4KiB so that every buffer handed out for a request
+	// within the limit can be returned to the pool on Put.
+	defaultBufferPoolMaxSize = 2<<20 + 8<<10
+)
+
 var (
 	defaultBufferPoolSizeExponents = []uint8{
 		8,
@@ -50,11 +60,11 @@ var (
 )
 
 func init() {
-	var err error
-	defaultBufferPool, err = NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
+	pool, err := NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create default buffer pool: %v", err))
 	}
+	defaultBufferPool = mem.NewMaxSizeBufferPool(pool, defaultBufferPoolMaxSize)
 
 	internal.SetDefaultBufferPool = func(pool BufferPool) {
 		defaultBufferPool = pool
@@ -64,6 +74,8 @@ func init() {
 // DefaultBufferPool returns the current default buffer pool. It is a BufferPool
 // created with NewBufferPool that uses a set of default sizes optimized for
 // expected workflows.
+//
+// Very large buffers may not be pooled.
 func DefaultBufferPool() BufferPool {
 	return defaultBufferPool
 }

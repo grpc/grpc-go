@@ -148,3 +148,76 @@ func TestBinaryTieredBufferPool_GetZero(t *testing.T) {
 		t.Errorf("poolForGet(0) = %T, want NopBufferPool", pool.poolForGet(0))
 	}
 }
+
+type spyBufferPool struct {
+	getCalls []int
+	putCaps  []int
+}
+
+func (s *spyBufferPool) Get(length int) *[]byte {
+	s.getCalls = append(s.getCalls, length)
+	b := make([]byte, length)
+	return &b
+}
+
+func (s *spyBufferPool) Put(buf *[]byte) {
+	s.putCaps = append(s.putCaps, cap(*buf))
+}
+
+func TestMaxSizeBufferPool(t *testing.T) {
+	const maxSize = 1024
+	spy := &spyBufferPool{}
+	pool := NewMaxSizeBufferPool(spy, maxSize)
+
+	getTests := []struct {
+		size       int
+		wantPooled bool
+	}{
+		{size: 0, wantPooled: true},
+		{size: maxSize - 1, wantPooled: true},
+		{size: maxSize, wantPooled: true},
+		{size: maxSize + 1, wantPooled: false},
+		{size: maxSize * 2, wantPooled: false},
+	}
+
+	for _, tt := range getTests {
+		prevCalls := len(spy.getCalls)
+		buf := pool.Get(tt.size)
+		if len(*buf) != tt.size {
+			t.Errorf("Get(%d) returned buffer with length %d, want %d", tt.size, len(*buf), tt.size)
+		}
+		if cap(*buf) < tt.size {
+			t.Errorf("Get(%d) returned buffer with capacity %d, want >= %d", tt.size, cap(*buf), tt.size)
+		}
+		gotPooled := len(spy.getCalls) == prevCalls+1
+		if gotPooled != tt.wantPooled {
+			t.Errorf("Get(%d) delegated to wrapped pool = %t, want %t", tt.size, gotPooled, tt.wantPooled)
+		}
+		if !tt.wantPooled && cap(*buf) != tt.size {
+			t.Errorf("Get(%d) unpooled buffer capacity = %d, want %d", tt.size, cap(*buf), tt.size)
+		}
+	}
+
+	putTests := []struct {
+		length     int
+		capacity   int
+		wantPooled bool
+	}{
+		{length: 0, capacity: 0, wantPooled: true},
+		{length: maxSize, capacity: maxSize, wantPooled: true},
+		{length: 1, capacity: maxSize, wantPooled: true},
+		{length: maxSize + 1, capacity: maxSize + 1, wantPooled: false},
+		// Even when len <= maxSize, Put must check cap.
+		{length: 1, capacity: maxSize + 1, wantPooled: false},
+	}
+
+	for _, tt := range putTests {
+		prevCalls := len(spy.putCaps)
+		buf := make([]byte, tt.length, tt.capacity)
+		pool.Put(&buf)
+		gotPooled := len(spy.putCaps) == prevCalls+1
+		if gotPooled != tt.wantPooled {
+			t.Errorf("Put(len=%d, cap=%d) delegated to wrapped pool = %t, want %t", tt.length, tt.capacity, gotPooled, tt.wantPooled)
+		}
+	}
+}
