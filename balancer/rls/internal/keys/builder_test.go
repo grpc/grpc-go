@@ -297,7 +297,7 @@ func TestRLSKey(t *testing.T) {
 			desc:   "directPathMatch-SingleKey",
 			path:   "/gBar/method1",
 			md:     metadata.Pairs("n1", "v1"),
-			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: "k1=v1"},
+			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: `"k1"="v1"`},
 		},
 		{
 			// A keyBuilder is found, and multiple headers match, but the first
@@ -305,7 +305,7 @@ func TestRLSKey(t *testing.T) {
 			desc:   "directPathMatch-FirstMatchingKey",
 			path:   "/gBar/method1",
 			md:     metadata.Pairs("n2", "v2", "n1", "v1"),
-			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: "k1=v1"},
+			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: `"k1"="v1"`},
 		},
 		{
 			// A keyBuilder is found as a wildcard match, but none of the
@@ -321,7 +321,7 @@ func TestRLSKey(t *testing.T) {
 			desc:   "wildcardPathMatch-SingleKey",
 			path:   "/gFoobar/method1",
 			md:     metadata.Pairs("n1", "v1"),
-			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: "k1=v1"},
+			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: `"k1"="v1"`},
 		},
 		{
 			// A keyBuilder is found as a wildcard match, and multiple headers
@@ -329,7 +329,7 @@ func TestRLSKey(t *testing.T) {
 			desc:   "wildcardPathMatch-FirstMatchingKey",
 			path:   "/gFoobar/method1",
 			md:     metadata.Pairs("n2", "v2", "n1", "v1"),
-			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: "k1=v1"},
+			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: `"k1"="v1"`},
 		},
 		{
 			// Multiple headerKeys find hits in the provided request headers.
@@ -346,7 +346,7 @@ func TestRLSKey(t *testing.T) {
 					"k1":          "v1",
 					"k2":          "v1",
 				},
-				Str: "const-key-1=const-val-1,const-key-2=const-val-2,host=dummy-host,k1=v1,k2=v1,method=method1,service=gFoo",
+				Str: `"const-key-1"="const-val-1","const-key-2"="const-val-2","host"="dummy-host","k1"="v1","k2"="v1","method"="method1","service"="gFoo"`,
 			},
 		},
 		{
@@ -355,7 +355,7 @@ func TestRLSKey(t *testing.T) {
 			desc:   "commaSeparated",
 			path:   "/gBar/method1",
 			md:     metadata.Pairs("n1", "v1", "n1", "v2", "n1", "v3"),
-			wantKM: KeyMap{Map: map[string]string{"k1": "v1,v2,v3"}, Str: "k1=v1,v2,v3"},
+			wantKM: KeyMap{Map: map[string]string{"k1": "v1,v2,v3"}, Str: `"k1"="v1,v2,v3"`},
 		},
 	}
 
@@ -363,6 +363,45 @@ func TestRLSKey(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			if gotKM := bm.RLSKey(test.md, "dummy-host", test.path); !cmp.Equal(gotKM, test.wantKM) {
 				t.Errorf("RLSKey(%+v, %s) = %+v, want %+v", test.md, test.path, gotKM, test.wantKM)
+			}
+		})
+	}
+}
+
+// TestMapToStringNoCollision verifies that distinct maps containing delimiter
+// characters (such as ',', '=', and ':') or empty keys/values serialize to
+// distinct cache key strings.
+func TestMapToStringNoCollision(t *testing.T) {
+	tests := []struct {
+		name string
+		a    map[string]string
+		b    map[string]string
+	}{
+		{
+			name: "comma_and_equals_in_value",
+			a:    map[string]string{"k1": "v1,k2=v2"},
+			b:    map[string]string{"k1": "v1", "k2": "v2"},
+		},
+		{
+			name: "equals_in_key_and_value",
+			a:    map[string]string{"a=b": "c"},
+			b:    map[string]string{"a": "b=c"},
+		},
+		{
+			name: "colon_in_key_and_value",
+			a:    map[string]string{"a:b": "c"},
+			b:    map[string]string{"a": "b:c"},
+		},
+		{
+			name: "empty_map_and_single_empty_entry",
+			a:    map[string]string{},
+			b:    map[string]string{"": ""},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if mapToString(test.a) == mapToString(test.b) {
+				t.Fatalf("mapToString(%v) == mapToString(%v) = %q, want distinct strings", test.a, test.b, mapToString(test.a))
 			}
 		})
 	}
@@ -384,7 +423,7 @@ func TestMapToString(t *testing.T) {
 			input: map[string]string{
 				"k1": "v1",
 			},
-			wantStr: "k1=v1",
+			wantStr: `"k1"="v1"`,
 		},
 		{
 			desc: "sorted keys",
@@ -393,7 +432,7 @@ func TestMapToString(t *testing.T) {
 				"k2": "v2",
 				"k3": "v3",
 			},
-			wantStr: "k1=v1,k2=v2,k3=v3",
+			wantStr: `"k1"="v1","k2"="v2","k3"="v3"`,
 		},
 		{
 			desc: "unsorted keys",
@@ -402,7 +441,7 @@ func TestMapToString(t *testing.T) {
 				"k1": "v1",
 				"k2": "v2",
 			},
-			wantStr: "k1=v1,k2=v2,k3=v3",
+			wantStr: `"k1"="v1","k2"="v2","k3"="v3"`,
 		},
 	}
 

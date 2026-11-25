@@ -261,7 +261,9 @@ func mapToString(kv map[string]string) string {
 		if i != 0 {
 			fmt.Fprint(&sb, ",")
 		}
-		fmt.Fprintf(&sb, "%s=%s", k, kv[k])
+		// Quote keys and values so that separators inside them cannot make two
+		// different maps serialize to the same string.
+		fmt.Fprintf(&sb, "%q=%q", k, kv[k])
 	}
 	return sb.String()
 }
