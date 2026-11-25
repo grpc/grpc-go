@@ -21,6 +21,7 @@ package xdsdepmgr_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 
 	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter
 )
@@ -1756,5 +1758,60 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 	// Verify both clusters are now present.
 	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Tests that subscribing to a new cluster after the dependency manager is
+// closed does not panic and does not start a new watch on the xDS client.
+func (s) TestSubscribeToClusterAfterClose(t *testing.T) {
+	const newClusterName = "new-cluster-name"
+	cdsRequested := testutils.NewChannel()
+	nodeID := uuid.New().String()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if slices.Contains(req.GetResourceNames(), newClusterName) {
+				cdsRequested.Replace(req.GetResourceNames())
+			}
+			return nil
+		},
+	})
+	t.Cleanup(mgmtServer.Stop)
+	xdsClient := createXDSClient(t, e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address))
+
+	watcher := newTestWatcher()
+	defer watcher.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	dm.Close()
+
+	unsubscribe := dm.SubscribeToCluster(newClusterName)
+	defer unsubscribe()
+
+	// The xDS client outlives the dependency manager (as it does when shared
+	// across channels), so a watch started after Close would show up here.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if names, err := cdsRequested.Receive(sCtx); err == nil {
+		t.Fatalf("Management server received a request for %v after the dependency manager was closed", names)
 	}
 }
