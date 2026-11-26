@@ -176,8 +176,9 @@ type LBConfig struct {
 	// applied, whichever is larger.
 	MaxEjectionTime iserviceconfig.Duration `json:"maxEjectionTime,omitempty"`
 	// MaxEjectionPercent is the maximum % of an upstream cluster that can be
-	// ejected due to outlier detection. Defaults to 10% but will eject at least
-	// one host regardless of the value.
+	// ejected due to outlier detection. Ejection never takes the ejected
+	// percentage above this value, so a value of 0 disables ejection.
+	// Defaults to 10%.
 	MaxEjectionPercent uint32 `json:"maxEjectionPercent,omitempty"`
 	// SuccessRateEjection is the parameters for the success rate ejection
 	// algorithm. If set, success rate ejections will be performed.
