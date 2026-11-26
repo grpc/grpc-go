@@ -1309,24 +1309,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantErr:  "failed unmarshalling of network filter",
 		},
 		{
-			name: "unexpected transport socket name",
-			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
-				Name:    v3LDSTarget,
-				Address: localSocketAddress,
-				FilterChains: []*v3listenerpb.FilterChain{
-					{
-						Name:    "filter-chain-1",
-						Filters: emptyValidNetworkFilters,
-						TransportSocket: &v3corepb.TransportSocket{
-							Name: "unsupported-transport-socket-name",
-						},
-					},
-				},
-			}),
-			wantName: v3LDSTarget,
-			wantErr:  "transport_socket field has unexpected name",
-		},
-		{
 			name: "unexpected transport socket typedConfig URL",
 			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,

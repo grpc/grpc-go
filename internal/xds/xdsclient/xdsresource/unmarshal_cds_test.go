@@ -230,6 +230,24 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			// Custom cluster types are identified by the type_url of their
+			// typed_config, so the aggregate cluster name alone is not enough.
+			name: "aggregate-name-with-wrong-type-url",
+			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name: "envoy.clusters.aggregate",
+						TypedConfig: testutils.MarshalAny(t, &v3clusterpb.Cluster{
+							Name: "not-an-aggregate-cluster-config",
+						}),
+					},
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			},
+			wantErr: true,
+		},
+		{
 			name: "aggregate-nil-clusters",
 			cluster: &v3clusterpb.Cluster{
 				Name: clusterName,
@@ -541,8 +559,11 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "transport-socket-unsupported-name",
+			// The transport socket is identified by the type_url of its
+			// typed_config, and its name is ignored.
+			name: "transport-socket-name-ignored",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{
@@ -556,13 +577,30 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "unsupported-foo",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-						},
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+						}),
 					},
 				},
 			},
-			wantErr: true,
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName: rootPluginInstance,
+					RootCertName:     rootCertName,
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
 		},
 		{
 			name: "transport-socket-unsupported-typeURL",

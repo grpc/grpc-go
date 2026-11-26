@@ -328,20 +328,6 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 			wantErr: "no supported filter chains and no default filter chain",
 		},
 		{
-			desc: "unexpected transport socket name",
-			lis: &v3listenerpb.Listener{
-				Name:    "test-listener",
-				Address: localSocketAddress,
-				FilterChains: []*v3listenerpb.FilterChain{
-					{
-						TransportSocket: &v3corepb.TransportSocket{Name: "unsupported-transport-socket-name"},
-						Filters:         emptyValidNetworkFilters(t),
-					},
-				},
-			},
-			wantErr: "transport_socket field has unexpected name",
-		},
-		{
 			desc: "unexpected transport socket URL",
 			lis: &v3listenerpb.Listener{
 				Name:    "test-listener",
@@ -1504,6 +1490,84 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 				DefaultFilterChain: &v3listenerpb.FilterChain{
 					TransportSocket: &v3corepb.TransportSocket{
 						Name: "envoy.transport_sockets.tls",
+						ConfigType: &v3corepb.TransportSocket_TypedConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    "defaultIdentityPluginInstance",
+										CertificateName: "defaultIdentityCertName",
+									},
+								},
+							}),
+						},
+					},
+					Filters: emptyValidNetworkFilters(t),
+				},
+			},
+			wantListener: ListenerUpdate{
+				TCPListener: &InboundListenerConfig{
+					Address: "0.0.0.0",
+					Port:    "9999",
+					FilterChains: NetworkFilterChainMap{
+						DstPrefixes: []DestinationPrefixEntry{{
+							SourceTypeArr: [3]SourcePrefixes{{
+								Entries: []SourcePrefixEntry{{
+									PortMap: map[int]NetworkFilterChainConfig{
+										0: {
+											SecurityCfg: &SecurityConfig{
+												IdentityInstanceName: "identityPluginInstance",
+												IdentityCertName:     "identityCertName",
+											},
+											HTTPConnMgr: &HTTPConnectionManagerConfig{
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       makeRouterFilterList(t),
+											},
+										},
+									}},
+								},
+							}},
+						}},
+					},
+					DefaultFilterChain: NetworkFilterChainConfig{
+						SecurityCfg: &SecurityConfig{
+							IdentityInstanceName: "defaultIdentityPluginInstance",
+							IdentityCertName:     "defaultIdentityCertName",
+						},
+						HTTPConnMgr: &HTTPConnectionManagerConfig{
+							InlineRouteConfig: inlineRouteConfig,
+							HTTPFilters:       makeRouterFilterList(t),
+						},
+					},
+				},
+			},
+		},
+		{
+			// The transport socket is identified by the type_url of its
+			// typed_config, and its name is ignored.
+			desc: "transport socket name ignored",
+			lis: &v3listenerpb.Listener{
+				Name:    "listerner-1",
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "unsupported-transport-socket-name",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    "identityPluginInstance",
+											CertificateName: "identityCertName",
+										},
+									},
+								}),
+							},
+						},
+						Filters: emptyValidNetworkFilters(t),
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					TransportSocket: &v3corepb.TransportSocket{
 						ConfigType: &v3corepb.TransportSocket_TypedConfig{
 							TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 								CommonTlsContext: &v3tlspb.CommonTlsContext{

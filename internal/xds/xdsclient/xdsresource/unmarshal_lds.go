@@ -333,9 +333,8 @@ func filterChainFromProto(fc *v3listenerpb.FilterChain, bc *bootstrap.Config, sc
 	if ts == nil {
 		return fcc, nil
 	}
-	if name := ts.GetName(); name != transportSocketName {
-		return emptyFilterChain, fmt.Errorf("transport_socket field has unexpected name: %s", name)
-	}
+	// The transport socket is identified by the type_url of its typed_config,
+	// and not by its name, which is ignored.
 	tc := ts.GetTypedConfig()
 	if typeURL := tc.GetTypeUrl(); typeURL != version.V3DownstreamTLSContextURL {
 		return emptyFilterChain, fmt.Errorf("transport_socket missing typed_config or wrong type_url: %q", typeURL)
