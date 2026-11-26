@@ -167,6 +167,29 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	}
 }
 
+// Tests that the picker calls exitIdle on an IDLE endpoint instead of using its
+// picker.
+func (s) TestPickerIdleEndpointCallsExitIdle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ring, epStates := testRingAndEndpointStates([]connectivity.State{connectivity.Idle})
+	exitIdleCalled := false
+	es := epStates[testSubConns[0].String()]
+	es.exitIdle = func() { exitIdleCalled = true }
+	epStates[testSubConns[0].String()] = es
+	p := &picker{
+		ring:           ring,
+		endpointStates: epStates,
+	}
+	if _, err := p.Pick(balancer.PickInfo{Ctx: iringhash.SetXDSRequestHash(ctx, 0)}); err != balancer.ErrNoSubConnAvailable {
+		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
+	}
+	if !exitIdleCalled {
+		t.Fatal("Pick() did not call exitIdle on the IDLE endpoint")
+	}
+}
+
 func (s) TestPickerNoRequestHash(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
