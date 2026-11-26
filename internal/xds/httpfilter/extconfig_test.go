@@ -235,7 +235,7 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			name: "InvalidHeaderKeyTooLong",
 			hmr:  &HeaderMutationRules{},
 			hvos: []*v3corepb.HeaderValueOption{
-				{Header: &v3corepb.HeaderValue{Key: strings.Repeat("a", 16385), Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+				{Header: &v3corepb.HeaderValue{Key: strings.Repeat("a", maxHeaderSize+1), Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
 			wantErr: true,
@@ -289,7 +289,7 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			name: "InvalidHeaderValueTooLong",
 			hmr:  &HeaderMutationRules{},
 			hvos: []*v3corepb.HeaderValueOption{
-				{Header: &v3corepb.HeaderValue{Key: "a", Value: strings.Repeat("1", 16385)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+				{Header: &v3corepb.HeaderValue{Key: "a", Value: strings.Repeat("1", maxHeaderSize+1)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
 			wantErr: true,
@@ -298,7 +298,7 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			name: "InvalidBinaryHeaderValueTooLong",
 			hmr:  &HeaderMutationRules{},
 			hvos: []*v3corepb.HeaderValueOption{
-				{Header: &v3corepb.HeaderValue{Key: "a-bin", RawValue: make([]byte, 16385)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+				{Header: &v3corepb.HeaderValue{Key: "a-bin", RawValue: make([]byte, maxHeaderSize+1)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
 			wantErr: true,
@@ -311,6 +311,34 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			},
 			inputMD: metadata.MD{},
 			wantMD:  metadata.MD{"a-bin": []string{string([]byte{1, 2, 3})}},
+		},
+		{
+			// A header key at the 32 KiB limit is accepted, per gRFC A102.
+			name: "HeaderKeyAt32K",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: strings.Repeat("a", maxHeaderSize), Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{strings.Repeat("a", maxHeaderSize): []string{"1"}},
+		},
+		{
+			name: "HeaderValueAt32K",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "a", Value: strings.Repeat("1", maxHeaderSize)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{"a": []string{strings.Repeat("1", maxHeaderSize)}},
+		},
+		{
+			name: "BinaryHeaderValueAt32K",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "a-bin", RawValue: make([]byte, maxHeaderSize)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{"a-bin": []string{string(make([]byte, maxHeaderSize))}},
 		},
 		{
 			name: "AppendIfExistsOrAdd_Exists",
@@ -498,8 +526,8 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 		{
 			name:            "InvalidHeaderKeyTooLong",
 			hmr:             &HeaderMutationRules{},
-			headersToRemove: []string{strings.Repeat("a", 16385)},
-			inputMD:         metadata.MD{strings.Repeat("a", 16385): []string{"1"}},
+			headersToRemove: []string{strings.Repeat("a", maxHeaderSize+1)},
+			inputMD:         metadata.MD{strings.Repeat("a", maxHeaderSize+1): []string{"1"}},
 			wantErr:         true,
 		},
 		{
