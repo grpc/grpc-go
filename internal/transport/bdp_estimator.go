@@ -109,6 +109,14 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 		return
 	}
 	b.mu.Lock()
+	// Ignore an ack with no BDP ping outstanding. Conforming peers never send
+	// one. Before the first ping sampleCount is 0. The rtt update would divide
+	// by it and make rtt +Inf and then NaN causing the estimate to never grow
+	// again.
+	if !b.isSent {
+		b.mu.Unlock()
+		return
+	}
 	rttSample := time.Since(b.sentAt).Seconds()
 	if b.sampleCount < 10 {
 		// Bootstrap rtt with an average of first 10 rtt samples.
