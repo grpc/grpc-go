@@ -34,7 +34,10 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
 // customTestResourceType is a fake resource type used for testing.
@@ -87,10 +90,6 @@ func (c *customTestResourceData) Equal(other xdsclient.ResourceData) bool {
 		return false
 	}
 	return c.val == o.val
-}
-
-func (c *customTestResourceData) Bytes() []byte {
-	return []byte(c.val)
 }
 
 // customTestWatcher is a watcher for the custom resource type.
@@ -248,6 +247,28 @@ func (s) TestCustomResourceWatch(t *testing.T) {
 				if gotData.val != test.wantUpdate {
 					t.Fatalf("Received resource value %q, want %q", gotData.val, test.wantUpdate)
 				}
+			}
+
+			// Verify that DumpResources returns the raw serialized resource
+			// bytes cached by the authority even though customTestResourceData
+			// only stores the decoded string.
+			wantNode := &v3corepb.Node{
+				Id:                   nodeID,
+				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{},
+				ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+			}
+			wantResp := &v3statuspb.ClientStatusResponse{
+				Config: []*v3statuspb.ClientConfig{
+					{
+						Node: wantNode,
+						GenericXdsConfigs: []*v3statuspb.ClientConfig_GenericXdsConfig{
+							makeGenericXdsConfig(customTestResourceType.TypeURL, resourceName, "1", v3adminpb.ClientResourceStatus_ACKED, resource, nil),
+						},
+					},
+				},
+			}
+			if err := checkResourceDump(ctx, wantResp, client); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
