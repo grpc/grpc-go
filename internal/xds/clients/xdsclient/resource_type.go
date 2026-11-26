@@ -90,10 +90,6 @@ func (a *AnyProto) ToAny() *anypb.Any {
 // DecodeOptions wraps the options required by ResourceType implementations for
 // decoding configuration received from the xDS management server.
 type DecodeOptions struct {
-	// Config contains the complete configuration passed to the xDS client.
-	// This contains useful data for resource validation.
-	Config *Config
-
 	// ServerConfig contains the configuration of the xDS server that provided
 	// the current resource being decoded.
 	ServerConfig *ServerConfig
