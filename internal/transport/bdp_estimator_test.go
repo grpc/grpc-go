@@ -19,8 +19,10 @@
 package transport
 
 import (
+	"math"
 	"sync"
 	"testing"
+	"time"
 )
 
 func (s) TestBDPEstimator_ConcurrentAccess(*testing.T) {
@@ -47,4 +49,41 @@ func (s) TestBDPEstimator_ConcurrentAccess(*testing.T) {
 		}
 	})
 	wg.Wait()
+}
+
+// ackBDPPing acks the outstanding bdp ping as if it had been sent one
+// millisecond ago. The rtt samples then stay close to one millisecond. So
+// bandwidth samples differ mostly by size and a much larger sample sets a new
+// bwMax.
+func ackBDPPing(b *bdpEstimator) {
+	b.mu.Lock()
+	b.sentAt = time.Now().Add(-time.Millisecond)
+	b.mu.Unlock()
+	b.calculate(bdpPing.data)
+}
+
+// TestBDPEstimator_AckBeforeFirstPing checks that an ack before the first BDP
+// ping leaves rtt finite. A later large sample then still grows the estimate.
+func (s) TestBDPEstimator_AckBeforeFirstPing(t *testing.T) {
+	var gotUpdate uint32
+	b := &bdpEstimator{
+		bdp:               initialWindowSize,
+		updateFlowControl: func(n uint32) { gotUpdate = n },
+	}
+	b.calculate(bdpPing.data)
+	if math.IsNaN(b.rtt) || math.IsInf(b.rtt, 0) {
+		t.Fatalf("rtt = %v after an ack before the first ping, want a finite value", b.rtt)
+	}
+
+	const frameSize = 16 * 1024
+	const frames = 4
+	for i := range frames {
+		if got, want := b.add(frameSize), i == 0; got != want {
+			t.Fatalf("add() on frame %d = %v, want %v", i, got, want)
+		}
+	}
+	ackBDPPing(b)
+	if wantBDP := uint32(gamma * frames * frameSize); gotUpdate != wantBDP || b.bdp != wantBDP {
+		t.Fatalf("Estimate = %d with update %d, want %d", b.bdp, gotUpdate, wantBDP)
+	}
 }
