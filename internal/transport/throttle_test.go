@@ -26,7 +26,7 @@ import (
 	"math"
 	"net"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,17 +36,31 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// writeTrackingConn is a net.Conn that tracks the number of in-progress calls
-// to Write.
+// writeTrackingConn is a net.Conn that tracks whether a call to Write is in
+// progress. It assumes a single writer.
 type writeTrackingConn struct {
 	net.Conn
-	writesInProgress atomic.Int32
+	mu      sync.Mutex
+	writing bool // Set while a call to Write is in progress.
 }
 
 func (c *writeTrackingConn) Write(b []byte) (int, error) {
-	c.writesInProgress.Add(1)
-	defer c.writesInProgress.Add(-1)
+	c.setWriting(true)
+	defer c.setWriting(false)
 	return c.Conn.Write(b)
+}
+
+func (c *writeTrackingConn) setWriting(w bool) {
+	c.mu.Lock()
+	c.writing = w
+	c.mu.Unlock()
+}
+
+// isWriting reports whether a call to Write is in progress.
+func (c *writeTrackingConn) isWriting() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.writing
 }
 
 // fakeServerHandshake performs the server side of the HTTP/2 connection
@@ -62,21 +76,45 @@ func fakeServerHandshake(conn net.Conn) (*http2.Framer, error) {
 	return fr, nil
 }
 
-// countQueuedItems returns the number of items of type T currently queued in
-// the given control buffer.
-func countQueuedItems[T cbItem](cb *controlBuffer) int {
+// countQueuedItemsMatching returns the number of items currently queued in the
+// given control buffer, in both producerList and consumerList, for which match
+// returns true.
+//
+// The consumer goroutine (loopy) accesses consumerList without holding cb.mu,
+// so conn must be the connection loopy writes to, and loopy must be blocked
+// writing to it. The test fails otherwise. While the count is taken, conn.mu
+// is held, which keeps loopy from returning from Write, and so from touching
+// consumerList.
+func countQueuedItemsMatching(t *testing.T, cb *controlBuffer, conn *writeTrackingConn, match func(cbItem) bool) int {
+	t.Helper()
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if !conn.writing {
+		t.Fatal("Loopy is not blocked writing to the connection, cannot read consumerList")
+	}
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	n := 0
-	// The items are stored in a ring buffer, starting at index head and
+	// The items are stored in ring buffers, starting at index head and
 	// wrapping around to the start of buf past its end.
-	for i := range cb.list.count {
-		index := (cb.list.head + i) % len(cb.list.buf)
-		if _, ok := cb.list.buf[index].(T); ok {
-			n++
+	for _, l := range []*itemList[cbItem]{&cb.producerList, &cb.consumerList} {
+		for i := range l.count {
+			if match(l.buf[(l.head+i)%len(l.buf)]) {
+				n++
+			}
 		}
 	}
 	return n
+}
+
+// countQueuedItems returns the number of items of type T currently queued in
+// the given control buffer, in both producerList and consumerList.
+func countQueuedItems[T cbItem](t *testing.T, cb *controlBuffer, conn *writeTrackingConn) int {
+	t.Helper()
+	return countQueuedItemsMatching(t, cb, conn, func(it cbItem) bool {
+		_, ok := it.(T)
+		return ok
+	})
 }
 
 // newClientTransportOverConn creates a client transport that uses conn as its
@@ -195,8 +233,9 @@ func (s) TestClientTransport_ServerFloodWithoutReading(t *testing.T) {
 			}()
 
 			// Use a small throttle timeout to keep the test fast.
+			wConn := &writeTrackingConn{Conn: cConn}
 			closeErrCh := make(chan error, 1)
-			ct, cleanup := newClientTransportOverConn(ctx, t, cConn, 100*time.Millisecond, func(info GoAwayInfo) {
+			ct, cleanup := newClientTransportOverConn(ctx, t, wConn, 100*time.Millisecond, func(info GoAwayInfo) {
 				select {
 				case closeErrCh <- info.Err:
 				default:
@@ -225,6 +264,17 @@ func (s) TestClientTransport_ServerFloodWithoutReading(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("Timeout when waiting for the client to close the connection")
 			}
+			// Verify that the number of queued items that count towards the
+			// limit never exceeded the limit, across both producerList and
+			// consumerList. Check this before closing sConn unblocks the writer
+			// and discards them.
+			queued := countQueuedItemsMatching(t, ct.controlBuf, wConn, func(it cbItem) bool {
+				return it.isTransportResponseFrame(ct.controlBuf.side)
+			})
+			if queued > 2*maxQueuedTransportResponseFrames {
+				t.Fatalf("Number of queued transport response frames = %d, want <= %d", queued, 2*maxQueuedTransportResponseFrames)
+			}
+
 			// While closing, the client waits for up to
 			// goAwayLoopyWriterTimeout for its writer to write a
 			// GOAWAY frame, which it cannot do since the server is
@@ -238,22 +288,6 @@ func (s) TestClientTransport_ServerFloodWithoutReading(t *testing.T) {
 			}
 			if st := stream.Status(); st.Code() != codes.Unavailable || !strings.Contains(st.Message(), wantErr) {
 				t.Fatalf("Stream status = %v, want code %v and message containing %q", st, codes.Unavailable, wantErr)
-			}
-
-			// Verify that the number of queued items that count
-			// towards the limit never exceeded the limit. The
-			// count is not reset when the control buffer is
-			// finished upon the writer exiting.
-			select {
-			case <-ct.writerDone:
-			case <-ctx.Done():
-				t.Fatal("Timeout when waiting for the client's writer to exit")
-			}
-			ct.controlBuf.mu.Lock()
-			queued := ct.controlBuf.transportResponseFrames
-			ct.controlBuf.mu.Unlock()
-			if queued > maxQueuedTransportResponseFrames {
-				t.Fatalf("Number of queued transport response frames = %d, want <= %d", queued, maxQueuedTransportResponseFrames)
 			}
 		})
 	}
@@ -447,7 +481,7 @@ func (s) TestClientTransport_StreamCleanupDoesNotThrottleReads(t *testing.T) {
 	if _, err := ct.NewStream(ctx, &CallHdr{}, nil); err != nil {
 		t.Fatalf("NewStream() failed: %v", err)
 	}
-	for wConn.writesInProgress.Load() == 0 {
+	for !wConn.isWriting() {
 		if ctx.Err() != nil {
 			t.Fatal("Timeout when waiting for the client's writer to block")
 		}
@@ -472,7 +506,7 @@ func (s) TestClientTransport_StreamCleanupDoesNotThrottleReads(t *testing.T) {
 	// Verify that the test queued enough cleanupStream items to throttle
 	// reads, had they counted towards the limit, and that the client
 	// transport is still healthy.
-	numCleanups := countQueuedItems[*cleanupStream](ct.controlBuf)
+	numCleanups := countQueuedItems[*cleanupStream](t, ct.controlBuf, wConn)
 	if numCleanups < numStreams {
 		t.Fatalf("Number of queued cleanupStream items = %d, want at least %d", numCleanups, numStreams)
 	}
@@ -503,6 +537,9 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 		sConn.Close()
 		cConn.Close()
 	}()
+	// Track the server's writes, to count the queued pings while its writer
+	// is blocked.
+	wConn := &writeTrackingConn{Conn: sConn}
 
 	type result struct {
 		st  ServerTransport
@@ -510,7 +547,7 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 	}
 	resultCh := make(chan result, 1)
 	go func() {
-		st, err := NewServerTransport(sConn, &ServerConfig{
+		st, err := NewServerTransport(wConn, &ServerConfig{
 			MaxStreams: math.MaxUint32,
 			BufferPool: mem.DefaultBufferPool(),
 			// Disable write buffering, so that the server's writer
@@ -582,10 +619,10 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 
 	// Flood the server. Since the client is not reading anymore, the
 	// server's writer blocks when writing the first BDP ping, and the
-	// subsequent ones are queued. Use well over the limit as the number of
-	// rounds, so that the flood cannot complete if the server throttles
-	// reads at the limit.
-	numRounds := 2 * maxQueuedTransportResponseFrames
+	// subsequent ones are queued. Use well over the number of pings that
+	// can be queued as the number of rounds, so that the flood cannot
+	// complete if the server throttles reads at the limit.
+	numRounds := 4 * maxQueuedTransportResponseFrames
 	var roundsWritten int
 	var floodErr error
 	floodDone := make(chan struct{})
@@ -609,7 +646,8 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 
 	// Verify that the server stops reading from the connection before
 	// reading all the frames of the flood, and that it does not queue more
-	// pings than the limit.
+	// pings than the limit, both in the list of queued items and among the
+	// items taken by the writer.
 	for st.controlBuf.trfChan.Load() == nil {
 		select {
 		case <-floodDone:
@@ -624,7 +662,7 @@ func (s) TestServerTransport_BDPPingFloodWithoutReading(t *testing.T) {
 		t.Fatalf("Flood ended after %d of %d rounds (error: %v) while the server was throttling reads", roundsWritten, numRounds, floodErr)
 	case <-time.After(defaultTestShortTimeout):
 	}
-	if numPings := countQueuedItems[*ping](st.controlBuf); numPings > maxQueuedTransportResponseFrames {
-		t.Fatalf("Number of queued pings = %d, want <= %d", numPings, maxQueuedTransportResponseFrames)
+	if numPings := countQueuedItems[*ping](t, st.controlBuf, wConn); numPings > 2*maxQueuedTransportResponseFrames {
+		t.Fatalf("Number of queued pings = %d, want <= %d", numPings, 2*maxQueuedTransportResponseFrames)
 	}
 }
