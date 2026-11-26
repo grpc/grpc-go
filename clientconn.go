@@ -248,7 +248,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelz)
 	cc.pickerWrapper = newPickerWrapper()
 
-	cc.metricsRecorderList = istats.NewMetricsRecorderList(cc.dopts.copts.StatsHandlers)
+	cc.metricsRecorderList = istats.NewMetricsRecorderList(cc.dopts.copts.StatsHandlers, nil)
 	cc.statsHandler = istats.NewCombinedHandler(cc.dopts.copts.StatsHandlers...)
 
 	cc.initIdleStateLocked() // Safe to call without the lock, since nothing else has a reference to cc.
