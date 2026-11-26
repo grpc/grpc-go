@@ -32,7 +32,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	estats "google.golang.org/grpc/experimental/stats"
 	grpcinternal "google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -4358,6 +4360,23 @@ func overrideTimeForMetricsTesting(t *testing.T) {
 	})
 }
 
+// histogramMetricsRecorder retains every histogram record instead of only the
+// latest one, so concurrent metrics can be checked independently of their order.
+type histogramMetricsRecorder struct {
+	*stats.TestMetricsRecorder
+	histograms *buffer.Unbounded[stats.MetricsData]
+}
+
+func (r *histogramMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
+	r.TestMetricsRecorder.RecordFloat64Histo(handle, incr, labels...)
+	r.histograms.Put(stats.MetricsData{
+		Handle:    handle.Descriptor(),
+		FloatIncr: incr,
+		LabelKeys: append(append([]string(nil), handle.Labels...), handle.OptionalLabels...),
+		LabelVals: append([]string(nil), labels...),
+	})
+}
+
 // TestUnaryMetrics tests the client-side ext_proc metrics for a Unary RPC in
 // both normal mode and observability mode. It verifies that all 4 duration
 // metrics are recorded with the correct labels and that their values match
@@ -4429,7 +4448,10 @@ func (s) TestUnaryMetrics(t *testing.T) {
 			defer stub.Stop()
 
 			const serviceName = "test-service"
-			tmr := stats.NewTestMetricsRecorder()
+			tmr := &histogramMetricsRecorder{
+				TestMetricsRecorder: stats.NewTestMetricsRecorder(),
+				histograms:          buffer.NewUnbounded[stats.MetricsData](),
+			}
 			grpcTarget := "xds:///" + serviceName
 			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
@@ -4456,28 +4478,27 @@ func (s) TestUnaryMetrics(t *testing.T) {
 				t.Fatalf("UnaryCall() failed: %v", err)
 			}
 
-			// Verify values in the map.
-			if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got != wantDurationSeconds {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_headers_duration", got, wantDurationSeconds)
+			// Metrics are recorded by different goroutines. Retain every record
+			// and verify all four metrics without assuming their arrival order.
+			wantMetrics := map[string]bool{
+				"grpc.client_ext_proc.client_headers_duration":    true,
+				"grpc.client_ext_proc.server_headers_duration":    true,
+				"grpc.client_ext_proc.client_half_close_duration": true,
+				"grpc.client_ext_proc.server_trailers_duration":   true,
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got != wantDurationSeconds {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_headers_duration", got, wantDurationSeconds)
+			for len(wantMetrics) > 0 {
+				select {
+				case md := <-tmr.histograms.Get():
+					tmr.histograms.Load()
+					if !wantMetrics[md.Handle.Name] {
+						t.Fatalf("Unexpected or duplicate metric %q", md.Handle.Name)
+					}
+					verifyMetric(t, md, md.Handle.Name, grpcTarget, wantDurationSeconds)
+					delete(wantMetrics, md.Handle.Name)
+				case <-ctx.Done():
+					t.Fatalf("Timed out waiting for metrics: %v", wantMetrics)
+				}
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got != wantDurationSeconds {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_half_close_duration", got, wantDurationSeconds)
-			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got != wantDurationSeconds {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_trailers_duration", got, wantDurationSeconds)
-			}
-
-			// Verify labels for the last metric (server_trailers_duration) from the
-			// channel. Since it is recorded last, it should be the one remaining in
-			// the channel.
-			md, err := tmr.ReadFloat64Histo(ctx)
-			if err != nil {
-				t.Fatalf("Failed to read last metric from channel: %v", err)
-			}
-			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, wantDurationSeconds)
 		})
 	}
 }
