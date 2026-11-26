@@ -22,6 +22,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"slices"
 	"time"
 
 	"google.golang.org/grpc/backoff"
@@ -97,6 +98,7 @@ type dialOptions struct {
 	enableLocalDNSResolution    bool // Specifies if target hostnames should be resolved when proxying is enabled.
 	useProxy                    bool // Specifies if a server should be connected via proxy.
 	clientConnProvider          ClientConnProvider
+	childChannelOptions         []DialOption // Dial options to be applied to child channels created by this channel.
 }
 
 // DialOption configures how we set up the connection.
@@ -809,5 +811,32 @@ func WithMaxCallAttempts(n int) DialOption {
 func withBufferPool(bufferPool mem.BufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.BufferPool = bufferPool
+	})
+}
+
+// WithChildChannelOptions returns a DialOption that specifies dial options to
+// be applied to child channels created internally by this channel (such as
+// channels to the xDS control plane, external authorization services, or
+// external processing servers).
+//
+// These options are not applied to the parent channel itself.
+//
+// If this option is specified multiple times, only the last one takes effect.
+// Calling it with no options clears any previously set child channel options.
+// This also means that a call to this option replaces any child channel
+// options set through global dial options.
+//
+// Note: Plumbing for child channel options is not yet implemented.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func WithChildChannelOptions(opts ...DialOption) DialOption {
+	// TODO: Revisit the doc comment once plumbing is implemented to ensure it
+	// is compliant with gRFC A110 and the implementation.
+	opts = slices.Clone(opts)
+	return newFuncDialOption(func(o *dialOptions) {
+		o.childChannelOptions = opts
 	})
 }
