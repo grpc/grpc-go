@@ -222,6 +222,16 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	chainUnaryClientInterceptors(cc)
 	chainStreamClientInterceptors(cc)
 
+	// Wrap the ClientConnProvider (if any) once per channel, so that LB
+	// policies requesting a ClientConn for the same key share it, as specified
+	// on ClientConnProvider. Wrapping it here (instead of whenever it is passed
+	// to the LB policy) ensures that the sharing extends across LB policy
+	// instances, and that the provider passed to the LB policy does not change
+	// across resolver updates.
+	if cc.dopts.clientConnProvider != nil {
+		cc.dopts.clientConnProvider = newSharedClientConnProvider(cc.dopts.clientConnProvider)
+	}
+
 	if err := cc.validateTransportCredentials(); err != nil {
 		return nil, err
 	}
