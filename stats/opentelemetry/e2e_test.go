@@ -2770,3 +2770,121 @@ func checkMetricWithMethod(ctx context.Context, reader *metric.ManualReader, met
 	}
 	return fmt.Errorf("metric %q with method %q not found", metricName, method)
 }
+
+// TestCallInfoNotInheritedFromStreamContext verifies that when the context of
+// an ongoing streaming RPC (stream.Context()) is used to start an RPC on a
+// different ClientConn, the per-call metrics of the new RPC are recorded with
+// its own method and target, and not those of the stream that the context was
+// derived from. Regression test for
+// https://github.com/grpc/grpc-go/issues/9651.
+func (s) TestCallInfoNotInheritedFromStreamContext(t *testing.T) {
+	ss := setupStubServer(t, nil, nil)
+	defer ss.Stop()
+	// Send headers right away, so that the client can wait for the stream to
+	// be established before using its context.
+	ss.FullDuplexCallF = func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return err
+		}
+		for {
+			if _, err := stream.Recv(); err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return err
+			}
+		}
+	}
+
+	metricsOpts, reader := defaultMetricsOptions(t, nil)
+	traceOpts, _ := defaultTraceOptions(t)
+	otelOpts := opentelemetry.Options{MetricsOptions: *metricsOpts, TraceOptions: *traceOpts}
+
+	streamTarget := "dns:///" + ss.Address
+	unaryTarget := "passthrough:///" + ss.Address
+	newClient := func(target string) testgrpc.TestServiceClient {
+		cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(otelOpts))
+		if err != nil {
+			t.Fatalf("grpc.NewClient(%q) failed: %v", target, err)
+		}
+		t.Cleanup(func() { cc.Close() })
+		return testgrpc.NewTestServiceClient(cc)
+	}
+	streamClient := newClient(streamTarget)
+	unaryClient := newClient(unaryTarget)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := streamClient.FullDuplexCall(ctx, grpc.StaticMethod())
+	if err != nil {
+		t.Fatalf("FullDuplexCall failed: %v", err)
+	}
+	if _, err := stream.Header(); err != nil {
+		t.Fatalf("stream.Header() failed: %v", err)
+	}
+
+	// Use the stream's context for a unary RPC on a different ClientConn, while
+	// the stream is still open.
+	if _, err := unaryClient.UnaryCall(stream.Context(), &testpb.SimpleRequest{}, grpc.StaticMethod()); err != nil {
+		t.Fatalf("UnaryCall failed: %v", err)
+	}
+
+	// Only the unary RPC (and its attempt) has completed, so the duration
+	// metrics must have exactly one data point, with the unary RPC's labels.
+	// Both RPCs have started an attempt, each with its own labels.
+	unaryLabels := methodTarget{method: "grpc.testing.TestService/UnaryCall", target: unaryTarget}
+	streamLabels := methodTarget{method: "grpc.testing.TestService/FullDuplexCall", target: streamTarget}
+	metrics := metricsDataFromReader(ctx, reader)
+	for name, want := range map[string][]methodTarget{
+		"grpc.client.call.duration":    {unaryLabels},
+		"grpc.client.attempt.duration": {unaryLabels},
+		"grpc.client.attempt.started":  {streamLabels, unaryLabels},
+	} {
+		got := methodTargetLabels(t, metrics, name)
+		if diff := cmp.Diff(want, got, cmp.AllowUnexported(methodTarget{}), cmpopts.SortSlices(func(a, b methodTarget) bool { return a.method < b.method })); diff != "" {
+			t.Errorf("%s labels mismatch (-want +got):\n%s", name, diff)
+		}
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() = %v, want io.EOF", err)
+	}
+}
+
+// methodTarget holds the grpc.method and grpc.target labels of a data point.
+type methodTarget struct{ method, target string }
+
+// methodTargetLabels returns the grpc.method and grpc.target labels of every
+// data point of the named metric, which must be an int64 sum or a float64
+// histogram.
+func methodTargetLabels(t *testing.T, metrics map[string]metricdata.Metrics, name string) []methodTarget {
+	t.Helper()
+	m, ok := metrics[name]
+	if !ok {
+		t.Fatalf("Metric %q not recorded", name)
+	}
+	var sets []attribute.Set
+	switch data := m.Data.(type) {
+	case metricdata.Sum[int64]:
+		for _, dp := range data.DataPoints {
+			sets = append(sets, dp.Attributes)
+		}
+	case metricdata.Histogram[float64]:
+		for _, dp := range data.DataPoints {
+			sets = append(sets, dp.Attributes)
+		}
+	default:
+		t.Fatalf("Metric %q has data of unsupported type %T", name, m.Data)
+	}
+	var got []methodTarget
+	for _, set := range sets {
+		method, _ := set.Value("grpc.method")
+		target, _ := set.Value("grpc.target")
+		got = append(got, methodTarget{method: method.AsString(), target: target.AsString()})
+	}
+	return got
+}
