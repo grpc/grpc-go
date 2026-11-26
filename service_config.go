@@ -96,7 +96,7 @@ type healthCheckConfig struct {
 }
 
 type jsonRetryPolicy struct {
-	MaxAttempts          int
+	MaxAttempts          internalserviceconfig.Uint32
 	InitialBackoff       internalserviceconfig.Duration
 	MaxBackoff           internalserviceconfig.Duration
 	BackoffMultiplier    float64
@@ -149,8 +149,8 @@ type jsonMC struct {
 	Name                    *[]jsonName
 	WaitForReady            *bool
 	Timeout                 *internalserviceconfig.Duration
-	MaxRequestMessageBytes  *int64
-	MaxResponseMessageBytes *int64
+	MaxRequestMessageBytes  *internalserviceconfig.Uint32
+	MaxResponseMessageBytes *internalserviceconfig.Uint32
 	RetryPolicy             *jsonRetryPolicy
 }
 
@@ -227,14 +227,14 @@ func parseServiceConfig(js string, maxAttempts int) *serviceconfig.ParseResult {
 			return &serviceconfig.ParseResult{Err: err}
 		}
 		if m.MaxRequestMessageBytes != nil {
-			if *m.MaxRequestMessageBytes > int64(maxInt) {
+			if uint64(*m.MaxRequestMessageBytes) > uint64(maxInt) {
 				mc.MaxReqSize = newInt(maxInt)
 			} else {
 				mc.MaxReqSize = newInt(int(*m.MaxRequestMessageBytes))
 			}
 		}
 		if m.MaxResponseMessageBytes != nil {
-			if *m.MaxResponseMessageBytes > int64(maxInt) {
+			if uint64(*m.MaxResponseMessageBytes) > uint64(maxInt) {
 				mc.MaxRespSize = newInt(maxInt)
 			} else {
 				mc.MaxRespSize = newInt(int(*m.MaxResponseMessageBytes))
@@ -285,8 +285,8 @@ func convertRetryPolicy(jrp *jsonRetryPolicy, maxAttempts int) (p *internalservi
 		return nil, fmt.Errorf("invalid retry policy (%+v): ", jrp)
 	}
 
-	if jrp.MaxAttempts < maxAttempts {
-		maxAttempts = jrp.MaxAttempts
+	if int64(jrp.MaxAttempts) < int64(maxAttempts) {
+		maxAttempts = int(jrp.MaxAttempts)
 	}
 	rp := &internalserviceconfig.RetryPolicy{
 		MaxAttempts:          maxAttempts,
