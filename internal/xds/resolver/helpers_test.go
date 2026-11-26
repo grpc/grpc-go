@@ -20,6 +20,7 @@ package resolver_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -70,23 +71,27 @@ var defaultTestPort = []uint32{8080}
 
 // wantServiceConfig returns a JSON representation of a service config with
 // xds_cluster_manager_experimental LB policy with a child policy of
-// cds_experimental for the provided cluster name.
-func wantServiceConfig(clusterName string) string {
-	return fmt.Sprintf(`{
-   "loadBalancingConfig": [{
-	 "xds_cluster_manager_experimental": {
-	   "children": {
+// cds_experimental for each of the provided cluster names.
+func wantServiceConfig(clusterNames ...string) string {
+	children := make([]string, 0, len(clusterNames))
+	for _, name := range clusterNames {
+		children = append(children, fmt.Sprintf(`
 		 "cluster:%s": {
 		   "childPolicy": [{
 			 "cds_experimental": {
 			   "cluster": "%s"
 			 }
 		   }]
-		 }
+		 }`, name, name))
+	}
+	return fmt.Sprintf(`{
+   "loadBalancingConfig": [{
+	 "xds_cluster_manager_experimental": {
+	   "children": {%s
 	   }
 	 }
    }]
- }`, clusterName, clusterName)
+ }`, strings.Join(children, ","))
 }
 
 // buildResolverForTarget builds an xDS resolver for the given target. If
@@ -138,6 +143,55 @@ func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapConte
 	return stateCh, errCh, r
 }
 
+// readUpdateFromResolver reads the next update pushed by the resolver to the
+// fake resolver.ClientConn. Returns an error if the context expires before an
+// update is received.
+func readUpdateFromResolver(ctx context.Context, stateCh chan resolver.State) (resolver.State, error) {
+	select {
+	case <-ctx.Done():
+		return resolver.State{}, fmt.Errorf("timeout waiting for an update from the resolver: %v", ctx.Err())
+	case state := <-stateCh:
+		return state, nil
+	}
+}
+
+// checkServiceConfig returns an error if the service config in the provided
+// state is invalid or does not match wantSC.
+func checkServiceConfig(state resolver.State, wantSC string) error {
+	if state.ServiceConfig == nil {
+		return fmt.Errorf("received nil service config, want %s", wantSC)
+	}
+	if err := state.ServiceConfig.Err; err != nil {
+		return fmt.Errorf("received error in service config: %v", err)
+	}
+	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantSC)
+	if err := wantSCParsed.Err; err != nil {
+		return fmt.Errorf("failed to parse wanted service config %s: %v", wantSC, err)
+	}
+	if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+		return fmt.Errorf("got service config:\n%s\nwant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+	}
+	return nil
+}
+
+// waitForServiceConfig reads updates pushed by the resolver to the fake
+// resolver.ClientConn, skipping intermediate ones, until it receives one whose
+// service config matches wantSC. Returns the matching update, or an error if
+// the context expires before such an update is received.
+func waitForServiceConfig(ctx context.Context, stateCh chan resolver.State, wantSC string) (resolver.State, error) {
+	lastErr := errors.New("no updates received")
+	for {
+		select {
+		case <-ctx.Done():
+			return resolver.State{}, fmt.Errorf("timeout waiting for a matching service config from the resolver: %v; last mismatch: %v", ctx.Err(), lastErr)
+		case state := <-stateCh:
+			if lastErr = checkServiceConfig(state, wantSC); lastErr == nil {
+				return state, nil
+			}
+		}
+	}
+}
+
 // verifyUpdateFromResolver waits for the resolver to push an update to the fake
 // resolver.ClientConn and verifies that update matches the provided service
 // config.
@@ -150,21 +204,16 @@ func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapConte
 func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan resolver.State, wantSC string) iresolver.ConfigSelector {
 	t.Helper()
 
-	var state resolver.State
-	select {
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for an update from the resolver: %v", ctx.Err())
-	case state = <-stateCh:
-		if err := state.ServiceConfig.Err; err != nil {
-			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
+	state, err := readUpdateFromResolver(ctx, stateCh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wantSC != "" {
+		if err := checkServiceConfig(state, wantSC); err != nil {
+			t.Fatal(err)
 		}
-		if wantSC == "" {
-			break
-		}
-		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantSC)
-		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
-			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-		}
+	} else if err := state.ServiceConfig.Err; err != nil {
+		t.Fatalf("Received error in service config: %v", err)
 	}
 	cs := iresolver.GetConfigSelector(state)
 	if cs == nil {
