@@ -92,6 +92,33 @@ type routeExtras struct {
 	virtualHost *xdsresource.VirtualHost
 }
 
+// clusterWalkResult is the result of resolving a single cluster while walking
+// the tree of a root cluster.
+type clusterWalkResult struct {
+	// inProgress is true while the cluster's subtree is still being visited,
+	// i.e. it is an ancestor in the current path. Reaching such a cluster again
+	// means that the cluster graph has a cycle. The other fields are not set
+	// while inProgress is true.
+	inProgress bool
+	// isResolved is true if the cluster and all its dependencies are fully
+	// resolved, i.e. either an update or an error has been received for each
+	// of them. It does not indicate success: it is also true when err is set
+	// or result contains an error.
+	isResolved bool
+	// leaves contains the names of the leaf clusters in the tree rooted at
+	// this cluster. For non-aggregate clusters, it contains only the cluster
+	// itself.
+	leaves []string
+	// err is the error to propagate up the tree, e.g. a resource error, the
+	// max depth being exceeded, or an error from a child cluster.
+	err error
+	// result is the entry for the cluster in the XDSConfig. It is nil if there
+	// is no entry for the cluster, e.g. no cluster update has been received
+	// yet, or the cluster resource has an error (which is reported on the
+	// parent cluster instead).
+	result *xdsresource.ClusterResult
+}
+
 // DependencyManager registers watches on the xDS client for all required xDS
 // resources, resolves dependencies between them, and returns a complete
 // configuration to the xDS resolver.
@@ -233,30 +260,40 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	edsResourcesSeen := make(map[string]bool)
 	dnsResourcesSeen := make(map[string]bool)
 	clusterResourcesSeen := make(map[string]bool)
+	rootResults := make(map[string]*xdsresource.ClusterResult)
 	haveAllResources := true
 
 	// Start watches for all clusters. Wait for all the clusters with static
 	// reference(from route config) to be resolved before sending the update.
 	for cluster := range m.clusterSubscriptions {
-		clusterConfig := make(map[string]*xdsresource.ClusterResult)
-		ok, leafClusters, err := m.populateClusterConfigLocked(cluster, 0, clusterConfig, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
-		if !ok && m.clusterSubscriptions[cluster].staticRefCount > 0 {
+		walkResults := make(map[string]clusterWalkResult)
+		isResolved, _, err := m.populateClusterConfigLocked(cluster, 0, walkResults, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
+		if !isResolved && m.clusterSubscriptions[cluster].staticRefCount > 0 {
 			haveAllResources = false
-		}
-		// If there are no leaf clusters, add that as error.
-		if ok && len(leafClusters) == 0 {
-			config.Clusters[cluster] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))}
-		}
-		if err != nil {
-			config.Clusters[cluster] = &xdsresource.ClusterResult{Err: err}
 		}
 		// Only if all the dependencies for the cluster is resolved, add the
 		// clusters to the config. This is to ensure we do not send partial
 		// updates for dynamic clusters.
-		if ok {
-			maps.Copy(config.Clusters, clusterConfig)
+		if !isResolved {
+			continue
+		}
+		for name, r := range walkResults {
+			if r.result != nil {
+				config.Clusters[name] = r.result
+			}
+		}
+		// Record the root cluster's own entry, if this walk produced one.
+		if r := walkResults[cluster].result; r != nil {
+			rootResults[cluster] = r
+		} else if err != nil {
+			// The root cluster's resource has an error.
+			rootResults[cluster] = &xdsresource.ClusterResult{Err: err}
 		}
 	}
+	// A root cluster's entry must come from its own tree. Another tree in which
+	// it is an intermediate node can compute a different result (due to the
+	// depth limit or cycles), and roots are walked in random order.
+	maps.Copy(config.Clusters, rootResults)
 
 	// Cancel resources not seen in the tree.
 	for name, ep := range m.endpointWatchers {
@@ -296,7 +333,8 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 //
 //	clusterName:          The name of the cluster resource to resolve.
 //	depth:                The current recursion depth.
-//	clusterConfigs:       Map to store the resolved cluster configuration.
+//	walkResults:          Map to store the result of resolving each cluster in
+//	                      the tree of the root cluster being walked.
 //	endpointResourcesSeen: Stores which EDS resource names have been encountered.
 //	dnsResourcesSeen:      Stores which DNS resource names have been encountered.
 //	clustersSeen:         Stores which cluster resource names have been encountered.
@@ -312,39 +350,56 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 //	error:                Error that needs to be propagated up the tree (like
 //	                      max depth exceeded or an error propagated from a
 //	                      child cluster).
-func (m *DependencyManager) populateClusterConfigLocked(clusterName string, depth int, clusterConfigs map[string]*xdsresource.ClusterResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) (bool, []string, error) {
+func (m *DependencyManager) populateClusterConfigLocked(clusterName string, depth int, walkResults map[string]clusterWalkResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) (bool, []string, error) {
 	const aggregateClusterMaxDepth = 16
 	clustersSeen[clusterName] = true
 
 	if depth >= aggregateClusterMaxDepth {
 		err := m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth))
-		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
+		walkResults[clusterName] = clusterWalkResult{isResolved: true, err: err, result: &xdsresource.ClusterResult{Err: err}}
 		return true, nil, err
 	}
 
-	// If cluster is already seen in the tree, return.
-	if _, ok := clusterConfigs[clusterName]; ok {
-		return true, nil, nil
+	if r, ok := walkResults[clusterName]; ok {
+		if r.inProgress {
+			// The cluster is an ancestor in the current path, i.e. the graph
+			// has a cycle. It contributes no leaf clusters via this path.
+			return true, nil, nil
+		}
+		// The cluster was already resolved via another path in this tree.
+		// Reuse the result.
+		return r.isResolved, r.leaves, r.err
 	}
 
+	// Mark the cluster as being resolved to detect cycles.
+	walkResults[clusterName] = clusterWalkResult{inProgress: true}
+	r := m.resolveClusterLocked(clusterName, depth, walkResults, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
+	walkResults[clusterName] = r
+	return r.isResolved, r.leaves, r.err
+}
+
+// resolveClusterLocked resolves the given cluster, starting watches for it and
+// its dependencies if required. It recursively resolves the children of
+// aggregate clusters.
+func (m *DependencyManager) resolveClusterLocked(clusterName string, depth int, walkResults map[string]clusterWalkResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) clusterWalkResult {
 	// If cluster watcher does not exist, create one.
 	state, ok := m.clusterWatchers[clusterName]
 	if !ok {
 		m.clusterWatchers[clusterName] = newClusterWatcher(clusterName, m)
-		return false, nil, nil
+		return clusterWalkResult{}
 	}
 
 	// If a watch exists but no update received yet, return.
 	if !state.updateReceived {
-		return false, nil, nil
+		return clusterWalkResult{}
 	}
 
 	// If there was a resource error, propagate it up.
 	if state.lastErr != nil {
-		return true, nil, state.lastErr
+		return clusterWalkResult{isResolved: true, err: state.lastErr}
 	}
 
-	clusterConfigs[clusterName] = &xdsresource.ClusterResult{
+	result := &xdsresource.ClusterResult{
 		Config: xdsresource.ClusterConfig{
 			Cluster: state.lastUpdate,
 		},
@@ -353,18 +408,20 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 
 	switch update.ClusterType {
 	case xdsresource.ClusterTypeEDS:
-		return m.populateEDSClusterLocked(clusterName, update, clusterConfigs, endpointResourcesSeen)
+		return m.populateEDSClusterLocked(clusterName, update, result, endpointResourcesSeen)
 	case xdsresource.ClusterTypeLogicalDNS:
-		return m.populateLogicalDNSClusterLocked(clusterName, update, clusterConfigs, dnsResourcesSeen)
+		return m.populateLogicalDNSClusterLocked(clusterName, update, result, dnsResourcesSeen)
 	case xdsresource.ClusterTypeAggregate:
-		return m.populateAggregateClusterLocked(clusterName, update, depth, clusterConfigs, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
+		return m.populateAggregateClusterLocked(update, depth, result, walkResults, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
 	default:
-		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("cluster type %v of cluster %s not supported", update.ClusterType, clusterName))}
-		return true, nil, nil
+		return clusterWalkResult{
+			isResolved: true,
+			result:     &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("cluster type %v of cluster %s not supported", update.ClusterType, clusterName))},
+		}
 	}
 }
 
-func (m *DependencyManager) populateEDSClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, clusterConfigs map[string]*xdsresource.ClusterResult, endpointResourcesSeen map[string]bool) (bool, []string, error) {
+func (m *DependencyManager) populateEDSClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, result *xdsresource.ClusterResult, endpointResourcesSeen map[string]bool) clusterWalkResult {
 	edsName := clusterName
 	if update.EDSServiceName != "" {
 		edsName = update.EDSServiceName
@@ -374,24 +431,24 @@ func (m *DependencyManager) populateEDSClusterLocked(clusterName string, update 
 	// If endpoint watcher does not exist, create one.
 	if _, ok := m.endpointWatchers[edsName]; !ok {
 		m.endpointWatchers[edsName] = newEndpointWatcher(edsName, m)
-		return false, nil, nil
+		return clusterWalkResult{result: result}
 	}
 	endpointState := m.endpointWatchers[edsName]
 
 	// If the resource does not have any update yet, return.
 	if !endpointState.updateReceived {
-		return false, nil, nil
+		return clusterWalkResult{result: result}
 	}
 
 	// Store the update and error.
-	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
+	result.Config.EndpointConfig = &xdsresource.EndpointConfig{
 		EDSUpdate:      endpointState.lastUpdate,
 		ResolutionNote: endpointState.lastErr,
 	}
-	return true, []string{clusterName}, nil
+	return clusterWalkResult{isResolved: true, leaves: []string{clusterName}, result: result}
 }
 
-func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, clusterConfigs map[string]*xdsresource.ClusterResult, dnsResourcesSeen map[string]bool) (bool, []string, error) {
+func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, result *xdsresource.ClusterResult, dnsResourcesSeen map[string]bool) clusterWalkResult {
 	target := update.DNSHostName
 	dnsResourcesSeen[target] = true
 
@@ -399,50 +456,59 @@ func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, 
 	if _, ok := m.dnsResolvers[target]; !ok {
 		state := m.newDNSResolver(target)
 		if state == nil {
-			return false, nil, nil
+			return clusterWalkResult{result: result}
 		}
 		m.dnsResolvers[target] = state
-		return false, nil, nil
+		return clusterWalkResult{result: result}
 	}
 	dnsState := m.dnsResolvers[target]
 
 	// If no update received, return false.
 	if !dnsState.updateReceived {
-		return false, nil, nil
+		return clusterWalkResult{result: result}
 	}
 
-	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
+	result.Config.EndpointConfig = &xdsresource.EndpointConfig{
 		DNSEndpoints:   dnsState.lastUpdate,
 		ResolutionNote: dnsState.lastErr,
 	}
-	return true, []string{clusterName}, nil
+	return clusterWalkResult{isResolved: true, leaves: []string{clusterName}, result: result}
 }
 
-func (m *DependencyManager) populateAggregateClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, depth int, clusterConfigs map[string]*xdsresource.ClusterResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) (bool, []string, error) {
+func (m *DependencyManager) populateAggregateClusterLocked(update *xdsresource.ClusterUpdate, depth int, result *xdsresource.ClusterResult, walkResults map[string]clusterWalkResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) clusterWalkResult {
 	var leafClusters []string
+	// A leaf cluster reachable via multiple paths is included only once, at
+	// the earliest position in which it is seen.
+	seenLeaves := make(map[string]bool)
 	haveAllResources := true
 	for _, child := range update.PrioritizedClusterNames {
-		ok, childLeafClusters, err := m.populateClusterConfigLocked(child, depth+1, clusterConfigs, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
-		if !ok {
+		isResolved, childLeafClusters, err := m.populateClusterConfigLocked(child, depth+1, walkResults, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
+		if !isResolved {
 			haveAllResources = false
 		}
 		if err != nil {
-			clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
-			return true, leafClusters, err
+			return clusterWalkResult{isResolved: true, leaves: leafClusters, err: err, result: &xdsresource.ClusterResult{Err: err}}
 		}
-		leafClusters = append(leafClusters, childLeafClusters...)
+		for _, leaf := range childLeafClusters {
+			if !seenLeaves[leaf] {
+				seenLeaves[leaf] = true
+				leafClusters = append(leafClusters, leaf)
+			}
+		}
 	}
 	if !haveAllResources {
-		return false, leafClusters, nil
+		return clusterWalkResult{leaves: leafClusters, result: result}
 	}
-	if haveAllResources && len(leafClusters) == 0 {
-		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))}
-		return true, leafClusters, nil
+	if len(leafClusters) == 0 {
+		return clusterWalkResult{
+			isResolved: true,
+			result:     &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))},
+		}
 	}
-	clusterConfigs[clusterName].Config.AggregateConfig = &xdsresource.AggregateConfig{
+	result.Config.AggregateConfig = &xdsresource.AggregateConfig{
 		LeafClusters: leafClusters,
 	}
-	return true, leafClusters, nil
+	return clusterWalkResult{isResolved: true, leaves: leafClusters, result: result}
 }
 
 func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.RouteConfigUpdate) {
