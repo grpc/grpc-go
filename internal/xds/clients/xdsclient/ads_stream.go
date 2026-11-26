@@ -20,6 +20,7 @@ package xdsclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -46,6 +47,15 @@ const (
 	// should be gated at this verbosity level. Other per-RPC level logs which print
 	// terse output should be at `INFO` and verbosity 2.
 	perRPCVerbosityLevel = 9
+)
+
+var (
+	// errResourceTypeUnsupported indicates the receipt of a message from the
+	// management server with resources of an unsupported resource type.
+	errResourceTypeUnsupported = errors.New("xds: unsupported resource type")
+	// errStreamFailedAfterRecv indicates an ADS stream error, after successful
+	// receipt of at least one message from the server.
+	errStreamFailedAfterRecv = errors.New("xds: stream failed after receiving a message")
 )
 
 // request represents a queued request message to be sent on the ADS stream. It
@@ -466,7 +476,7 @@ func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 		var nackErr error
 		s.fc.setPending(true)
 		resourceNames, nackErr = s.eventHandler.onResponse(resp, sync.OnceFunc(func() { s.fc.setPending(false) }))
-		if xdsresource.ErrType(nackErr) == xdsresource.ErrorTypeResourceTypeUnsupported {
+		if errors.Is(nackErr, errResourceTypeUnsupported) {
 			// A general guiding principle is that if the server sends
 			// something the client didn't actually subscribe to, then the
 			// client ignores it. Here, we have received a response with
@@ -602,7 +612,7 @@ func (s *adsStreamImpl) onError(err error, msgReceived bool) {
 	// connection hitting its max connection age limit.
 	// (see [gRFC A9](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md)).
 	if msgReceived {
-		err = xdsresource.NewError(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
+		err = fmt.Errorf("%w: %w", errStreamFailedAfterRecv, err)
 	}
 
 	s.eventHandler.onStreamError(err)

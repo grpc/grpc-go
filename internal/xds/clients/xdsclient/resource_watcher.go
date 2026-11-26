@@ -18,6 +18,20 @@
 
 package xdsclient
 
+import "errors"
+
+var (
+	// ErrResourceNotFound indicates that the requested xDS resource was not
+	// found on the management server.
+	ErrResourceNotFound = errors.New("xds: resource not found")
+	// ErrConnection indicates a connection error communicating with the xDS
+	// management server.
+	ErrConnection = errors.New("xds: connection error")
+	// ErrNACKed indicates that configuration provided by the xDS management
+	// server was NACKed.
+	ErrNACKed = errors.New("xds: resource NACKed")
+)
+
 // ResourceWatcher is notified of the resource updates and errors that are
 // received by the xDS client from the management server.
 //
@@ -37,6 +51,10 @@ type ResourceWatcher interface {
 	// ResourceError indicates an error occurred while trying to fetch or
 	// decode the associated resource. The previous version of the resource
 	// should be considered invalid.
+	//
+	// Callers can use errors.Is to check for ErrResourceNotFound,
+	// ErrConnection, or ErrNACKed, and errors.As or status.FromError to
+	// inspect the underlying cause.
 	ResourceError(err error, done func())
 
 	// AmbientError indicates an error occurred after a resource has been
@@ -44,5 +62,8 @@ type ResourceWatcher interface {
 	// useful information about the state of the XDSClient for debugging
 	// purposes. The previous version of the resource should still be
 	// considered valid.
+	//
+	// Callers can use errors.Is to check for ErrConnection or ErrNACKed, and
+	// errors.As or status.FromError to inspect the underlying cause.
 	AmbientError(err error, done func())
 }

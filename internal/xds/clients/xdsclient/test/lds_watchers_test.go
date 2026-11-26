@@ -20,6 +20,7 @@ package xdsclient_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -134,9 +135,8 @@ func verifyNoListenerUpdate(ctx context.Context, updateCh *testutils.Channel) er
 //
 // It performs the following checks:
 //   - Waits for an item on updateCh until the context deadline.
-//   - If wantUpdate contains a resourceErr or ambientErr, it compares the
-//     xdsresource.ErrorType of the received error with the expected error
-//     type.
+//   - If wantUpdate contains a resourceErr or ambientErr, it verifies that the
+//     received error matches the expected error using errors.Is.
 //   - If wantUpdate contains an update, it compares the received update with
 //     the expected update, ignoring the Raw field.
 //
@@ -149,13 +149,13 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	got := u.(listenerUpdateErrTuple)
 	if wantUpdate.resourceErr != nil {
-		if gotType, wantType := xdsresource.ErrType(got.resourceErr), xdsresource.ErrType(wantUpdate.resourceErr); gotType != wantType {
-			return fmt.Errorf("received update with resource error type %v, want %v", gotType, wantType)
+		if !errors.Is(got.resourceErr, wantUpdate.resourceErr) {
+			return fmt.Errorf("received update with resource error %v, want errors.Is(..., %v) = true", got.resourceErr, wantUpdate.resourceErr)
 		}
 	}
 	if wantUpdate.ambientErr != nil {
-		if gotType, wantType := xdsresource.ErrType(got.ambientErr), xdsresource.ErrType(wantUpdate.ambientErr); gotType != wantType {
-			return fmt.Errorf("received update with ambient error type %v, want %v", gotType, wantType)
+		if !errors.Is(got.ambientErr, wantUpdate.ambientErr) {
+			return fmt.Errorf("received update with ambient error %v, want errors.Is(..., %v) = true", got.ambientErr, wantUpdate.ambientErr)
 		}
 	}
 	cmpOpts := []cmp.Option{
@@ -187,27 +187,27 @@ func verifyListenerError(_ context.Context, gotErr error, wantErr, wantNodeID st
 	return nil
 }
 
-func verifyAmbientErrorType(ctx context.Context, updateCh *testutils.Channel, wantErrType xdsresource.ErrorType, wantNodeID string) error {
+func verifyAmbientErrorType(ctx context.Context, updateCh *testutils.Channel, wantErr error, wantNodeID string) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
 	}
 	gotErr := u.(listenerUpdateErrTuple).ambientErr
-	return verifyErrorType(gotErr, wantErrType, wantNodeID)
+	return verifyErrorType(gotErr, wantErr, wantNodeID)
 }
 
-func verifyResourceErrorType(ctx context.Context, updateCh *testutils.Channel, wantErrType xdsresource.ErrorType, wantNodeID string) error {
+func verifyResourceErrorType(ctx context.Context, updateCh *testutils.Channel, wantErr error, wantNodeID string) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
 	}
 	gotErr := u.(listenerUpdateErrTuple).resourceErr
-	return verifyErrorType(gotErr, wantErrType, wantNodeID)
+	return verifyErrorType(gotErr, wantErr, wantNodeID)
 }
 
-func verifyErrorType(gotErr error, wantErrType xdsresource.ErrorType, wantNodeID string) error {
-	if got, want := xdsresource.ErrType(gotErr), wantErrType; got != want {
-		return fmt.Errorf("update received with error %v of type: %v, want %v", gotErr, got, want)
+func verifyErrorType(gotErr, wantErr error, wantNodeID string) error {
+	if !errors.Is(gotErr, wantErr) {
+		return fmt.Errorf("update received with error %v, want errors.Is(..., %v) = true", gotErr, wantErr)
 	}
 	if !strings.Contains(gotErr.Error(), wantNodeID) {
 		return fmt.Errorf("update received with error: %v, want error with node ID: %q", gotErr, wantNodeID)
@@ -742,8 +742,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")
-	if err := verifyListenerUpdate(ctx, lw.resourceErrCh, listenerUpdateErrTuple{resourceErr: wantErr}); err != nil {
+	if err := verifyListenerUpdate(ctx, lw.resourceErrCh, listenerUpdateErrTuple{resourceErr: xdsclient.ErrResourceNotFound}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -918,7 +917,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	// The first watcher should receive a resource error for resource removal,
 	// while the second watcher should not see an update.
 	if err := verifyListenerUpdate(ctx, lw1.resourceErrCh, listenerUpdateErrTuple{
-		resourceErr: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, ""),
+		resourceErr: xdsclient.ErrResourceNotFound,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1025,7 +1024,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 
 	// The existing watcher should receive a resource error for resource
 	// removal.
-	updateError := listenerUpdateErrTuple{resourceErr: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")}
+	updateError := listenerUpdateErrTuple{resourceErr: xdsclient.ErrResourceNotFound}
 	if err := verifyListenerUpdate(ctx, lw1.resourceErrCh, updateError); err != nil {
 		t.Fatal(err)
 	}
@@ -1092,7 +1091,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is not cached, it should be received as resource
 	// error.
-	if err := verifyResourceErrorType(ctx, lw.resourceErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyResourceErrorType(ctx, lw.resourceErrCh, xdsclient.ErrNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1102,7 +1101,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyResourceErrorType(ctx, lw2.resourceErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyResourceErrorType(ctx, lw2.resourceErrCh, xdsclient.ErrNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1180,7 +1179,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is cached, it should be received as ambient error.
-	if err := verifyAmbientErrorType(ctx, lw1.ambientErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyAmbientErrorType(ctx, lw1.ambientErrCh, xdsclient.ErrNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1194,7 +1193,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is cached, it should be received as ambient error.
-	if err := verifyAmbientErrorType(ctx, lw2.ambientErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyAmbientErrorType(ctx, lw2.ambientErrCh, xdsclient.ErrNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1271,7 +1270,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is not cached, it should be received as resource
 	// error.
-	if err := verifyResourceErrorType(ctx, lw1.resourceErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyResourceErrorType(ctx, lw1.resourceErrCh, xdsclient.ErrNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
