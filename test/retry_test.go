@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -35,6 +36,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1065,5 +1068,153 @@ func (s) TestAuthorityOverrideNotReusedAcrossAttempts(t *testing.T) {
 	}
 	if authorities[1] != wantAuthority {
 		t.Errorf("Retry attempt used authority %q, want %q", authorities[1], wantAuthority)
+	}
+}
+
+type pauseOnRetryHeadersKey struct{}
+
+// pauseOnRetryHeaders sleeps once a transparent retry attempt's headers are
+// out, before its body is written. This widens the race window in which the
+// server can answer trailers-only before the client writes the body, making
+// TestRetryTransparentRetryKeepsTrailersStatus deterministic. It never sleeps
+// on non-retry attempts.
+type pauseOnRetryHeaders struct {
+	pause time.Duration
+}
+
+func (h *pauseOnRetryHeaders) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return context.WithValue(ctx, pauseOnRetryHeadersKey{}, new(atomic.Bool))
+}
+func (h *pauseOnRetryHeaders) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+func (h *pauseOnRetryHeaders) HandleConn(context.Context, stats.ConnStats) {}
+func (h *pauseOnRetryHeaders) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	isRetry, _ := ctx.Value(pauseOnRetryHeadersKey{}).(*atomic.Bool)
+	if isRetry == nil {
+		return
+	}
+	switch s := s.(type) {
+	case *stats.Begin:
+		isRetry.Store(s.IsTransparentRetryAttempt)
+	case *stats.OutHeader:
+		if isRetry.Load() {
+			time.Sleep(h.pause)
+		}
+	}
+}
+
+// TestRetryTransparentRetryKeepsTrailersStatus is a regression test for
+// https://github.com/grpc/grpc-go/issues/9443: after a transparent retry, if
+// the server answers the retry trailers-only before the client writes the
+// body, the replayed send hits the closed stream and surfaces a bare io.EOF,
+// losing the server's status. Invoke must return the status instead.
+func (s) TestRetryTransparentRetryKeepsTrailersStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		rstAfterTrailers bool
+	}{
+		{name: "trailers only"},
+		{name: "rst after trailers", rstAfterTrailers: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("Failed to listen. Err: %v", err)
+			}
+			defer lis.Close()
+			server := &httpServer{
+				responses: []httpServerResponse{{
+					trailers: [][]string{{
+						":status", "200",
+						"content-type", "application/grpc",
+						"grpc-status", "5", // NOT_FOUND
+						"grpc-message", "not found",
+					}},
+					rstAfterTrailers: tc.rstAfterTrailers,
+				}},
+				refuseStream: func(i uint32) bool {
+					return i == 1
+				},
+			}
+			server.start(t, lis)
+
+			cc, err := grpc.NewClient(lis.Addr().String(),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithStatsHandler(&pauseOnRetryHeaders{pause: 100 * time.Millisecond}))
+			if err != nil {
+				t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+			}
+			defer cc.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			_, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+			if err == nil {
+				t.Fatalf("EmptyCall() succeeded, want NotFound")
+			}
+			if errors.Is(err, io.EOF) {
+				t.Fatalf("EmptyCall() returned bare io.EOF, want status NotFound")
+			}
+			if got := status.Code(err); got != codes.NotFound {
+				t.Fatalf("EmptyCall() returned code %v, want NotFound", got)
+			}
+		})
+	}
+}
+
+// slowSendOnOutHeader delays each attempt between sending headers and sending
+// the request, so the server's trailers-only response arrives first.
+type slowSendOnOutHeader struct{}
+
+func (slowSendOnOutHeader) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+func (slowSendOnOutHeader) HandleRPC(_ context.Context, s stats.RPCStats) {
+	if _, ok := s.(*stats.OutHeader); ok {
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+func (slowSendOnOutHeader) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+func (slowSendOnOutHeader) HandleConn(context.Context, stats.ConnStats) {}
+
+// TestRetryExhaustionKeepsStatus is a regression test for the second path
+// losing the server status: when retry-policy attempts run out, shouldRetry
+// wraps the replayed send's bare io.EOF in "max retries exhausted", and
+// Invoke returned that instead of the server's status.
+func (s) TestRetryExhaustionKeepsStatus(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := grpc.NewServer()
+	healthpb.RegisterHealthServer(srv, health.NewServer()) // any service; the called one is absent
+	go func() { _ = srv.Serve(lis) }()
+	defer srv.Stop()
+
+	for _, slow := range []bool{false, true} {
+		opts := []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultServiceConfig(`{"methodConfig":[{"name":[{}],"retryPolicy":{"maxAttempts":5,"initialBackoff":"0.01s","maxBackoff":"0.05s","backoffMultiplier":2,"retryableStatusCodes":["UNIMPLEMENTED"]}}]}`),
+		}
+		if slow {
+			opts = append(opts, grpc.WithStatsHandler(slowSendOnOutHeader{}))
+		}
+		cc, err := grpc.NewClient(lis.Addr().String(), opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+
+		err = cc.Invoke(ctx, "/missing.Service/Method", &healthpb.HealthCheckRequest{}, &healthpb.HealthCheckResponse{})
+		_ = cc.Close()
+		if got := status.Code(err); got != codes.Unimplemented {
+			t.Errorf("slowSend=%v: status.Code = %v, want Unimplemented; err = %v", slow, got, err)
+		}
 	}
 }

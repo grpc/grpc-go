@@ -6344,6 +6344,9 @@ type httpServerResponse struct {
 	headers  [][]string
 	payloads [][]byte
 	trailers [][]string
+	// rstAfterTrailers makes the server send RST_STREAM right after the
+	// trailers, for tests where a reset races a trailers-only response.
+	rstAfterTrailers bool
 }
 
 type httpServer struct {
@@ -6462,6 +6465,13 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			for i, trailer := range response.trailers {
 				if err = s.writeHeader(framer, sid, trailer, i == len(response.trailers)-1); err != nil {
 					t.Errorf("Error at server-side while writing trailers. Err: %v", err)
+					return
+				}
+				writer.Flush()
+			}
+			if response.rstAfterTrailers {
+				if err = framer.WriteRSTStream(sid, http2.ErrCodeCancel); err != nil {
+					t.Errorf("Error at server-side while writing RST_STREAM. Err: %v", err)
 					return
 				}
 				writer.Flush()
