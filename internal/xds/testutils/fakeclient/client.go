@@ -51,6 +51,7 @@ type ReportLoadArgs struct {
 }
 
 type transportBuilder struct {
+	clients.UnimplementedTransportBuilder
 }
 
 func (*transportBuilder) Build(clients.ServerIdentifier) (clients.Transport, error) {
@@ -58,6 +59,7 @@ func (*transportBuilder) Build(clients.ServerIdentifier) (clients.Transport, err
 }
 
 type transport struct {
+	clients.UnimplementedTransport
 }
 
 func (*transport) NewStream(context.Context, string) (clients.Stream, error) {
@@ -68,6 +70,7 @@ func (*transport) Close() {
 }
 
 type stream struct {
+	clients.UnimplementedStream
 }
 
 func (*stream) Send([]byte) error {

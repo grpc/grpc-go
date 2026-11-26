@@ -32,6 +32,8 @@ const ListenerResourceTypeName = "ListenerResource"
 // listenerResourceDecoder is an implementation of the xdsclient.Decoder
 // interface for listener resources.
 type listenerResourceDecoder struct {
+	xdsclient.UnimplementedDecoder
+
 	bootstrapConfig *bootstrap.Config
 	serverConfigs   map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
@@ -157,6 +159,8 @@ type ListenerWatcher interface {
 }
 
 type delegatingListenerWatcher struct {
+	xdsclient.UnimplementedResourceWatcher
+
 	watcher ListenerWatcher
 }
 
