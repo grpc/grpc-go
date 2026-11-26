@@ -331,8 +331,8 @@ func snapshotMetricsRegistryForTesting() func() {
 
 	registeredMetrics = make(map[string]bool)
 	metricsRegistry = make(map[string]*MetricDescriptor)
-	maps.Copy(registeredMetrics, registeredMetrics)
-	maps.Copy(metricsRegistry, metricsRegistry)
+	maps.Copy(registeredMetrics, oldRegisteredMetrics)
+	maps.Copy(metricsRegistry, oldMetricsRegistry)
 
 	return func() {
 		DefaultMetrics = oldDefaultMetrics
