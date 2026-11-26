@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -88,8 +89,10 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 		ClientConn:       cc,
 		uuid:             uuid.New().String(),
 		endpointMap:      make(map[string]*endpointState),
+		endpointsByAddrs: resolver.NewEndpointMap[*endpointState](),
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
+		state:            connectivity.Connecting,
 	}
 
 	// Configure endpointsharding to not automatically reconnect a child that
@@ -105,6 +108,11 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 }
 
 // endpointState represents the state associated with an endpoint in the LB policy.
+//
+// An endpointState is tied to a specific endpointsharding child, which is
+// identified by the set of addresses in the endpoint. The same endpointState
+// object is retained (and updated in place) across resolver updates for as long
+// as an endpoint with the same set of addresses is present.
 type endpointState struct {
 	index             int                // Index of the endpoint within the NR update
 	connectivityState connectivity.State // The connectivity state of the child balancer for this endpoint.
@@ -131,21 +139,76 @@ type autoshardingBalancer struct {
 	//   serially
 	// - UpdateState calls from child policies
 	// - Updates from the autosharding client
-	mu                       sync.Mutex
-	lbCfg                    LBConfig                  // The latest balancer config received from the resolver.
-	lastResolverErr          error                     // The latest error received from the resolver. Non-nil value results in the channel moving to TF with an error picker.
-	assignment               *sharding.Assignment      // The latest assignment received from the autosharding client.
-	assignmentErr            error                     // The latest error received from the autosharding client.
-	autoshardingChannel      grpc.ClientConnInterface  // The gRPC channel to the autosharding service.
-	autoshardingChannelClose func()                    // The function to close the gRPC channel to the autosharding service.
-	autoshardingClientClose  func()                    // The function to close the autosharding client. Nil before the first client is created.
-	autoshardingClientGen    int                       // The generation number of the autosharding client. Incremented each time a new client is created.
-	autoshardingTarget       string                    // The autosharding target used to create the autosharding client.
-	endpointMap              map[string]*endpointState // Map of hostname to endpointState for all endpoints received from the resolver.
-	sliceMap                 *sliceMap                 // The latest sliceMap generated from the latest assignment and endpointMap.
-	inhibitChildUpdates      bool                      // Set to true to inhibit updates from the child balancer when processing a new resolver update.
-	shouldRegenerateSliceMap bool                      // Set to true when the order or count of endpoints changes when processing a new resolver update.
-	closed                   bool                      // Set to true when the balancer is closed.
+	mu                      sync.Mutex
+	lbCfg                   LBConfig                  // The latest balancer config received from the resolver.
+	lastResolverErr         error                     // The latest error received from the resolver. Non-nil value results in the channel moving to TF with an error picker.
+	assignment              *sharding.Assignment      // The latest assignment received from the autosharding client.
+	assignmentErr           error                     // The latest error received from the autosharding client.
+	autoshardingClientClose func()                    // The function to close the autosharding client (which also releases its gRPC channel). Nil before the first client is created.
+	autoshardingClientGen   int                       // The generation number of the autosharding client. Incremented each time a new client is created.
+	autoshardingTarget      string                    // The autosharding target used to create the autosharding client.
+	endpointMap             map[string]*endpointState // Map of hostname to endpointState for all endpoints received from the resolver.
+	// Map of endpoint (keyed by its set of addresses) to endpointState. This
+	// contains the same endpointState objects as endpointMap, but is keyed the
+	// same way as the children of the endpointsharding balancer. It is used to
+	// apply child state updates, since a hostname may be reassigned to a
+	// different endpoint by a resolver update, while an update from a child
+	// always corresponds to a specific set of addresses.
+	endpointsByAddrs    *resolver.EndpointMap[*endpointState]
+	sliceMap            *sliceMap          // The latest sliceMap generated from the latest assignment and endpointMap.
+	inhibitChildUpdates bool               // Set to true to inhibit updates from the child balancer when processing a new resolver update.
+	closed              bool               // Set to true when the balancer is closed.
+	state               connectivity.State // The most recently reported connectivity state.
+
+	// The endpoint on which a connection attempt was most recently triggered
+	// by connectToRandomIdleEndpointLocked (as opposed to by a pick), until it
+	// reports that it has moved out of IDLE. See
+	// connectToRandomIdleEndpointLocked for details.
+	pendingConnectEndpoint *endpointState
+
+	// The following fields are used to avoid reporting IDLE before the first
+	// connection attempt is made. Reporting IDLE after reporting CONNECTING
+	// would reset the failover timer in the priority LB policy (if that is our
+	// parent), and moving back to CONNECTING when a pick triggers a connection
+	// attempt would start a new failover timer, thereby delaying failover.
+	//
+	// While waiting for the first result from the autosharding client (i.e.,
+	// both assignment and assignmentErr are nil), CONNECTING is reported and
+	// RPCs are queued. When the first usable result (a valid assignment, or an
+	// error with fallback enabled) is received, the initial connect timer is
+	// started, to give queued RPCs a chance to trigger a connection attempt to
+	// the endpoint they are routed to. While the timer is running, CONNECTING
+	// is reported instead of IDLE (which is the state computed by the
+	// aggregation rules while all endpoints are IDLE), and the rules for
+	// proactively triggering connection attempts are not applied. The timer is
+	// stopped when any of the following happens:
+	// - The timer fires. A connection attempt is triggered to a random IDLE
+	//   endpoint.
+	// - ExitIdle is called. A connection attempt is triggered to a random IDLE
+	//   endpoint.
+	// - An endpoint moves out of IDLE, for example because a pick triggered a
+	//   connection attempt.
+	// - TRANSIENT_FAILURE is reported because of a resolver error, or because
+	//   of an error from the autosharding client with fallback disabled. After
+	//   that, the priority LB policy (if that is our parent) would have
+	//   cancelled its failover timer, and reporting IDLE is harmless.
+	//
+	// Once a connection attempt has been triggered, the aggregated state is
+	// reported as usual. In rare cases (for example, if the endpoint is removed
+	// by a resolver update before it reports CONNECTING), this may result in
+	// IDLE being reported, which is acceptable.
+	//
+	// seenExitIdle is set when ExitIdle is called while waiting for the first
+	// result from the autosharding client. When the first usable result is
+	// received, the recorded ExitIdle call is handled (as if ExitIdle was
+	// called while the timer is running) after the picker for that result has
+	// been reported. Handling it before reporting the picker would result in
+	// IDLE being reported, since the connection attempt is triggered
+	// asynchronously, and the endpoint would still be IDLE when the aggregated
+	// state is computed.
+	initialConnectTimerStop func() bool // Stops the initial connect timer. Nil if the timer is not running.
+	initialConnectTimerGen  int         // Incremented every time the timer is started or stopped, to ignore stale timer callbacks.
+	seenExitIdle            bool
 }
 
 func (b *autoshardingBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -162,7 +225,7 @@ func (b *autoshardingBalancer) UpdateClientConnState(ccs balancer.ClientConnStat
 	defer func() {
 		b.mu.Lock()
 		b.inhibitChildUpdates = false
-		b.updateStateAndPickerLocked()
+		b.updateStateAndPickerLocked(true)
 		b.mu.Unlock()
 	}()
 
@@ -210,15 +273,20 @@ func hostnameFromEndpoint(ep resolver.Endpoint) string {
 }
 
 // handleNewEndpointsLocked processes the new endpoints received from the
-// resolver and updates the endpointMap accordingly. It also determines if the
-// order or count of endpoints has changed, which would require regenerating the
-// slice map in updateStateAndPickerLocked().
+// resolver and updates endpointMap and endpointsByAddrs accordingly. It returns
+// the filtered list of endpoints to be passed to the endpointsharding child.
+//
+// The endpointState for an endpoint is looked up (and reused in place) using
+// the endpoint's set of addresses, not its hostname. The connectivity state,
+// picker and exitIdle function stored in an endpointState belong to a specific
+// endpointsharding child, and endpointsharding identifies its children by their
+// set of addresses. If a hostname is moved to a different set of addresses, the
+// state of the old child must not be carried over to the new one.
 func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.Endpoint) []resolver.Endpoint {
 	filteredEndpoints := make([]resolver.Endpoint, 0, len(endpoints))
 
-	orderOrCountChanged := false
-	seenEndpoints := resolver.NewEndpointMap[bool]()
 	newEndpointMap := make(map[string]*endpointState)
+	newEndpointsByAddrs := resolver.NewEndpointMap[*endpointState]()
 	for _, ep := range endpoints {
 		// Filter out endpoints with zero addresses.
 		if len(ep.Addresses) == 0 {
@@ -237,71 +305,54 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 		// endpointsharding drops children with duplicate addresses, and we want
 		// to ensure that the endpointMap and sliceMap are consistent with what
 		// the child balancer sees.
-		if _, ok := seenEndpoints.Get(ep); ok {
+		if _, ok := newEndpointsByAddrs.Get(ep); ok {
 			b.logger.Warningf("Ignoring endpoint %v with duplicate addresses", ep)
 			continue
 		}
-
-		seenEndpoints.Set(ep, true)
 		filteredEndpoints = append(filteredEndpoints, ep)
 
-		idx := len(newEndpointMap)
-		oldEpState := b.endpointMap[hostname]
-		if oldEpState == nil || oldEpState.index != idx {
-			// This is a new endpoint, or its index changed.
-			orderOrCountChanged = true
+		// Reuse the existing endpointState if the endpointsharding child for
+		// this set of addresses already exists. Otherwise, create a new one.
+		// The child state of a new endpoint will be populated when the
+		// endpointsharding child reports its state.
+		es, ok := b.endpointsByAddrs.Get(ep)
+		if !ok {
+			es = &endpointState{}
 		}
-
-		newEndpointMap[hostname] = &endpointState{index: idx}
-		// There is no need to preserve the child state from the previous
-		// endpoint map, as the endpointsharding child balancer will report the
-		// new child states in its UpdateState call inline when we call
-		// UpdateClientConnState on it (which happens in our
-		// UpdateClientConnState once we return from this method). This is
-		// simply to decouple the autosharding balancer from the
-		// endpointsharding child's implementation details.
-		if oldEpState != nil {
-			newEndpointMap[hostname].connectivityState = oldEpState.connectivityState
-			newEndpointMap[hostname].picker = oldEpState.picker
-			newEndpointMap[hostname].exitIdle = oldEpState.exitIdle
-		}
-	}
-	if len(newEndpointMap) != len(b.endpointMap) {
-		// The count of endpoints has changed.
-		orderOrCountChanged = true
+		es.index = len(newEndpointMap)
+		newEndpointMap[hostname] = es
+		newEndpointsByAddrs.Set(ep, es)
 	}
 	b.endpointMap = newEndpointMap
-	if orderOrCountChanged {
-		b.shouldRegenerateSliceMap = true
-	}
+	b.endpointsByAddrs = newEndpointsByAddrs
 	return filteredEndpoints
 }
 
 // handleNewConfiguration processes the new balancer configuration received from
 // the resolver and updates the autosharding balancer's state accordingly. It
 // handles changes to the channel factory key and autosharding target, creating
-// new gRPC channels and autosharding clients as needed. It also updates the
-// lastResolverErr field to reflect any errors encountered during processing.
+// new autosharding clients as needed. It also updates the lastResolverErr field
+// to reflect any errors encountered during processing.
 func (b *autoshardingBalancer) handleNewConfiguration(state resolver.State, newConfig *LBConfig) error {
-	clientClose, channelClose, err := b.handleNewConfigurationInternal(state, newConfig)
+	clientClose, err := b.handleNewConfigurationInternal(state, newConfig)
 	if clientClose != nil {
 		clientClose()
-	}
-	if channelClose != nil {
-		channelClose()
 	}
 	return err
 }
 
-func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.State, newConfig *LBConfig) (clientClose, channelClose func(), _ error) {
+// handleNewConfigurationInternal does the work of handleNewConfiguration while
+// holding mu. It returns a function to close the previous autosharding client
+// (if one needs to be closed), which must be invoked without holding mu.
+func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.State, newConfig *LBConfig) (clientClose func(), _ error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	// If there is an error processing the configuration that is going to result
 	// in the LB policy moving the channel to TF with an erroring picker, there
-	// is no reason to keep the old gRPC channel and autosharding client open.
-	// So, we set the return values such that they close any existing gRPC
-	// channel and autosharding client.
+	// is no reason to keep the old autosharding client (and the gRPC channel
+	// owned by it) open. So, we set the return value such that it closes any
+	// existing autosharding client.
 	//
 	// We also reset the previous assignment/error because when we later process
 	// the new configuration successfully, we would want to queue RPCs until we
@@ -313,13 +364,9 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 			b.autoshardingClientClose = nil
 			b.autoshardingTarget = ""
 			b.autoshardingClientGen++
-			channelClose = b.autoshardingChannelClose
-			b.autoshardingChannelClose = nil
-			b.autoshardingChannel = nil
 
 			b.assignment = nil
 			b.assignmentErr = nil
-			b.shouldRegenerateSliceMap = true
 		}
 	}()
 
@@ -335,76 +382,74 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 	// child policies associated with endpoints that have been removed.
 	if len(b.endpointMap) == 0 {
 		b.lastResolverErr = internal.ErrNoEndpointsFromNR
-		return nil, nil, balancer.ErrBadResolverState
+		return nil, balancer.ErrBadResolverState
 	}
 
 	provider := grpc.ClientConnProviderFromResolverState(state)
 	if provider == nil {
 		b.lastResolverErr = internal.ErrNoChannelFactory
-		return nil, nil, balancer.ErrBadResolverState
-	}
-
-	// Reuse the existing gRPC channel unless channel_factory_key has changed.
-	channel := b.autoshardingChannel
-	var shardingChannelClose func()
-	createNewAutoshardingClient := false
-	newAutoshardingChannelCreated := false
-	if b.autoshardingClientClose == nil || newConfig.ChannelFactoryKey != b.lbCfg.ChannelFactoryKey {
-		if b.logger.V(2) {
-			b.logger.Infof("Creating a new gRPC channel with channel_factory_key: %q", newConfig.ChannelFactoryKey)
-		}
-		var err error
-		channel, shardingChannelClose, err = provider(newConfig.ChannelFactoryKey)
-		if err != nil {
-			if b.logger.V(2) {
-				b.logger.Infof("Failed to create gRPC channel with channel_factory_key: %q, error: %v", newConfig.ChannelFactoryKey, err)
-			}
-			// If channel creation fails, pass a lame channel to the
-			// autosharding client. This results in the client immediately
-			// returning an error to the LB policy. And this will result in RPCs
-			// using fallback (if enabled) or failing.
-			channel = &lameChannel{err: status.Errorf(codes.Unavailable, "autosharding: failed to create gRPC channel to sharding service: %v", err)}
-		}
-
-		newAutoshardingChannelCreated = true
-		createNewAutoshardingClient = true
+		return nil, balancer.ErrBadResolverState
 	}
 
 	// Ensure %s string substitution for "Locality" is taken into account for
 	// the autosharding_target field.
 	locality := locality.FromResolverState(state)
 	newTarget := strings.Replace(newConfig.AutoShardingTarget, "%s", locality, 1)
-	if b.autoshardingClientClose == nil || newTarget != b.autoshardingTarget {
-		createNewAutoshardingClient = true
-	}
+
+	// A new autosharding client is required if this is the first valid
+	// configuration, or if the channel factory key or the autosharding target
+	// has changed.
+	channelFactoryKeyChanged := newConfig.ChannelFactoryKey != b.lbCfg.ChannelFactoryKey
+	authshardingTargetChanged := newTarget != b.autoshardingTarget
+	createNewAutoshardingClient := b.autoshardingClientClose == nil || channelFactoryKeyChanged || authshardingTargetChanged
 	b.lbCfg = *newConfig
-
-	var prevAutoshardingClientClose, prevAutoshardingChannelClose func()
-	if createNewAutoshardingClient {
-		// There is a small window of time when both the old and new
-		// autosharding clients are active. We increment the generation number
-		// to ensure that callbacks from the old client are ignored.
-		b.autoshardingClientGen++
-		curGen := b.autoshardingClientGen
-		cancel := internal.NewAutoshardingClient(sharding.ClientOptions{
-			CC:                       channel,
-			AutoshardingTarget:       newTarget,
-			UUID:                     b.uuid,
-			InitialAssignmentTimeout: time.Duration(newConfig.InitialAssignmentTimeout),
-			OnAssignmentUpdate:       func(assignment *sharding.Assignment) { b.onAssignmentUpdate(curGen, assignment) },
-			OnAssignmentError:        func(err error) { b.onAssignmentError(curGen, err) },
-		})
-		prevAutoshardingClientClose = b.autoshardingClientClose
-		b.autoshardingClientClose = cancel
-		b.autoshardingTarget = newTarget
+	if !createNewAutoshardingClient {
+		return nil, nil
 	}
 
-	if newAutoshardingChannelCreated {
-		prevAutoshardingChannelClose = b.autoshardingChannelClose
-		b.autoshardingChannel = channel
-		b.autoshardingChannelClose = shardingChannelClose
+	// Get a gRPC channel from the channel factory every time a new
+	// autosharding client is created, even if the channel factory key has not
+	// changed. The channel factory is expected to return a reference to an
+	// existing channel for the same key, instead of creating a new one. The
+	// autosharding client takes ownership of the channel, and releases it when
+	// it is closed.
+	if b.logger.V(2) {
+		b.logger.Infof("Getting a gRPC channel with channel_factory_key: %q", newConfig.ChannelFactoryKey)
 	}
-	return prevAutoshardingClientClose, prevAutoshardingChannelClose, nil
+	channel, channelClose, err := provider(newConfig.ChannelFactoryKey)
+	if err != nil {
+		if b.logger.V(2) {
+			b.logger.Infof("Failed to get gRPC channel with channel_factory_key: %q, error: %v", newConfig.ChannelFactoryKey, err)
+		}
+		// If channel creation fails, pass a lame channel to the autosharding
+		// client. This results in the client immediately returning an error to
+		// the LB policy. And this will result in RPCs using fallback (if
+		// enabled) or failing.
+		channel = &lameChannel{err: status.Errorf(codes.Unavailable, "autosharding: failed to create gRPC channel to sharding service: %v", err)}
+		channelClose = nil
+	}
+
+	// There is a small window of time when both the old and new autosharding
+	// clients are active. We increment the generation number to ensure that
+	// callbacks from the old client are ignored.
+	//
+	// The new client is created before the old one is closed (by the caller),
+	// so that a channel shared between the two is not closed in between.
+	b.autoshardingClientGen++
+	curGen := b.autoshardingClientGen
+	newClientClose := internal.NewAutoshardingClient(sharding.ClientOptions{
+		CC:                       channel,
+		CCClose:                  channelClose,
+		AutoshardingTarget:       newTarget,
+		UUID:                     b.uuid,
+		InitialAssignmentTimeout: time.Duration(newConfig.InitialAssignmentTimeout),
+		OnAssignmentUpdate:       func(assignment *sharding.Assignment) { b.onAssignmentUpdate(curGen, assignment) },
+		OnAssignmentError:        func(err error) { b.onAssignmentError(curGen, err) },
+	})
+	prevClientClose := b.autoshardingClientClose
+	b.autoshardingClientClose = newClientClose
+	b.autoshardingTarget = newTarget
+	return prevClientClose, nil
 }
 
 // onAssignmentUpdate is called by the autosharding client when a new assignment
@@ -420,10 +465,10 @@ func (b *autoshardingBalancer) onAssignmentUpdate(gen int, assignment *sharding.
 			return
 		}
 
+		firstResult := b.assignment == nil && b.assignmentErr == nil
 		b.assignment = assignment
 		b.assignmentErr = nil
-		b.shouldRegenerateSliceMap = true
-		b.updateStateAndPickerLocked()
+		b.handleAutoshardingResultLocked(firstResult)
 	})
 }
 
@@ -441,18 +486,141 @@ func (b *autoshardingBalancer) onAssignmentError(gen int, err error) {
 			return
 		}
 
+		firstResult := b.assignment == nil && b.assignmentErr == nil
 		b.assignment = nil
 		b.assignmentErr = err
-		b.shouldRegenerateSliceMap = true
-		b.updateStateAndPickerLocked()
+		b.handleAutoshardingResultLocked(firstResult)
 	})
+}
+
+// handleAutoshardingResultLocked is called after a result from the autosharding
+// client has been stored, and updates the picker. firstResult is true if this
+// is the first result received from the autosharding client.
+//
+// If this is the first result and it can be used to route RPCs, the initial
+// connect timer is started before the picker is updated. An ExitIdle call
+// recorded while waiting for this result is handled only after the picker has
+// been updated. See the comment on seenExitIdle for details.
+func (b *autoshardingBalancer) handleAutoshardingResultLocked(firstResult bool) {
+	usable := b.assignment != nil || b.lbCfg.EnableFallback
+	startInitialConnect := firstResult && usable
+	if startInitialConnect {
+		b.startInitialConnectTimerLocked()
+	}
+	b.updateStateAndPickerLocked(true)
+	if startInitialConnect && b.seenExitIdle {
+		b.seenExitIdle = false
+		b.exitIdleLocked()
+	}
+}
+
+// startInitialConnectTimerLocked starts the initial connect timer, unless it is
+// already running.
+func (b *autoshardingBalancer) startInitialConnectTimerLocked() {
+	if b.initialConnectTimerStop != nil {
+		return
+	}
+	gen := b.initialConnectTimerGen
+	b.initialConnectTimerStop = internal.AfterFunc(internal.InitialConnectDelay, func() {
+		b.onInitialConnectTimer(gen)
+	})
+}
+
+// stopInitialConnectTimerLocked stops the initial connect timer, if running.
+// It also ensures that a callback from a timer that has already fired is
+// ignored.
+func (b *autoshardingBalancer) stopInitialConnectTimerLocked() {
+	b.initialConnectTimerGen++
+	if b.initialConnectTimerStop != nil {
+		b.initialConnectTimerStop()
+		b.initialConnectTimerStop = nil
+	}
+}
+
+// onInitialConnectTimer is invoked when the initial connect timer fires. It
+// triggers a connection attempt to a random IDLE endpoint.
+//
+// The timer is stopped as soon as an endpoint moves out of IDLE, so all
+// endpoints are IDLE when it fires.
+func (b *autoshardingBalancer) onInitialConnectTimer(gen int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.closed || gen != b.initialConnectTimerGen {
+		return
+	}
+	b.initialConnectTimerStop = nil
+	if b.logger.V(2) {
+		b.logger.Infof("Initial connect timer fired, triggering connection attempt to a random endpoint")
+	}
+	b.connectToRandomIdleEndpointLocked()
+}
+
+// clearInitialConnectLocked stops the initial connect timer, and discards any
+// ExitIdle call recorded while waiting for the first result from the
+// autosharding client.
+func (b *autoshardingBalancer) clearInitialConnectLocked() {
+	b.seenExitIdle = false
+	b.stopInitialConnectTimerLocked()
+}
+
+// connectToRandomIdleEndpointLocked triggers a connection attempt to an IDLE
+// endpoint chosen at random, unless an endpoint is already CONNECTING.
+//
+// Connection attempts are triggered asynchronously (the endpointsharding child
+// runs ExitIdle in a goroutine), so this may be invoked again before the
+// chosen endpoint reports that it has moved out of IDLE. To avoid triggering
+// connection attempts to multiple endpoints in that case, the chosen endpoint
+// is remembered, and is reused as long as it is still IDLE.
+func (b *autoshardingBalancer) connectToRandomIdleEndpointLocked() {
+	idle := make([]*endpointState, 0, len(b.endpointMap))
+	for _, es := range b.endpointMap {
+		if es.connectivityState == connectivity.Connecting {
+			return
+		}
+		if es.connectivityState == connectivity.Idle && es.exitIdle != nil {
+			idle = append(idle, es)
+		}
+	}
+	if len(idle) == 0 {
+		return
+	}
+	if p := b.pendingConnectEndpoint; p != nil && slices.Contains(idle, p) {
+		p.exitIdle()
+		return
+	}
+	// Sort by index so that the choice is a deterministic function of the
+	// random number, since map iteration order is random.
+	slices.SortFunc(idle, func(a, b *endpointState) int { return a.index - b.index })
+	es := idle[internal.RandIntN(len(idle))]
+	b.pendingConnectEndpoint = es
+	es.exitIdle()
+}
+
+// updateStateLocked records the given state as the most recently reported
+// state and reports it along with the given picker to the parent.
+func (b *autoshardingBalancer) updateStateLocked(state connectivity.State, picker balancer.Picker) {
+	b.state = state
+	b.ClientConn.UpdateState(balancer.State{ConnectivityState: state, Picker: picker})
 }
 
 // updateStateAndPickerLocked updates the picker based on the current state of
 // the balancer. It computes the aggregated connectivity state based on the
 // child states of the endpoints and updates the ClientConn with the new state
-// and picker. This method must be called with mu locked.
-func (b *autoshardingBalancer) updateStateAndPickerLocked() {
+// and picker.
+//
+// If regenerateSliceMap is true, the sliceMap is rebuilt from the current
+// endpointMap and assignment before anything else. This is done ahead of the
+// early returns below so that the sliceMap is never left out of sync with the
+// endpointMap, regardless of whether a new picker is produced by this call.
+func (b *autoshardingBalancer) updateStateAndPickerLocked(regenerateSliceMap bool) {
+	if regenerateSliceMap {
+		if b.logger.V(2) {
+			b.logger.Infof("Regenerating slice map")
+		}
+		b.sliceMap = buildSliceMap(b.endpointMap, b.assignment)
+	}
+
 	if b.inhibitChildUpdates {
 		return
 	}
@@ -463,10 +631,8 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 	// contained no endpoints), report TRANSIENT_FAILURE and surface the error
 	// in failing RPCs.
 	if b.lastResolverErr != nil {
-		b.ClientConn.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            base.NewErrPicker(b.lastResolverErr),
-		})
+		b.clearInitialConnectLocked()
+		b.updateStateLocked(connectivity.TransientFailure, base.NewErrPicker(b.lastResolverErr))
 		return
 	}
 
@@ -474,10 +640,7 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 	if b.assignment == nil && b.assignmentErr == nil {
 		// TODO(easwars/mbissa): Add autosharding_assignment_pending as the
 		// delay type here once A121 is ready.
-		b.ClientConn.UpdateState(balancer.State{
-			ConnectivityState: connectivity.Idle,
-			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
-		})
+		b.updateStateLocked(connectivity.Connecting, base.NewErrPicker(balancer.ErrNoSubConnAvailable))
 		return
 	}
 
@@ -485,56 +648,25 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 	// report TRANSIENT_FAILURE and surface the error in failing RPCs. If
 	// fallback is enabled, we will continue to use the fallback pool for picks.
 	if b.assignmentErr != nil && !b.lbCfg.EnableFallback {
-		b.ClientConn.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            base.NewErrPicker(b.assignmentErr),
-		})
+		b.clearInitialConnectLocked()
+		b.updateStateLocked(connectivity.TransientFailure, base.NewErrPicker(b.assignmentErr))
 		return
 	}
 
-	// Compute the aggregated connectivity state of the
-	// autosharding balancer based on the following rules.
-	//   - If there is at least one endpoint in READY state, report READY.
-	//   - If there are 2 or more endpoints in TRANSIENT_FAILURE state, report
-	//     TRANSIENT_FAILURE.
-	//   - If there is at least one endpoint in CONNECTING state, report CONNECTING.
-	//   - If there is one endpoint in TRANSIENT_FAILURE and there is more than one
-	//     endpoint, report state CONNECTING.
-	//   - If there is at least one endpoint in Idle state, report Idle.
-	//   - Otherwise, report TRANSIENT_FAILURE.
-	var nums [5]int
-	var firstIdle *endpointState
-	for _, es := range b.endpointMap {
-		s := es.connectivityState
-		nums[s]++
-		if s == connectivity.Idle {
-			// Pick the first endpoint in IDLE state to trigger a connection
-			// attempt on. While A119 does not specify which IDLE endpoint to
-			// pick, we pick the one with the lowest index to ensure
-			// deterministic behavior. This is required because the
-			// endpointsharding child runs ExitIdle() in a goroutine. So, if we
-			// pick a random IDLE endpoint, it is possible that another state
-			// update arrives before the goroutine runs and moves the endpoint
-			// to CONNECTING. In this case, we would end up attempting to
-			// connect to another endpoint since the order of map iteration is
-			// not deterministic.
-			if firstIdle == nil || es.index < firstIdle.index {
-				firstIdle = es
-			}
-		}
-	}
+	// Compute the aggregated connectivity state.
+	aggState := b.computeAggregatedConnectivityStateLocked()
 
-	aggState := connectivity.TransientFailure
-	if nums[connectivity.Ready] > 0 {
-		aggState = connectivity.Ready
-	} else if nums[connectivity.TransientFailure] > 1 {
-		aggState = connectivity.TransientFailure
-	} else if nums[connectivity.Connecting] > 0 {
-		aggState = connectivity.Connecting
-	} else if nums[connectivity.TransientFailure] == 1 && len(b.endpointMap) > 1 {
-		aggState = connectivity.Connecting
-	} else if nums[connectivity.Idle] > 0 {
-		aggState = connectivity.Idle
+	// While the initial connect timer is running, report CONNECTING instead of
+	// IDLE, and do not proactively trigger connection attempts. Once an
+	// endpoint has moved out of IDLE (for example, because a pick triggered a
+	// connection attempt), the timer is no longer needed. See the comment on
+	// initialConnectTimerStop for details.
+	if b.initialConnectTimerStop != nil {
+		if aggState == connectivity.Idle {
+			b.updateStateLocked(connectivity.Connecting, newPicker(b.endpointMap, b.sliceMap, &b.lbCfg))
+			return
+		}
+		b.stopInitialConnectTimerLocked()
 	}
 
 	// The specific behavior that will enable this LB policy to stop reporting
@@ -543,26 +675,44 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 	// resolver update, if the aggregated connectivity state is
 	// TRANSIENT_FAILURE or CONNECTING and there are no endpoints in CONNECTING
 	// state, the policy will choose one of the endpoints in IDLE state (if any)
-	// to trigger a connection attempt on. - A119
+	// at random to trigger a connection attempt on. - A119
 	if aggState == connectivity.Connecting || aggState == connectivity.TransientFailure {
-		if nums[connectivity.Connecting] == 0 && firstIdle != nil && firstIdle.exitIdle != nil {
-			firstIdle.exitIdle()
-		}
+		b.connectToRandomIdleEndpointLocked()
 	}
 
-	if b.shouldRegenerateSliceMap {
-		if b.logger.V(2) {
-			b.logger.Infof("Regenerating slice map")
-		}
-		b.sliceMap = buildSliceMap(b.endpointMap, b.assignment)
-		b.shouldRegenerateSliceMap = false
+	b.updateStateLocked(aggState, newPicker(b.endpointMap, b.sliceMap, &b.lbCfg))
+}
+
+// computeAggregatedConnectivityStateLocked computes the aggregated connectivity
+// state of the autosharding balancer based on the following rules:
+//   - If there is at least one endpoint in READY state, report READY.
+//   - If there are 2 or more endpoints in TRANSIENT_FAILURE state, report
+//     TRANSIENT_FAILURE.
+//   - If there is at least one endpoint in CONNECTING state, report CONNECTING.
+//   - If there is one endpoint in TRANSIENT_FAILURE and there is more than one
+//     endpoint, report state CONNECTING.
+//   - If there is at least one endpoint in Idle state, report Idle.
+//   - Otherwise, report TRANSIENT_FAILURE.
+func (b *autoshardingBalancer) computeAggregatedConnectivityStateLocked() connectivity.State {
+	var nums [5]int
+	for _, es := range b.endpointMap {
+		nums[es.connectivityState]++
 	}
 
-	newPicker := newPicker(b.endpointMap, b.sliceMap, &b.lbCfg)
-	b.ClientConn.UpdateState(balancer.State{
-		ConnectivityState: aggState,
-		Picker:            newPicker,
-	})
+	switch {
+	case nums[connectivity.Ready] > 0:
+		return connectivity.Ready
+	case nums[connectivity.TransientFailure] > 1:
+		return connectivity.TransientFailure
+	case nums[connectivity.Connecting] > 0:
+		return connectivity.Connecting
+	case nums[connectivity.TransientFailure] == 1 && len(b.endpointMap) > 1:
+		return connectivity.Connecting
+	case nums[connectivity.Idle] > 0:
+		return connectivity.Idle
+	default:
+		return connectivity.TransientFailure
+	}
 }
 
 func (b *autoshardingBalancer) ResolverError(err error) {
@@ -593,27 +743,52 @@ func (b *autoshardingBalancer) UpdateSubConnState(sc balancer.SubConn, state bal
 	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
+// ExitIdle is called when the channel is explicitly asked to connect (for
+// example, when the application calls Connect() on the channel). Connections
+// are otherwise triggered from picks or from child balancer state changes.
 func (b *autoshardingBalancer) ExitIdle() {
-	// ExitIdle implementation is a no-op because connections are either
-	// triggered from picks or from child balancer state changes.
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.closed {
+		return
+	}
+	b.exitIdleLocked()
+}
+
+// exitIdleLocked handles a request to exit IDLE. See the comment on
+// initialConnectTimerStop for details.
+func (b *autoshardingBalancer) exitIdleLocked() {
+	switch {
+	case b.assignment == nil && b.assignmentErr == nil:
+		// No result has been received from the autosharding client yet.
+		// Record the request, so that it can be handled once the first usable
+		// result is received.
+		b.seenExitIdle = true
+	case b.initialConnectTimerStop != nil:
+		// The initial connect timer is running. Don't wait for it to fire.
+		b.stopInitialConnectTimerLocked()
+		b.connectToRandomIdleEndpointLocked()
+	case b.state == connectivity.Idle:
+		b.connectToRandomIdleEndpointLocked()
+	}
 }
 
 func (b *autoshardingBalancer) Close() {
-	var clientClose, channelClose func()
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
 		return
 	}
 	b.closed = true
-	clientClose = b.autoshardingClientClose
+	b.clearInitialConnectLocked()
+	clientClose := b.autoshardingClientClose
 	b.autoshardingClientClose = nil
-	channelClose = b.autoshardingChannelClose
-	b.autoshardingChannelClose = nil
-	b.autoshardingChannel = nil
 	b.serializerCancel()
 	b.lastResolverErr = nil
 	b.endpointMap = nil
+	b.pendingConnectEndpoint = nil
+	b.endpointsByAddrs = resolver.NewEndpointMap[*endpointState]()
 	b.sliceMap = nil
 	b.assignment = nil
 	b.assignmentErr = nil
@@ -621,11 +796,9 @@ func (b *autoshardingBalancer) Close() {
 
 	// Called outside of the lock to avoid deadlocks caused by lock order
 	// inversion between the autosharding balancer and the child balancer.
+	// Closing the autosharding client also releases its gRPC channel.
 	if clientClose != nil {
 		clientClose()
-	}
-	if channelClose != nil {
-		channelClose()
 	}
 	b.child.Close()
 
@@ -656,16 +829,28 @@ func (b *autoshardingBalancer) UpdateState(state balancer.State) {
 
 	childStates := endpointsharding.ChildStatesFromPicker(state.Picker)
 	for _, cs := range childStates {
-		hostname := hostnameFromEndpoint(cs.Endpoint)
-		if es, ok := b.endpointMap[hostname]; ok {
-			es.connectivityState = cs.State.ConnectivityState
-			es.picker = cs.State.Picker
-			es.exitIdle = cs.ExitIdle
-		} else {
-			b.logger.Warningf("Received child state for unknown endpoint with hostname %q", hostname)
+		// Look up the endpointState using the endpoint's set of addresses,
+		// which is how endpointsharding identifies its children. Looking up by
+		// hostname is unsafe because a resolver update may have reassigned the
+		// hostname to a different endpoint, while this update could contain
+		// state for the child associated with the old endpoint.
+		es, ok := b.endpointsByAddrs.Get(cs.Endpoint)
+		if !ok {
+			// This can happen when a child update races with a resolver update
+			// that removed the endpoint.
+			if b.logger.V(2) {
+				b.logger.Infof("Ignoring child state for unknown endpoint %v", cs.Endpoint)
+			}
+			continue
+		}
+		es.connectivityState = cs.State.ConnectivityState
+		es.picker = cs.State.Picker
+		es.exitIdle = cs.ExitIdle
+		if es == b.pendingConnectEndpoint && es.connectivityState != connectivity.Idle {
+			b.pendingConnectEndpoint = nil
 		}
 	}
-	b.updateStateAndPickerLocked()
+	b.updateStateAndPickerLocked(false)
 }
 
 // lameChannel is a gRPC channel that always returns the configured error for

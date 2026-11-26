@@ -22,6 +22,8 @@ package internal
 
 import (
 	"errors"
+	rand "math/rand/v2"
+	"time"
 
 	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
 	"google.golang.org/grpc/codes"
@@ -35,6 +37,24 @@ var (
 	// longer need the autosharding client. This will be overridden in tests to stub
 	// out the real autosharding client.
 	NewAutoshardingClient func(sharding.ClientOptions) func()
+
+	// InitialConnectDelay is the amount of time the LB policy waits, after
+	// receiving the first usable result from the autosharding client, for a
+	// pick to trigger a connection attempt before it triggers a connection
+	// attempt to a random endpoint on its own.
+	InitialConnectDelay = 500 * time.Millisecond
+
+	// AfterFunc schedules f to be called after d has elapsed, and returns a
+	// function that stops the timer. It is a variable to allow tests to control
+	// when the initial connect timer fires.
+	AfterFunc = func(d time.Duration, f func()) (stop func() bool) {
+		return time.AfterFunc(d, f).Stop
+	}
+
+	// RandIntN returns a random integer in [0, n). It is used to pick a random
+	// endpoint to connect to, and is a variable to allow tests to make that
+	// choice deterministic.
+	RandIntN = rand.IntN
 
 	// ErrNoEndpointsFromNR is the error returned by the balancer when the
 	// resolver returns an empty list of endpoints.
