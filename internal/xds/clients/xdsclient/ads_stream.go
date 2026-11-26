@@ -81,6 +81,7 @@ type adsStreamEventHandler interface {
 
 // state corresponding to a resource type.
 type resourceTypeState struct {
+	typ                 ResourceType                               // Resource type for these subscriptions.
 	version             string                                     // Last acked version. Should not be reset when the stream breaks.
 	nonce               string                                     // Last received nonce. Should be reset when the stream breaks.
 	subscribedResources map[string]*xdsresource.ResourceWatchState // Map of subscribed resource names to their state.
@@ -111,8 +112,8 @@ type adsStreamImpl struct {
 
 	// Guards access to the below fields (and to the contents of the map).
 	mu                sync.Mutex
-	resourceTypeState map[ResourceType]*resourceTypeState // Map of resource types to their state.
-	pendingRequests   []request                           // Subscriptions and unsubscriptions are pushed here.
+	resourceTypeState map[string]*resourceTypeState // Map of resource type URLs to their state.
+	pendingRequests   []request                     // Subscriptions and unsubscriptions are pushed here.
 
 	// The following fields are accessed atomically.
 	firstRequest       atomic.Bool // False after the first request is sent out.
@@ -145,7 +146,7 @@ func newADSStreamImpl(opts adsStreamOpts) *adsStreamImpl {
 		runnerDoneCh:      make(chan struct{}),
 		fc:                newADSFlowControl(),
 		notifySender:      make(chan struct{}, 1),
-		resourceTypeState: make(map[ResourceType]*resourceTypeState),
+		resourceTypeState: make(map[string]*resourceTypeState),
 	}
 
 	l := grpclog.Component("xds")
@@ -175,12 +176,12 @@ func (s *adsStreamImpl) subscribe(typ ResourceType, name string) {
 	}
 
 	s.mu.Lock()
-	state, ok := s.resourceTypeState[typ]
+	state, ok := s.resourceTypeState[typ.TypeURL]
 	if !ok {
 		// An entry in the type state map is created as part of the first
 		// subscription request for this type.
-		state = &resourceTypeState{subscribedResources: make(map[string]*xdsresource.ResourceWatchState)}
-		s.resourceTypeState[typ] = state
+		state = &resourceTypeState{typ: typ, subscribedResources: make(map[string]*xdsresource.ResourceWatchState)}
+		s.resourceTypeState[typ.TypeURL] = state
 	}
 
 	// Create state for the newly subscribed resource. The watch timer will
@@ -207,7 +208,7 @@ func (s *adsStreamImpl) unsubscribe(typ ResourceType, name string) {
 	}
 
 	s.mu.Lock()
-	state, ok := s.resourceTypeState[typ]
+	state, ok := s.resourceTypeState[typ.TypeURL]
 	if !ok {
 		s.mu.Unlock()
 		return
@@ -327,7 +328,7 @@ func (s *adsStreamImpl) send(ctx context.Context) {
 // Caller needs to hold c.mu.
 func (s *adsStreamImpl) sendNewLocked(stream clients.Stream, requests []request) error {
 	for _, req := range requests {
-		state := s.resourceTypeState[req.typ]
+		state := s.resourceTypeState[req.typ.TypeURL]
 		if err := s.sendMessageLocked(stream, req.resourceNames, req.typ.TypeURL, state.version, state.nonce, nil); err != nil {
 			return err
 		}
@@ -348,7 +349,7 @@ func (s *adsStreamImpl) sendExisting(stream clients.Stream) error {
 	// resent below.
 	s.pendingRequests = nil
 
-	for typ, state := range s.resourceTypeState {
+	for typeURL, state := range s.resourceTypeState {
 		// Reset only the nonces map when the stream restarts.
 		//
 		// xDS spec says the following. See section:
@@ -367,10 +368,10 @@ func (s *adsStreamImpl) sendExisting(stream clients.Stream) error {
 		}
 
 		names := resourceNames(state.subscribedResources)
-		if err := s.sendMessageLocked(stream, names, typ.TypeURL, state.version, state.nonce, nil); err != nil {
+		if err := s.sendMessageLocked(stream, names, typeURL, state.version, state.nonce, nil); err != nil {
 			return err
 		}
-		s.startWatchTimersLocked(typ, names)
+		s.startWatchTimersLocked(state.typ, names)
 	}
 	return nil
 }
@@ -514,14 +515,7 @@ func (s *adsStreamImpl) onRecv(stream clients.Stream, names []string, url, versi
 	defer s.mu.Unlock()
 
 	// Lookup the resource type specific state based on the type URL.
-	var typ ResourceType
-	for t := range s.resourceTypeState {
-		if t.TypeURL == url {
-			typ = t
-			break
-		}
-	}
-	typeState, ok := s.resourceTypeState[typ]
+	typeState, ok := s.resourceTypeState[url]
 	if !ok {
 		s.logger.Warningf("ADS stream received a response for type %q, but no state exists for it", url)
 		return
@@ -616,7 +610,7 @@ func (s *adsStreamImpl) onError(err error, msgReceived bool) {
 //
 // The caller must hold the s.mu lock.
 func (s *adsStreamImpl) startWatchTimersLocked(typ ResourceType, names []string) {
-	typeState := s.resourceTypeState[typ]
+	typeState := s.resourceTypeState[typ.TypeURL]
 	for _, name := range names {
 		resourceState, ok := typeState.subscribedResources[name]
 		if !ok {
@@ -642,7 +636,7 @@ func (s *adsStreamImpl) adsResourceWatchStateForTesting(rType ResourceType, reso
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	state, ok := s.resourceTypeState[rType]
+	state, ok := s.resourceTypeState[rType.TypeURL]
 	if !ok {
 		return xdsresource.ResourceWatchState{}, fmt.Errorf("unknown resource type: %v", rType)
 	}
