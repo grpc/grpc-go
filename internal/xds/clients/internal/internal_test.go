@@ -19,6 +19,7 @@
 package internal
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -149,6 +150,7 @@ func (s) TestNodeProto(t *testing.T) {
 		desc      string
 		inputNode clients.Node
 		wantProto *v3corepb.Node
+		wantErr   string
 	}{
 		{
 			desc: "all_fields_set",
@@ -160,7 +162,7 @@ func (s) TestNodeProto(t *testing.T) {
 					Zone:    "zone",
 					SubZone: "sub_zone",
 				},
-				Metadata:         newStructProtoFromMap(t, map[string]any{"k1": "v1", "k2": 101, "k3": 280.0}),
+				Metadata:         map[string]any{"k1": "v1", "k2": 101, "k3": 280.0},
 				UserAgentName:    "user agent",
 				UserAgentVersion: "version",
 			},
@@ -175,6 +177,55 @@ func (s) TestNodeProto(t *testing.T) {
 				Metadata:             newStructProtoFromMap(t, map[string]any{"k1": "v1", "k2": 101, "k3": 280.0}),
 				UserAgentName:        "user agent",
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "version"},
+			},
+		},
+		{
+			desc: "valid_nested_metadata",
+			inputNode: clients.Node{
+				ID: "id",
+				Metadata: map[string]any{
+					"str":    "value",
+					"bool":   true,
+					"list":   []any{"elem1", 42.0},
+					"nested": map[string]any{"innerKey": "innerVal"},
+				},
+			},
+			wantProto: &v3corepb.Node{
+				Id: "id",
+				Metadata: newStructProtoFromMap(t, map[string]any{
+					"str":    "value",
+					"bool":   true,
+					"list":   []any{"elem1", 42.0},
+					"nested": map[string]any{"innerKey": "innerVal"},
+				}),
+				UserAgentName:        "",
+				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: ""},
+			},
+		},
+		{
+			desc: "empty_metadata",
+			inputNode: clients.Node{
+				ID:       "id",
+				Metadata: map[string]any{},
+			},
+			wantProto: &v3corepb.Node{
+				Id:                   "id",
+				Metadata:             nil,
+				UserAgentName:        "",
+				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: ""},
+			},
+		},
+		{
+			desc: "nil_metadata",
+			inputNode: clients.Node{
+				ID:       "id",
+				Metadata: nil,
+			},
+			wantProto: &v3corepb.Node{
+				Id:                   "id",
+				Metadata:             nil,
+				UserAgentName:        "",
+				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: ""},
 			},
 		},
 		{
@@ -200,11 +251,36 @@ func (s) TestNodeProto(t *testing.T) {
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: ""},
 			},
 		},
+		{
+			desc: "invalid_metadata_channel",
+			inputNode: clients.Node{
+				ID:       "id",
+				Metadata: map[string]any{"invalid": make(chan int)},
+			},
+			wantErr: "failed to convert node metadata",
+		},
+		{
+			desc: "invalid_metadata_function",
+			inputNode: clients.Node{
+				ID:       "id",
+				Metadata: map[string]any{"invalid": func() {}},
+			},
+			wantErr: "failed to convert node metadata",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotProto := NodeProto(test.inputNode)
+			gotProto, err := NodeProto(test.inputNode)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("NodeProto() error = %v, wantErr containing %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NodeProto() unexpected error: %v", err)
+			}
 			if diff := cmp.Diff(test.wantProto, gotProto, protocmp.Transform()); diff != "" {
 				t.Fatalf("Unexpected diff in node proto: (-want, +got):\n%s", diff)
 			}
