@@ -1319,6 +1319,15 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 
 		return toRPCErr(err)
 	}
+	// A second message on a non-server-streaming RPC violates the RPC's
+	// cardinality contract. Report it here, in the underlying receive path,
+	// so the error flows through clientStream.RecvMsg and finishes the RPC
+	// (completion callbacks and stream cleanup). Returning it from the
+	// clientStreamWrapper instead skips finish, because both underlying
+	// receives succeed. See https://github.com/grpc/grpc-go/issues/9606.
+	if !cs.desc.ServerStreams && cs.receivedFirstMsg {
+		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+	}
 	cs.receivedFirstMsg = true
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -1677,6 +1686,13 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 			return io.EOF // indicates successful end of stream.
 		}
 		return toRPCErr(err)
+	}
+	// A second message on a non-server-streaming RPC violates the RPC's
+	// cardinality contract. Report it here, in the underlying receive path,
+	// so the error finishes the RPC (stream cleanup). See
+	// https://github.com/grpc/grpc-go/issues/9606.
+	if !as.desc.ServerStreams && as.receivedFirstMsg {
+		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 	}
 	as.receivedFirstMsg = true
 	return nil
