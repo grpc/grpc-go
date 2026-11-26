@@ -20,6 +20,7 @@ package grpcservice
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -125,6 +126,12 @@ func googleGrpcService(target string, channelPlugins, callPlugins []*anypb.Any, 
 	}
 }
 
+// withInitialMetadata sets the initial metadata of gs and returns it.
+func withInitialMetadata(gs *v3corepb.GrpcService, headers ...*v3corepb.HeaderValue) *v3corepb.GrpcService {
+	gs.InitialMetadata = headers
+	return gs
+}
+
 // protoIdentity returns the identity of a proto plugin config.
 func protoIdentity(a *anypb.Any) xdscreds.Identity {
 	return xdscreds.Identity{Type: a.GetTypeUrl(), Data: a.GetValue()}
@@ -148,6 +155,15 @@ func (s) TestParse(t *testing.T) {
 	tokenPlugin := accessTokenPlugin(t, "test-token")
 	unsupportedCallPlugin := &anypb.Any{TypeUrl: "type.googleapis.com/unsupported.CallCredentials"}
 	allowedInsecure := `{"dns:///my-service:443":{"channel_creds":[{"type":"insecure"}]}}`
+	headers := []*v3corepb.HeaderValue{
+		{Key: "key-b", Value: "b"},
+		// raw_value takes precedence over the legacy value field.
+		{Key: "key-a", Value: "legacy", RawValue: []byte("raw-a")},
+		// The values of "-bin" headers are base64-encoded in the proto.
+		{Key: "key-bin", RawValue: []byte("AP8=")},
+	}
+	invalidHeader := &v3corepb.HeaderValue{Key: "grpc-key", Value: "v"}
+	invalidBinHeader := &v3corepb.HeaderValue{Key: "key-bin", RawValue: []byte("not base64!")}
 
 	tests := []struct {
 		name   string
@@ -174,8 +190,8 @@ func (s) TestParse(t *testing.T) {
 			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(xdsWithInsecureFallback), nil)},
 		},
 		{
-			// Call-creds plugins of unsupported types are skipped, while
-			// supported ones are built in order.
+			// Call-creds plugins of unsupported types are skipped,
+			// while supported ones are built in order.
 			name:   "trusted_with_call_creds",
 			gs:     googleGrpcService(target, []*anypb.Any{insecurePlugin}, []*anypb.Any{tokenPlugin, unsupportedCallPlugin}, nil),
 			sc:     trustedServerConfig(t),
@@ -208,8 +224,9 @@ func (s) TestParse(t *testing.T) {
 			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)},
 		},
 		{
-			// The proto's call-creds plugins are ignored along with its
-			// channel-creds plugins: the allowlist's call creds are used.
+			// The proto's call-creds plugins are ignored along with
+			// its channel-creds plugins: the allowlist's call creds
+			// are used.
 			name:   "untrusted_allowlisted_uses_allowlist_call_creds",
 			gs:     googleGrpcService(target, []*anypb.Any{insecurePlugin}, []*anypb.Any{tokenPlugin}, nil),
 			sc:     untrustedServerConfig(t),
@@ -219,8 +236,9 @@ func (s) TestParse(t *testing.T) {
 				ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
 				CallCredentials: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
 					Type: "jwt_token_file",
-					// Bootstrap parsing normalizes the configuration JSON
-					// via json.Indent, and the identity carries the
+					// Bootstrap parsing normalizes the
+					// configuration JSON via json.Indent,
+					// and the identity carries the
 					// normalized bytes.
 					Data: json.RawMessage("{\n\"jwt_token_file\": \"/tokens/token\"\n}"),
 				}, nil)},
@@ -259,6 +277,19 @@ func (s) TestParse(t *testing.T) {
 			},
 		},
 		{
+			// Unlike initial metadata and credentials, the timeout
+			// does not depend on trust.
+			name:   "untrusted_timeout_honored",
+			gs:     googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, durationpb.New(10*time.Second)),
+			sc:     untrustedServerConfig(t),
+			config: bootstrapConfig(t, allowedInsecure),
+			want: &Config{
+				TargetURI:          target,
+				Timeout:            10 * time.Second,
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+			},
+		},
+		{
 			name:    "zero_timeout_rejected",
 			gs:      googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, durationpb.New(0)),
 			sc:      trustedServerConfig(t),
@@ -266,23 +297,53 @@ func (s) TestParse(t *testing.T) {
 			wantErr: "timeout must be strictly positive",
 		},
 		{
-			name: "initial_metadata",
-			gs: func() *v3corepb.GrpcService {
-				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
-				gs.InitialMetadata = []*v3corepb.HeaderValue{
-					{Key: "key-b", Value: "b"},
-					// raw_value takes precedence over the legacy value field.
-					{Key: "key-a", Value: "legacy", RawValue: []byte("raw-a")},
-				}
-				return gs
-			}(),
+			name:    "untrusted_zero_timeout_rejected",
+			gs:      googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, durationpb.New(0)),
+			sc:      untrustedServerConfig(t),
+			config:  bootstrapConfig(t, allowedInsecure),
+			wantErr: "timeout must be strictly positive",
+		},
+		{
+			name:   "trusted_initial_metadata",
+			gs:     withInitialMetadata(googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil), headers...),
 			sc:     trustedServerConfig(t),
 			config: bootstrapConfig(t, "{}"),
 			want: &Config{
 				TargetURI:          target,
-				InitialMetadata:    metadata.MD{"key-b": {"b"}, "key-a": {"raw-a"}},
+				InitialMetadata:    metadata.MD{"key-b": {"b"}, "key-a": {"raw-a"}, "key-bin": {"\x00\xff"}},
 				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
 			},
+		},
+		{
+			name:    "trusted_invalid_initial_metadata",
+			gs:      withInitialMetadata(googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil), invalidHeader),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "invalid header key",
+		},
+		{
+			name:    "trusted_invalid_binary_initial_metadata",
+			gs:      withInitialMetadata(googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil), invalidBinHeader),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "not valid base64",
+		},
+		{
+			// The proto's initial metadata is ignored along with
+			// its credentials.
+			name:   "untrusted_initial_metadata_ignored",
+			gs:     withInitialMetadata(googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil), headers...),
+			sc:     untrustedServerConfig(t),
+			config: bootstrapConfig(t, allowedInsecure),
+			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)},
+		},
+		{
+			// Ignored initial metadata is not validated.
+			name:   "untrusted_invalid_initial_metadata_ignored",
+			gs:     withInitialMetadata(googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil), invalidHeader, invalidBinHeader),
+			sc:     untrustedServerConfig(t),
+			config: bootstrapConfig(t, allowedInsecure),
+			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)},
 		},
 	}
 
@@ -298,9 +359,9 @@ func (s) TestParse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse() returned unexpected error: %v", err)
 			}
-			// The cmp.Diff below compares credentials by identity only, so it
-			// cannot tell a built credential from a nil one; verify the
-			// credentials were built.
+			// The cmp.Diff below compares credentials by identity
+			// only, so it cannot tell a built credential from a nil
+			// one; verify the credentials were built.
 			if got.ChannelCredentials.Bundle() == nil {
 				t.Error("Parse() returned channel credentials without a built bundle")
 			}
@@ -311,6 +372,150 @@ func (s) TestParse(t *testing.T) {
 			}
 			if diff := cmp.Diff(test.want, got); diff != "" {
 				t.Errorf("Parse() returned unexpected config (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Tests the validation of initial_metadata HeaderValue protos and their
+// conversion to metadata.MD.
+func (s) TestParseInitialMetadata(t *testing.T) {
+	// 12288 bytes are 16384 bytes once base64-encoded, i.e. the limit.
+	maxBinValue := base64.StdEncoding.EncodeToString(make([]byte, 12288))
+
+	tests := []struct {
+		name    string
+		headers []*v3corepb.HeaderValue
+		want    metadata.MD
+		wantErr string
+	}{
+		{
+			name: "none",
+		},
+		{
+			name:    "value",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: "v"}},
+			want:    metadata.MD{"key": {"v"}},
+		},
+		{
+			name:    "raw_value_takes_precedence",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: "legacy", RawValue: []byte("raw")}},
+			want:    metadata.MD{"key": {"raw"}},
+		},
+		{
+			name:    "repeated_key_preserves_order",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: "1"}, {Key: "key", Value: "2"}},
+			want:    metadata.MD{"key": {"1", "2"}},
+		},
+		{
+			// Only the values of "-bin" headers are base64-decoded.
+			name:    "value_that_looks_like_base64",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: "AP8="}},
+			want:    metadata.MD{"key": {"AP8="}},
+		},
+		{
+			name:    "bin_padded",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", RawValue: []byte("AP8=")}},
+			want:    metadata.MD{"key-bin": {"\x00\xff"}},
+		},
+		{
+			name:    "bin_unpadded",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", RawValue: []byte("AP8")}},
+			want:    metadata.MD{"key-bin": {"\x00\xff"}},
+		},
+		{
+			name:    "bin_legacy_value",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", Value: "AP8="}},
+			want:    metadata.MD{"key-bin": {"\x00\xff"}},
+		},
+		{
+			name:    "bin_raw_value_takes_precedence",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", Value: "bGVnYWN5", RawValue: []byte("AP8=")}},
+			want:    metadata.MD{"key-bin": {"\x00\xff"}},
+		},
+		{
+			name:    "bin_empty",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin"}},
+			want:    metadata.MD{"key-bin": {""}},
+		},
+		{
+			name:    "bin_max_length",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", RawValue: []byte(maxBinValue)}},
+			want:    metadata.MD{"key-bin": {string(make([]byte, 12288))}},
+		},
+		{
+			// The length limit applies to the value as encoded in
+			// the proto: these 16388 bytes would decode to 12291.
+			name:    "bin_too_long",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", RawValue: []byte(maxBinValue + "AAAA")}},
+			wantErr: "exceeds maximum allowed length",
+		},
+		{
+			name:    "bin_invalid_base64",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", RawValue: []byte("not base64!")}},
+			wantErr: "not valid base64",
+		},
+		{
+			name:    "bin_url_safe_alphabet",
+			headers: []*v3corepb.HeaderValue{{Key: "key-bin", RawValue: []byte("AP8-_w")}},
+			wantErr: "not valid base64",
+		},
+		{
+			name:    "value_too_long",
+			headers: []*v3corepb.HeaderValue{{Key: "key", Value: strings.Repeat("v", maxHeaderValueLen+1)}},
+			wantErr: "exceeds maximum allowed length",
+		},
+		{
+			name:    "value_not_printable",
+			headers: []*v3corepb.HeaderValue{{Key: "key", RawValue: []byte{0x00, 0xff}}},
+			wantErr: "non-printable",
+		},
+		{
+			name:    "key_empty",
+			headers: []*v3corepb.HeaderValue{{Value: "v"}},
+			wantErr: "invalid header key",
+		},
+		{
+			name:    "key_uppercase",
+			headers: []*v3corepb.HeaderValue{{Key: "Key", Value: "v"}},
+			wantErr: "invalid header key",
+		},
+		{
+			name:    "key_too_long",
+			headers: []*v3corepb.HeaderValue{{Key: strings.Repeat("k", maxHeaderKeyLen+1), Value: "v"}},
+			wantErr: "exceeds maximum allowed length",
+		},
+		{
+			name:    "key_host",
+			headers: []*v3corepb.HeaderValue{{Key: "host", Value: "v"}},
+			wantErr: `cannot be "host"`,
+		},
+		{
+			name:    "key_pseudo_header",
+			headers: []*v3corepb.HeaderValue{{Key: ":authority", Value: "v"}},
+			wantErr: `cannot start with ":"`,
+		},
+		{
+			name:    "key_grpc_prefix",
+			headers: []*v3corepb.HeaderValue{{Key: "grpc-key", Value: "v"}},
+			wantErr: `cannot start with "grpc-"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseInitialMetadata(test.headers)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("parseInitialMetadata() error = %v, want substring %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseInitialMetadata() returned unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("parseInitialMetadata() returned unexpected metadata (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -334,10 +539,12 @@ func (s) TestConfigDial(t *testing.T) {
 // Tests that a Config carrying TLS channel credentials and access token call
 // credentials, built from a trusted server's GrpcService proto, can dial a
 // TLS-serving backend, and that RPCs on the resulting channel succeed and
-// carry the token.
+// carry the token and the initial metadata.
 func (s) TestConfigDialTLS(t *testing.T) {
-	// Start a TLS-serving backend that verifies the access token arrives.
+	// Start a TLS-serving backend that verifies the access token and the
+	// initial metadata arrive.
 	const wantAuthorization = "Bearer test-token"
+	const wantBinValue = "\x00\xff"
 	serverCreds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("Failed to create server TLS credentials: %v", err)
@@ -350,6 +557,9 @@ func (s) TestConfigDialTLS(t *testing.T) {
 			}
 			if got := md.Get("authorization"); len(got) != 1 || got[0] != wantAuthorization {
 				return nil, fmt.Errorf("authorization metadata = %v, want [%q]", got, wantAuthorization)
+			}
+			if got := md.Get("key-bin"); len(got) != 1 || got[0] != wantBinValue {
+				return nil, fmt.Errorf("key-bin metadata = %q, want [%q]", got, wantBinValue)
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -383,6 +593,9 @@ func (s) TestConfigDialTLS(t *testing.T) {
 		t.Fatalf("Failed to marshal TlsCredentials: %v", err)
 	}
 	gs := googleGrpcService(backend.Address, []*anypb.Any{tlsPlugin}, []*anypb.Any{accessTokenPlugin(t, "test-token")}, nil)
+	// The value is base64-encoded in the proto and decoded by Parse; the
+	// transport encodes it again on the wire.
+	gs = withInitialMetadata(gs, &v3corepb.HeaderValue{Key: "key-bin", RawValue: []byte(base64.StdEncoding.EncodeToString([]byte(wantBinValue)))})
 	cfg, err := Parse(gs, bc, trustedServerConfig(t))
 	if err != nil {
 		t.Fatalf("Parse() returned unexpected error: %v", err)
@@ -398,6 +611,8 @@ func (s) TestConfigDialTLS(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	// Consumers of a Config attach its initial metadata to each RPC.
+	ctx = metadata.NewOutgoingContext(ctx, cfg.InitialMetadata)
 	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
