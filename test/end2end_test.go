@@ -3907,6 +3907,294 @@ func (s) TestUnaryRPC_ServerCallSendMsgTwice(t *testing.T) {
 	}
 }
 
+// Tests that a second RecvMsg call on a unary RPC reports the outcome of
+// the background read for a second request message: io.EOF once the client
+// has half-closed, instead of blocking forever or reading past the first
+// message. See https://github.com/grpc/grpc-go/issues/9618.
+func (s) TestUnaryRPC_RecvMsgTwiceReturnsEOF(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "UnaryCall",
+				Handler: func(_ any, stream grpc.ServerStream) error {
+					if err := stream.RecvMsg(&testpb.Empty{}); err != nil {
+						t.Errorf("first stream.RecvMsg() = %v, want <nil>", err)
+					}
+					if err := stream.RecvMsg(&testpb.Empty{}); err != io.EOF {
+						t.Errorf("second stream.RecvMsg() = %v, want %v", err, io.EOF)
+					}
+					if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+						t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+					}
+					return nil
+				},
+				ClientStreams: false,
+				ServerStreams: false,
+			},
+		},
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err = client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Errorf("client.UnaryCall() = %v, want <nil>", err)
+	}
+}
+
+// Tests that the server runs a unary handler as soon as the single request
+// message arrives, without waiting for the client to half-close the stream,
+// and that a second request message arriving while the handler runs is
+// still rejected with an INTERNAL cardinality violation. See
+// https://github.com/grpc/grpc-go/issues/9618.
+func (s) TestUnaryRPC_HandlerRunsBeforeClientHalfClose(t *testing.T) {
+	// dialRaw opens a raw HTTP/2 connection to the server and performs the
+	// connection handshake.
+	dialRaw := func(t *testing.T, addr string) (net.Conn, *http2.Framer) {
+		t.Helper()
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			t.Fatalf("Failed to dial tcp: %v", err)
+		}
+		if _, err := conn.Write([]byte(http2.ClientPreface)); err != nil {
+			t.Fatalf("Failed to write preface: %v", err)
+		}
+		framer := http2.NewFramer(conn, conn)
+		if err := framer.WriteSettings(); err != nil {
+			t.Fatalf("Failed to write settings: %v", err)
+		}
+		// Read the server's settings frame and acknowledge it.
+		conn.SetReadDeadline(time.Now().Add(defaultTestTimeout))
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Fatalf("Failed to read server settings: %v", err)
+			}
+			if sf, ok := frame.(*http2.SettingsFrame); ok && !sf.IsAck() {
+				if err := framer.WriteSettingsAck(); err != nil {
+					t.Fatalf("Failed to write settings ack: %v", err)
+				}
+				break
+			}
+		}
+		conn.SetReadDeadline(time.Time{})
+		return conn, framer
+	}
+
+	// sendUnaryRequest writes the HEADERS and DATA frames for a unary call
+	// on stream 1. The message is an empty SimpleRequest. Unless endStream
+	// is true, the stream is left open so the handler must run without the
+	// client half-closing.
+	sendUnaryRequest := func(t *testing.T, framer *http2.Framer, addr string, endStream bool) {
+		t.Helper()
+		var headerBuf bytes.Buffer
+		enc := hpack.NewEncoder(&headerBuf)
+		for _, hf := range []hpack.HeaderField{
+			{Name: ":method", Value: "POST"},
+			{Name: ":scheme", Value: "http"},
+			{Name: ":authority", Value: addr},
+			{Name: ":path", Value: "/grpc.testing.TestService/UnaryCall"},
+			{Name: "content-type", Value: "application/grpc"},
+			{Name: "te", Value: "trailers"},
+		} {
+			if err := enc.WriteField(hf); err != nil {
+				t.Fatalf("Failed to encode header field %v: %v", hf, err)
+			}
+		}
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      1,
+			BlockFragment: headerBuf.Bytes(),
+			EndStream:     false,
+			EndHeaders:    true,
+		}); err != nil {
+			t.Fatalf("Failed to write headers: %v", err)
+		}
+		if err := framer.WriteData(1, endStream, []byte{0, 0, 0, 0, 0}); err != nil {
+			t.Fatalf("Failed to write data: %v", err)
+		}
+	}
+
+	// newDecoder returns an HPACK decoder for the connection. The returned
+	// pointer always holds the grpc-status of the most recently decoded
+	// HEADERS frame; every HEADERS frame on the connection must be fed to
+	// the same decoder, in order, to keep its dynamic table in sync.
+	newDecoder := func() (*hpack.Decoder, *string) {
+		var grpcStatus string
+		dec := hpack.NewDecoder(4096, func(f hpack.HeaderField) {
+			if f.Name == "grpc-status" {
+				grpcStatus = f.Value
+			}
+		})
+		return dec, &grpcStatus
+	}
+
+	// readTrailers reads frames until the trailers HEADERS frame for
+	// stream 1 arrives, returning whether a DATA frame was seen first and
+	// the grpc-status carried by the trailers.
+	readTrailers := func(t *testing.T, conn net.Conn, framer *http2.Framer, dec *hpack.Decoder, status *string, timeout time.Duration) (bool, string) {
+		t.Helper()
+		sawData := false
+		deadline := time.Now().Add(timeout)
+		for {
+			conn.SetReadDeadline(deadline)
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Fatalf("Failed reading frame while waiting for trailers: %v", err)
+			}
+			switch f := frame.(type) {
+			case *http2.HeadersFrame:
+				if f.StreamID != 1 {
+					continue
+				}
+				*status = ""
+				if _, err := dec.Write(f.HeaderBlockFragment()); err != nil {
+					t.Fatalf("Failed decoding headers: %v", err)
+				}
+				if f.StreamEnded() {
+					return sawData, *status
+				}
+			case *http2.DataFrame:
+				if f.StreamID == 1 {
+					sawData = true
+				}
+			}
+		}
+	}
+
+	t.Run("ResponseBeforeHalfClose", func(t *testing.T) {
+		ss := &stubserver.StubServer{
+			UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{}, nil
+			},
+		}
+		if err := ss.Start(nil); err != nil {
+			t.Fatalf("Error starting endpoint server: %v", err)
+		}
+		defer ss.Stop()
+
+		conn, framer := dialRaw(t, ss.Address)
+		defer conn.Close()
+		dec, status := newDecoder()
+		sendUnaryRequest(t, framer, ss.Address, false)
+
+		// The response headers must arrive without the client half-closing.
+		// Before the fix they only arrived after END_STREAM, so this read
+		// would time out.
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Fatalf("Response headers did not arrive before client half-close: %v", err)
+			}
+			if hf, ok := frame.(*http2.HeadersFrame); ok && hf.StreamID == 1 {
+				// Decode with the connection's decoder to keep its dynamic
+				// table in sync for the trailers below.
+				if _, err := dec.Write(hf.HeaderBlockFragment()); err != nil {
+					t.Fatalf("Failed decoding headers: %v", err)
+				}
+				break
+			}
+		}
+		// Half-close now and drain the trailers to confirm success.
+		if err := framer.WriteData(1, true, nil); err != nil {
+			t.Fatalf("Failed to half-close: %v", err)
+		}
+		if _, trailersStatus := readTrailers(t, conn, framer, dec, status, defaultTestTimeout); trailersStatus != "0" {
+			t.Errorf("Got grpc-status %q, want 0", trailersStatus)
+		}
+	})
+
+	t.Run("SecondMessageRejected", func(t *testing.T) {
+		handlerStarted := make(chan struct{})
+		ss := &stubserver.StubServer{
+			UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				close(handlerStarted)
+				// Stay in the handler long enough for the second message
+				// below to arrive and be observed while the handler runs.
+				// The handler must not return in the same instant the
+				// second message is written: the background read for it
+				// runs concurrently, and the response must only be sent
+				// once that read has had a chance to observe it.
+				time.Sleep(200 * time.Millisecond)
+				return &testpb.SimpleResponse{}, nil
+			},
+		}
+		if err := ss.Start(nil); err != nil {
+			t.Fatalf("Error starting endpoint server: %v", err)
+		}
+		defer ss.Stop()
+
+		conn, framer := dialRaw(t, ss.Address)
+		defer conn.Close()
+		sendUnaryRequest(t, framer, ss.Address, false)
+
+		// Wait until the handler has read the first message, then send a
+		// second request message while it is still running.
+		select {
+		case <-handlerStarted:
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("Handler did not start after the first message")
+		}
+		if err := framer.WriteData(1, false, []byte{0, 0, 0, 0, 0}); err != nil {
+			t.Fatalf("Failed to write second message: %v", err)
+		}
+
+		// No reply may be sent; the trailers must carry INTERNAL.
+		dec, status := newDecoder()
+		sawData, trailersStatus := readTrailers(t, conn, framer, dec, status, defaultTestTimeout)
+		if sawData {
+			t.Error("Received a reply DATA frame, want none: the second message must fail the RPC")
+		}
+		if want := strconv.Itoa(int(codes.Internal)); trailersStatus != want {
+			t.Errorf("Got grpc-status %q, want %q (cardinality violation)", trailersStatus, want)
+		}
+	})
+
+	t.Run("HalfCloseFirst", func(t *testing.T) {
+		ss := &stubserver.StubServer{
+			UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{}, nil
+			},
+		}
+		if err := ss.Start(nil); err != nil {
+			t.Fatalf("Error starting endpoint server: %v", err)
+		}
+		defer ss.Stop()
+
+		conn, framer := dialRaw(t, ss.Address)
+		defer conn.Close()
+		sendUnaryRequest(t, framer, ss.Address, true)
+
+		dec, status := newDecoder()
+		sawData, trailersStatus := readTrailers(t, conn, framer, dec, status, defaultTestTimeout)
+		if !sawData {
+			t.Error("No reply DATA frame received, want one")
+		}
+		if trailersStatus != "0" {
+			t.Errorf("Got grpc-status %q, want 0", trailersStatus)
+		}
+	})
+}
+
 // Tests the behavior for client-streaming RPC when client calls RecvMsg() twice.
 // Second call to RecvMsg should fail with io.EOF.
 func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
