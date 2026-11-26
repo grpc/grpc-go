@@ -27,12 +27,14 @@ import (
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/balancer/leastrequest"       // To register least_request
 	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -46,6 +48,7 @@ import (
 	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -265,5 +268,83 @@ func (s) TestWrrLocality(t *testing.T) {
 				t.Fatalf("Error in expected round robin: %v", err)
 			}
 		})
+	}
+}
+
+// TestWrrLocality_PickFirstReconnectAfterIdle tests that when a pick_first
+// child policy under wrr_locality (weighted_target) transitions to IDLE after
+// its READY backend disconnects, subsequent RPCs trigger reconnection to the
+// remaining healthy backend instead of timing out.
+func (s) TestWrrLocality_PickFirstReconnectAfterIdle(t *testing.T) {
+	backend1 := stubserver.StartTestService(t, nil)
+	port1 := testutils.ParsePort(t, backend1.Address)
+	defer backend1.Stop()
+	backend2 := stubserver.StartTestService(t, nil)
+	port2 := testutils.ParsePort(t, backend2.Address)
+	defer backend2.Stop()
+
+	const serviceName = "my-service-client-side-xds"
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	routeConfigName := "route-" + serviceName
+	clusterName := "cluster-" + serviceName
+	endpointsName := "endpoints-" + serviceName
+	wrrLocalityCfg := wrrLocality(t, &v3xdsxdstypepb.TypedStruct{
+		TypeUrl: "type.googleapis.com/pick_first",
+		Value:   &structpb.Struct{},
+	})
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(t, clusterName, endpointsName, e2e.SecurityLevelNone, wrrLocalityCfg)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: endpointsName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Backends: []e2e.BackendOptions{{Ports: []uint32{port1}}, {Ports: []uint32{port2}}},
+					Weight:   1,
+				},
+			},
+		})},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// Verify initial RPC succeeds on backend1.
+	var p peer.Peer
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+		t.Fatalf("Initial EmptyCall() failed: %v", err)
+	}
+	if got, want := p.Addr.String(), backend1.Address; got != want {
+		t.Fatalf("Initial EmptyCall() routed to %q, want %q", got, want)
+	}
+
+	// Stop backend1 so pick_first transitions READY -> IDLE and triggers
+	// reconnection to backend2 via weighted_target calling ExitIdle.
+	backend1.Stop()
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
+
+	// Send another RPC; it should reconnect via pick_first to backend2.
+	rpcCtx, rpcCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer rpcCancel()
+	if _, err := client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+		t.Fatalf("EmptyCall() after backend1 stopped failed: %v", err)
+	}
+	if got, want := p.Addr.String(), backend2.Address; got != want {
+		t.Fatalf("EmptyCall() after backend1 stopped routed to %q, want %q", got, want)
 	}
 }
