@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -28,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/fileutil"
 	"google.golang.org/grpc/internal/xds/rbac"
 	"google.golang.org/grpc/status"
 )
@@ -171,7 +171,7 @@ func (i *FileWatcherInterceptor) run(ctx context.Context) {
 // error in reading the file or parsing the policy, the previous
 // internalInterceptors will not be replaced.
 func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
-	policyContents, err := os.ReadFile(i.options.PolicyFile)
+	policyContents, err := fileutil.ReadFile(i.options.PolicyFile)
 	if err != nil {
 		return fmt.Errorf("policyFile(%s) read failed: %v", i.options.PolicyFile, err)
 	}

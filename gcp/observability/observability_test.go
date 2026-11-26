@@ -34,6 +34,7 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/fileutil"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -341,6 +342,32 @@ func (s) TestErrInFileSystemEnvVar(t *testing.T) {
 	defer cancel()
 	if err := Start(ctx); err == nil {
 		t.Fatalf("Invalid file system path not triggering error")
+	}
+}
+
+// TestErrInFileSystemEnvVar_OversizedFile tests that an observability
+// configuration file larger than the maximum config file size is rejected
+// when starting the observability system.
+func (s) TestErrInFileSystemEnvVar_OversizedFile(t *testing.T) {
+	oversized := make([]byte, fileutil.MaxConfigFileSize+1)
+	configJSONFile, err := os.CreateTemp(os.TempDir(), "configJSON-")
+	if err != nil {
+		t.Fatalf("cannot create file: %v", err)
+	}
+	defer os.Remove(configJSONFile.Name())
+	if _, err := configJSONFile.Write(oversized); err != nil {
+		t.Fatalf("cannot write oversized config: %v", err)
+	}
+	configJSONFile.Close()
+	oldObservabilityConfigFile := envconfig.ObservabilityConfigFile
+	envconfig.ObservabilityConfigFile = configJSONFile.Name()
+	defer func() {
+		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := Start(ctx); err == nil || !strings.Contains(err.Error(), "exceeds maximum size") {
+		t.Fatalf("Start() returned err: %v, want err containing %q", err, "exceeds maximum size")
 	}
 }
 
