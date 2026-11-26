@@ -53,6 +53,20 @@ type CertStore struct {
 	// identity. It has "localhost" as its common name, and is trusted by
 	// ClientTrust1.
 	ServerPeerLocalhost1 tls.Certificate
+	// ServerPeerECDSALocalhost1 is the ECDSA certificate sent by server to
+	// prove its identity. It has "localhost" as its SAN, and is trusted by
+	// ClientTrust1.
+	ServerPeerECDSALocalhost1 tls.Certificate
+	// ClientPeerECDSALocalhost1 is the ECDSA certificate sent by client to
+	// prove its identity. It has "localhost" as its SAN, and is trusted by
+	// ServerTrust1.
+	ClientPeerECDSALocalhost1 tls.Certificate
+	// ServerECDSACert1 is the ECDSA certificate sent by server to prove its
+	// identity. It is trusted by ClientTrust1.
+	ServerECDSACert1 tls.Certificate
+	// ClientECDSACert1 is the ECDSA certificate sent by client to prove its
+	// identity. It is trusted by ServerTrust1.
+	ClientECDSACert1 tls.Certificate
 	// ClientTrust1 is the root certificate used on the client side.
 	ClientTrust1 *x509.CertPool
 	// ClientTrust2 is the root certificate used on the client side.
@@ -105,6 +119,18 @@ func (cs *CertStore) LoadCerts() error {
 		return err
 	}
 	if cs.ServerPeerLocalhost1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_localhost_1.pem"), testdata.Path("server_key_localhost_1.pem")); err != nil {
+		return err
+	}
+	if cs.ServerPeerECDSALocalhost1, err = tls.LoadX509KeyPair(testdata.Path("server_ecdsa_cert_localhost_1.pem"), testdata.Path("server_ecdsa_key_localhost_1.pem")); err != nil {
+		return err
+	}
+	if cs.ClientPeerECDSALocalhost1, err = tls.LoadX509KeyPair(testdata.Path("client_ecdsa_cert_localhost_1.pem"), testdata.Path("client_ecdsa_key_localhost_1.pem")); err != nil {
+		return err
+	}
+	if cs.ServerECDSACert1, err = tls.LoadX509KeyPair(testdata.Path("server_ecdsa_cert_1.pem"), testdata.Path("server_ecdsa_key_1.pem")); err != nil {
+		return err
+	}
+	if cs.ClientECDSACert1, err = tls.LoadX509KeyPair(testdata.Path("client_ecdsa_cert_1.pem"), testdata.Path("client_ecdsa_key_1.pem")); err != nil {
 		return err
 	}
 	if cs.ClientTrust1, err = readTrustCert(testdata.Path("client_trust_cert_1.pem")); err != nil {
