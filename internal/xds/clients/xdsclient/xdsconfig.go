@@ -19,6 +19,7 @@
 package xdsclient
 
 import (
+	"log/slog"
 	"time"
 
 	"google.golang.org/grpc/internal/xds/clients"
@@ -83,6 +84,10 @@ type Config struct {
 	// seconds is used as specified here:
 	// envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol#knowing-when-a-requested-resource-does-not-exist
 	WatchExpiryTimeout time.Duration
+
+	// Logger is the slog.Logger to be used by the XDSClient for logging. If nil,
+	// logs will be discarded.
+	Logger *slog.Logger
 }
 
 // ServerConfig contains configuration for an xDS management server.

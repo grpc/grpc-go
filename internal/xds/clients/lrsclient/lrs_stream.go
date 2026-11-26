@@ -23,12 +23,11 @@ import (
 	"io"
 	"time"
 
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
-	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/clients"
+	igrpclog "google.golang.org/grpc/internal/xds/clients/internal/grpclog"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 
@@ -71,7 +70,7 @@ type streamOpts struct {
 	backoff     func(int) time.Duration // Backoff for retries, after stream failures.
 	minInterval time.Duration           // Lower bound on the load reporting interval.
 	nodeProto   *v3corepb.Node          // Node proto to identify the gRPC application.
-	logPrefix   string                  // Prefix to be used for log messages.
+	logger      *igrpclog.PrefixLogger  // Logger for the client.
 }
 
 // newStreamImpl creates a new StreamImpl with the provided options.
@@ -92,8 +91,7 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 		finalSendDone:    make(chan error, 1),
 	}
 
-	l := grpclog.Component("xds")
-	lrs.logger = igrpclog.NewPrefixLogger(l, opts.logPrefix+fmt.Sprintf("[lrs-stream %p] ", lrs))
+	lrs.logger = opts.logger.WithPrefix(fmt.Sprintf("[lrs-stream %p] ", lrs))
 	lrs.loadStore = newLoadStore()
 	go lrs.runner(ctx)
 	return lrs
