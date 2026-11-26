@@ -18,8 +18,6 @@
 
 package xdsclient
 
-import "google.golang.org/protobuf/types/known/anypb"
-
 // ResourceType wraps all resource-type specific functionality. Each supported
 // resource type needs to provide an implementation of the Decoder.
 type ResourceType struct {
@@ -53,9 +51,8 @@ type Decoder interface {
 	// Decode deserializes and validates an xDS resource as received from the
 	// xDS management server.
 	//
-	// The `resource` parameter may contain a value of the serialized wrapped
-	// resource (i.e. with the type URL
-	// `type.googleapis.com/envoy.service.discovery.v3.Resource`).
+	// The resource parameter may contain a serialized wrapped resource (with
+	// type URL `type.googleapis.com/envoy.service.discovery.v3.Resource`).
 	// Implementations are responsible for unwrapping the underlying resource if
 	// it is wrapped.
 	//
@@ -64,27 +61,23 @@ type Decoder interface {
 	Decode(resource *AnyProto, options DecodeOptions) (*DecodeResult, error)
 }
 
-// AnyProto contains the type URL and serialized proto data of an xDS resource.
+// AnyProto represents a serialized protobuf Any message (corresponding to
+// [google.golang.org/protobuf/types/known/anypb.Any]).
+//
+// This plain Go struct is used in place of anypb.Any to avoid exposing a direct
+// dependency on google.golang.org/protobuf on the xdsclient API surface while
+// keeping wire representation lightweight.
 type AnyProto struct {
-	typeURL string
-	value   []byte
-}
+	// TypeURL is the URL identifying the type of serialized protobuf message.
+	// For example:
+	// "type.googleapis.com/envoy.config.listener.v3.Listener"
+	TypeURL string
 
-// NewAnyProto creates an AnyProto from an anypb.Any. Must be called with a
-// non-nil argument.
-func NewAnyProto(a *anypb.Any) *AnyProto {
-	return &AnyProto{
-		typeURL: a.TypeUrl,
-		value:   a.Value,
-	}
-}
-
-// ToAny converts an AnyProto to an anypb.Any. Never returns nil.
-func (a *AnyProto) ToAny() *anypb.Any {
-	return &anypb.Any{
-		TypeUrl: a.typeURL,
-		Value:   a.value,
-	}
+	// Value contains the serialized protobuf message bytes.
+	//
+	// This slice must be treated as read-only. Callers and decoders must not
+	// modify the underlying bytes.
+	Value []byte
 }
 
 // DecodeOptions wraps the options required by ResourceType implementations for

@@ -136,7 +136,7 @@ func newFilterChainManagerForTesting(t *testing.T, lis *v3listenerpb.Listener) *
 		t.Fatalf("bootstrap.NewConfigFromContents() failed: %v", err)
 	}
 	decoder := xdsresource.NewListenerResourceTypeDecoder(bc, nil)
-	res, err := decoder.Decode(xdsclient.NewAnyProto(lAny), xdsclient.DecodeOptions{})
+	res, err := decoder.Decode(&xdsclient.AnyProto{TypeURL: lAny.GetTypeUrl(), Value: lAny.GetValue()}, xdsclient.DecodeOptions{})
 	if err != nil {
 		t.Fatalf("decoder.Decode() failed: %v", err)
 	}

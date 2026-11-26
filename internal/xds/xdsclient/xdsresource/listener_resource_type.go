@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ListenerResourceTypeName is a human friendly name for the listener resource.
@@ -37,11 +38,17 @@ type listenerResourceDecoder struct {
 }
 
 func (d *listenerResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	if resource == nil {
+		return nil, fmt.Errorf("nil resource")
+	}
 	var serverCfg *bootstrap.ServerConfig
 	if opts.ServerConfig != nil {
 		serverCfg = d.serverConfigs[*opts.ServerConfig]
 	}
-	name, listener, err := unmarshalListenerResource(resource.ToAny(), d.bootstrapConfig, serverCfg)
+	name, listener, err := unmarshalListenerResource(&anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
+	}, d.bootstrapConfig, serverCfg)
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err

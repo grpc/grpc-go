@@ -261,7 +261,10 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 					}
 				}
 			}()
-			return rType.Decoder.Decode(NewAnyProto(r), *opts)
+			return rType.Decoder.Decode(&AnyProto{
+				TypeURL: r.GetTypeUrl(),
+				Value:   r.GetValue(),
+			}, *opts)
 		}()
 
 		// Name field of the result is left unpopulated only when resource
