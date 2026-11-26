@@ -288,7 +288,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 
 			wantCfg := tt.wantXDSClientConfig(bootstrapConfig)
 
-			unexportedTypeOpts := cmpopts.IgnoreUnexported(clients.Node{}, grpctransport.Builder{})
+			unexportedTypeOpts := cmpopts.IgnoreUnexported(clients.Node{}, grpctransport.Builder{}, xdsclient.Config{})
 			ignoreTypeOpts := cmpopts.IgnoreTypes(sync.Mutex{})
 			resourceTypeCmpOpts := cmp.Comparer(func(a, b xdsclient.ResourceType) bool {
 				return a.TypeURL == b.TypeURL && a.TypeName == b.TypeName && a.AllResourcesRequiredInSotW == b.AllResourcesRequiredInSotW && reflect.TypeOf(a.Decoder) == reflect.TypeOf(b.Decoder)
