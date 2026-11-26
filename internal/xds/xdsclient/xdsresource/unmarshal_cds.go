@@ -48,12 +48,7 @@ import (
 // validateClusterAndConstructClusterUpdate function for testing purposes.
 var ValidateClusterAndConstructClusterUpdateForTesting = validateClusterAndConstructClusterUpdate
 
-const (
-	maxSNILength = 255
-	// TransportSocket proto message has a `name` field which is expected to be set
-	// to this value by the management server.
-	transportSocketName = "envoy.transport_sockets.tls"
-)
+const maxSNILength = 255
 
 func unmarshalClusterResource(r *anypb.Any, bootstrapCfg *bootstrap.Config, serverCfg *bootstrap.ServerConfig) (string, ClusterUpdate, error) {
 	r, err := UnwrapResource(r)
@@ -269,7 +264,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, boot
 		}
 		ret.DNSHostName = dnsHN
 		return ret, nil
-	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
+	// Custom cluster types are identified by the type_url of their typed_config,
+	// and not by their name, which is ignored.
+	case cluster.GetClusterType().GetTypedConfig().GetTypeUrl() == version.V3AggregateClusterConfigURL:
 		clusters := &v3aggregateclusterpb.ClusterConfig{}
 		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
 			return ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -355,9 +352,8 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, b
 		typeURL = tc.GetTypeUrl()
 	}
 
-	if name := ts.GetName(); name != transportSocketName {
-		return nil, false, fmt.Errorf("transport_socket field has unexpected name: %s", name)
-	}
+	// The transport socket is identified by the type_url of its typed_config,
+	// and not by its name, which is ignored.
 	if typeURL != version.V3UpstreamTLSContextURL {
 		return nil, false, fmt.Errorf("transport_socket missing typed_config or wrong type_url: %q", typeURL)
 	}

@@ -41,4 +41,5 @@ const (
 	V3HTTP11ProxyUpstreamTransportURL = googleapiPrefix + "envoy.extensions.transport_sockets.http_11_proxy.v3.Http11ProxyUpstreamTransport"
 	V3AddressURL                      = googleapiPrefix + "envoy.config.core.v3.Address"
 	V3AudienceURL                     = googleapiPrefix + "envoy.extensions.filters.http.gcp_authn.v3.Audience"
+	V3AggregateClusterConfigURL       = googleapiPrefix + "envoy.extensions.clusters.aggregate.v3.ClusterConfig"
 )

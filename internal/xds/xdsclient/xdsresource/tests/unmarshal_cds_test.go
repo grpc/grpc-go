@@ -193,6 +193,37 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 		},
 		{
+			// Custom cluster types are identified by the type_url of their
+			// typed_config, and their name is ignored.
+			name: "happy-case-aggregate-v3-name-ignored",
+			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name: "unsupported-cluster-type-name",
+						TypedConfig: testutils.MarshalAny(t, &v3aggregateclusterpb.ClusterConfig{
+							Clusters: []string{"a", "b", "c"},
+						}),
+					},
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			},
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName:             clusterName,
+				ClusterType:             xdsresource.ClusterTypeAggregate,
+				PrioritizedClusterNames: []string{"a", "b", "c"},
+				TelemetryLabels:         xdsinternal.UnknownCSMLabels,
+			},
+			wantLBConfig: &iserviceconfig.BalancerConfig{
+				Name: wrrlocality.Name,
+				Config: &wrrlocality.LBConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
+						Name: "round_robin",
+					},
+				},
+			},
+		},
+		{
 			name:    "happy-case-no-service-name-no-lrs",
 			cluster: e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone),
 			wantUpdate: xdsresource.ClusterUpdate{
