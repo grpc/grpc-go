@@ -1,0 +1,151 @@
+/*
+ *
+ * Copyright 2026 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Binary server is an interop server with OpenTelemetry tracing support.
+//
+// It is functionally identical to the interop server in the root module
+// (interop/server) but additionally accepts -enable_opentelemetry and
+// -otel_collector_address, which configure the gRPC OpenTelemetry plugin to
+// export traces over OTLP/gRPC. It lives in its own module so that the OTLP
+// exporter's dependencies do not leak into the root grpc-go module.
+//
+// See interop test case descriptions [here].
+//
+// [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
+package main
+
+import (
+	"flag"
+	"net"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/alts"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
+	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/interop"
+	interopotel "google.golang.org/grpc/interop/otel"
+	"google.golang.org/grpc/orca"
+	grpcotel "google.golang.org/grpc/stats/opentelemetry"
+	"google.golang.org/grpc/testdata"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+)
+
+var (
+	useTLS               = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	useALTS              = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
+	altsHSAddr           = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
+	certFile             = flag.String("tls_cert_file", "", "The TLS cert file")
+	keyFile              = flag.String("tls_key_file", "", "The TLS key file")
+	port                 = flag.Int("port", 10000, "The server port")
+	enableOpenTelemetry  = flag.Bool("enable_opentelemetry", false, "Whether to enable OpenTelemetry tracing")
+	otelCollectorAddress = flag.String("otel_collector_address", "", "The OTLP/gRPC address of the OpenTelemetry trace collector, e.g. localhost:4317 or http://localhost:4317")
+
+	logger = grpclog.Component("interop")
+)
+
+func main() {
+	flag.Parse()
+	if *useTLS && *useALTS {
+		logger.Fatal("-use_tls and -use_alts cannot be both set to true")
+	}
+	p := strconv.Itoa(*port)
+	lis, err := net.Listen("tcp", ":"+p)
+	if err != nil {
+		logger.Fatalf("failed to listen: %v", err)
+	}
+	logger.Infof("interop server listening on %v", lis.Addr())
+	opts := []grpc.ServerOption{orca.CallMetricsServerOption(nil)}
+	tp, propagator, shutdownTracing, err := interopotel.Setup(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	if err != nil {
+		logger.Fatalf("Failed to set up OpenTelemetry tracing: %v", err)
+	}
+	if tp != nil {
+		defer shutdownTracing()
+		opts = append(opts, grpcotel.ServerOption(grpcotel.Options{
+			TraceOptions: oteltracing.TraceOptions{
+				TracerProvider:    tp,
+				TextMapPropagator: propagator,
+			},
+		}))
+	}
+	if *useTLS {
+		if *certFile == "" {
+			*certFile = testdata.Path("server1.pem")
+		}
+		if *keyFile == "" {
+			*keyFile = testdata.Path("server1.key")
+		}
+		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
+		if err != nil {
+			logger.Fatalf("Failed to generate credentials: %v", err)
+		}
+		opts = append(opts, grpc.Creds(creds))
+	} else if *useALTS {
+		altsOpts := alts.DefaultServerOptions()
+		if *altsHSAddr != "" {
+			altsOpts.HandshakerServiceAddress = *altsHSAddr
+		}
+		altsTC := alts.NewServerCreds(altsOpts)
+		opts = append(opts, grpc.Creds(altsTC))
+	}
+	server := grpc.NewServer(opts...)
+	metricsRecorder := orca.NewServerMetricsRecorder()
+	sopts := orca.ServiceOptions{
+		MinReportingInterval:  time.Second,
+		ServerMetricsProvider: metricsRecorder,
+	}
+	internal.ORCAAllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&sopts)
+	orca.Register(server, sopts)
+	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer(interop.NewTestServerOptions{MetricsRecorder: metricsRecorder}))
+
+	// Stop serving on SIGINT/SIGTERM so that the deferred tracing shutdown
+	// runs and flushes any spans that have not been exported yet.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		logger.Info("Signal received, stopping interop server")
+		stopped := make(chan struct{})
+		go func() {
+			server.GracefulStop()
+			close(stopped)
+		}()
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-stopped:
+		case <-timer.C:
+			server.Stop()
+		}
+	}()
+	if err := server.Serve(lis); err != nil {
+		// Serve returns nil after Stop/GracefulStop, so this is a real failure.
+		// Flush pending spans explicitly since os.Exit skips deferred calls.
+		logger.Errorf("interop server failed to serve: %v", err)
+		shutdownTracing()
+		os.Exit(1)
+	}
+}
