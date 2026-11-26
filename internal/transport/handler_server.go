@@ -47,6 +47,25 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	// handlerStreamWindowSize is the maximum number of bytes of request data
+	// that the request body reading goroutine buffers ahead of the
+	// application.
+	//
+	// TODO: Consider making this configurable, based on either the
+	// InitialWindowSize server option or the per-stream receive buffer size
+	// set on the std lib's HTTP/2 server. Note that the latter would result in
+	// double the quota being used, since the std lib's server buffers up to
+	// that many bytes on its own before the request body is read.
+	handlerStreamWindowSize = 32 * 1024
+	// handlerStreamWindowRefill is the minimum amount of quota that must be
+	// available for the request body reading goroutine to read. Reading pauses
+	// once less than this is available, and resumes once the application has
+	// consumed enough of the buffered data. This avoids many tiny reads from
+	// the request body.
+	handlerStreamWindowRefill = handlerStreamWindowSize / 4
+)
+
 // NewServerHandlerTransport returns a ServerTransport handling gRPC from
 // inside an http.Handler, or writes an HTTP error to w and returns an error.
 // It requires that the http Server supports HTTP/2.
@@ -100,6 +119,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats sta
 		stats:          stats,
 		bufferPool:     bufferPool,
 	}
+	st.readQuota.init(handlerStreamWindowSize)
 	st.logger = prefixLoggerForServerHandlerTransport(st)
 
 	if v := r.Header.Get("grpc-timeout"); v != "" {
@@ -174,6 +194,81 @@ type serverHandlerTransport struct {
 	logger *grpclog.PrefixLogger
 
 	bufferPool mem.BufferPool
+
+	// readQuota limits how many bytes the request body reading goroutine may
+	// buffer ahead of the application's reads. Since net/http's HTTP/2 server
+	// only replenishes the peer's stream flow control window when the request
+	// body is read, this provides stream level flow control.
+	readQuota readQuota
+}
+
+// readQuota tracks the number of bytes the request body reading goroutine is
+// allowed to read before the application consumes the buffered data.
+type readQuota struct {
+	mu        sync.Mutex
+	available int
+	// quotaReturned is signalled when quota is returned, to wake up the
+	// reading goroutine.
+	quotaReturned chan struct{}
+}
+
+// init initializes the quota with size bytes. It must be called before any
+// other method.
+func (q *readQuota) init(size int) {
+	q.available = size
+	q.quotaReturned = make(chan struct{}, 1)
+}
+
+// acquire reserves and returns up to maxSize bytes of quota. It blocks until
+// at least minSize bytes of quota are available, to avoid many tiny reads. It
+// returns false if ctx is done before the quota is available.
+func (q *readQuota) acquire(ctx context.Context, minSize, maxSize int) (int, bool) {
+	for {
+		q.mu.Lock()
+		if q.available >= minSize {
+			n := min(q.available, maxSize)
+			q.available -= n
+			q.mu.Unlock()
+			return n, true
+		}
+		q.mu.Unlock()
+		select {
+		case <-q.quotaReturned:
+		case <-ctx.Done():
+			return 0, false
+		}
+	}
+}
+
+// release returns n bytes of quota and wakes up the reading goroutine.
+func (q *readQuota) release(n int) {
+	if n <= 0 {
+		return
+	}
+	q.mu.Lock()
+	q.available += n
+	q.mu.Unlock()
+	select {
+	case q.quotaReturned <- struct{}{}:
+	default:
+	}
+}
+
+// dataBuffer returns a mem.Buffer holding the first n bytes of buf, which must
+// have been obtained from ht.bufferPool. It takes ownership of buf.
+//
+// The read quota only accounts for the bytes read, and not for the capacity of
+// the buffers holding them. To keep the memory held by the buffered data
+// proportional to the quota, the bytes are copied to a right-sized buffer if
+// they occupy less than half of buf's capacity.
+func (ht *serverHandlerTransport) dataBuffer(buf *[]byte, n int) mem.Buffer {
+	if 2*n < cap(*buf) {
+		b := mem.Copy((*buf)[:n], ht.bufferPool)
+		ht.bufferPool.Put(buf)
+		return b
+	}
+	*buf = (*buf)[:n]
+	return mem.NewBuffer(buf, ht.bufferPool)
 }
 
 func (ht *serverHandlerTransport) Close(err error) {
@@ -386,7 +481,10 @@ func (ht *serverHandlerTransport) writeHeader(s *ServerStream, md metadata.MD) e
 func (ht *serverHandlerTransport) adjustWindow(*ServerStream, uint32) {
 }
 
-func (ht *serverHandlerTransport) updateWindow(*ServerStream, uint32) {
+// updateWindow is called when the application consumes n bytes of buffered
+// request data. It returns the quota to the request body reading goroutine.
+func (ht *serverHandlerTransport) updateWindow(_ *ServerStream, n uint32) {
+	ht.readQuota.release(int(n))
 }
 
 func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream func(*ServerStream)) {
@@ -437,11 +535,21 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		defer close(readerDone)
 
 		for {
-			buf := ht.bufferPool.Get(http2MaxFrameLen)
+			// Wait until the application has consumed enough of the
+			// buffered data. Not reading from the request body stops
+			// net/http from sending window updates to the client.
+			size, ok := ht.readQuota.acquire(ctx, handlerStreamWindowRefill, http2MaxFrameLen)
+			if !ok {
+				// The stream is done. The recvBufferReader observes ctx
+				// being done, so there's no need to push an error.
+				return
+			}
+			buf := ht.bufferPool.Get(size)
 			n, err := req.Body.Read(*buf)
+			// Return the quota for the bytes that were not read.
+			ht.readQuota.release(size - n)
 			if n > 0 {
-				*buf = (*buf)[:n]
-				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf, ht.bufferPool)})
+				s.buf.put(recvMsg{buffer: ht.dataBuffer(buf, n)})
 			} else {
 				ht.bufferPool.Put(buf)
 			}

@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -433,6 +435,153 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		"Grpc-Message": {encodeGrpcMessage("too slow")},
 	}
 	checkHeaderAndTrailer(t, rw, wantHeader, wantTrailer)
+}
+
+// Tests that the handler transport stops reading the request body when the
+// application isn't consuming the buffered data, without buffering more than
+// handlerStreamWindowSize bytes, and resumes reading once the application
+// consumes the data.
+func (s) TestHandlerTransport_HandleStreams_FlowControl(t *testing.T) {
+	st := newHandleStreamTest(t, nil)
+	const (
+		chunkSize  = 1024
+		totalSize  = 4 * handlerStreamWindowSize
+		headerSize = 5
+		// The reading goroutine keeps reading until less than
+		// handlerStreamWindowRefill bytes of quota are available.
+		minBuffered = handlerStreamWindowSize - handlerStreamWindowRefill
+	)
+	want := make([]byte, totalSize)
+	for i := range want {
+		want[i] = byte(i)
+	}
+
+	// io.Pipe writes block until the reader consumes the data, so written
+	// tracks the number of bytes read from the request body.
+	var written atomic.Int64
+	writerDone := make(chan error, 1)
+	go func() {
+		for off := 0; off < totalSize; off += chunkSize {
+			if _, err := st.bodyw.Write(want[off : off+chunkSize]); err != nil {
+				writerDone <- err
+				return
+			}
+			written.Add(chunkSize)
+		}
+		writerDone <- st.bodyw.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	handleStream := func(s *ServerStream) {
+		defer s.WriteStatus(status.New(codes.OK, ""))
+
+		// Wait for the reading goroutine to use up the quota.
+		for written.Load() <= minBuffered {
+			if ctx.Err() != nil {
+				t.Errorf("Timed out waiting for more than %d bytes to be read from the body, got %d", minBuffered, written.Load())
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		// Verify that reading stops within the window while the application
+		// isn't consuming the data.
+		time.Sleep(defaultTestShortTimeout)
+		if got := written.Load(); got > handlerStreamWindowSize {
+			t.Errorf("Bytes read from the body without application reads = %d, want <= %d", got, handlerStreamWindowSize)
+			return
+		}
+
+		// Consuming the data should allow the rest of the body to be read.
+		// Both ReadMessageHeader and Read return quota, so use both.
+		header := make([]byte, headerSize)
+		if err := s.ReadMessageHeader(header); err != nil {
+			t.Errorf("s.ReadMessageHeader() failed: %v", err)
+			return
+		}
+		data, err := s.Read(totalSize - headerSize)
+		if err != nil {
+			t.Errorf("s.Read(%d) failed: %v", totalSize-headerSize, err)
+			return
+		}
+		defer data.Free()
+		if got := append(header, data.Materialize()...); !bytes.Equal(got, want) {
+			t.Errorf("Reading %d bytes from the stream returned unexpected data", totalSize)
+		}
+		if err := <-writerDone; err != nil {
+			t.Errorf("Writing request body failed: %v", err)
+		}
+	}
+	st.ht.HandleStreams(ctx, func(s *ServerStream) { go handleStream(s) })
+}
+
+// Tests that HandleStreams returns when the application finishes the RPC
+// without consuming the request data, while the request body reading
+// goroutine is blocked waiting for quota.
+func (s) TestHandlerTransport_HandleStreams_FlowControl_UnreadData(t *testing.T) {
+	st := newHandleStreamTest(t, nil)
+	const (
+		chunkSize = 1024
+		// The reading goroutine keeps reading until less than
+		// handlerStreamWindowRefill bytes of quota are available.
+		minBuffered = handlerStreamWindowSize - handlerStreamWindowRefill
+	)
+
+	// io.Pipe writes block until the reader consumes the data, so written
+	// tracks the number of bytes read from the request body.
+	var written atomic.Int64
+	writerDone := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		chunk := make([]byte, chunkSize)
+		// Write until the request body is closed.
+		for {
+			if _, err := st.bodyw.Write(chunk); err != nil {
+				return
+			}
+			written.Add(chunkSize)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	handleStream := func(s *ServerStream) {
+		defer s.WriteStatus(status.New(codes.OK, ""))
+
+		// Wait for the reading goroutine to use up the quota.
+		for written.Load() <= minBuffered {
+			if ctx.Err() != nil {
+				t.Errorf("Timed out waiting for more than %d bytes to be read from the body, got %d", minBuffered, written.Load())
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		// Give the reading goroutine time to block waiting for quota.
+		time.Sleep(defaultTestShortTimeout)
+	}
+
+	// The context passed to HandleStreams is not tied to the test timeout, to
+	// ensure that the reading goroutine is unblocked by the end of the RPC and
+	// not by the test's context expiring.
+	hsCtx, hsCancel := context.WithCancel(context.Background())
+	defer hsCancel()
+	handleStreamsDone := make(chan struct{})
+	go func() {
+		defer close(handleStreamsDone)
+		st.ht.HandleStreams(hsCtx, func(s *ServerStream) { go handleStream(s) })
+	}()
+	select {
+	case <-handleStreamsDone:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for HandleStreams to return")
+	}
+
+	// HandleStreams closes the request body, which unblocks the writer.
+	select {
+	case <-writerDone:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the request body writer to exit")
+	}
 }
 
 // TestHandlerTransport_HandleStreams_MultiWriteStatus ensures that
