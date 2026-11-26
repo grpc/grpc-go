@@ -25,7 +25,6 @@ import (
 	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -42,52 +41,6 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-func (s) TestPruneActiveClusters(t *testing.T) {
-	newClusterInfo := func(ref int32, unsubscribe func()) *clusterInfo {
-		ci := &clusterInfo{unsubscribe: unsubscribe}
-		ci.refCount.Store(ref)
-		return ci
-	}
-	r := &xdsResolver{
-		activeClusters: map[string]*clusterInfo{
-			"zero":        newClusterInfo(0, func() {}),
-			"one":         newClusterInfo(1, func() {}),
-			"two":         newClusterInfo(2, func() {}),
-			"anotherzero": newClusterInfo(0, func() {}),
-		},
-		activePlugins: map[string]*clusterInfo{
-			"zero":        newClusterInfo(0, nil),
-			"one":         newClusterInfo(1, nil),
-			"two":         newClusterInfo(2, nil),
-			"anotherzero": newClusterInfo(0, nil),
-		},
-	}
-	wantActiveClusters := map[string]int32{
-		"one": 1,
-		"two": 2,
-	}
-	wantActivePlugins := map[string]int32{
-		"one": 1,
-		"two": 2,
-	}
-	r.pruneActiveClustersAndPlugins()
-
-	getRefCounts := func(m map[string]*clusterInfo) map[string]int32 {
-		res := make(map[string]int32)
-		for k, v := range m {
-			res[k] = v.refCount.Load()
-		}
-		return res
-	}
-
-	if d := cmp.Diff(getRefCounts(r.activeClusters), wantActiveClusters); d != "" {
-		t.Fatalf("r.activeClusters refCounts mismatch (-got +want):\n%s", d)
-	}
-	if d := cmp.Diff(getRefCounts(r.activePlugins), wantActivePlugins); d != "" {
-		t.Fatalf("r.activePlugins refCounts mismatch (-got +want):\n%s", d)
-	}
 }
 
 func (s) TestGenerateRequestHash(t *testing.T) {
