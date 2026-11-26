@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedtarget/weightedaggregator"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/experimental/resolver/locality"
 	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpclog"
@@ -59,7 +60,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	b.bg = balancergroup.New(balancergroup.Options{
 		CC:                      cc,
 		BuildOpts:               bOpts,
-		StateAggregator:         b.stateAggregator,
+		StateAggregator:         b,
 		Logger:                  b.logger,
 		SubBalancerCloseTimeout: time.Duration(0), // Disable caching of removed child policies
 	})
@@ -184,4 +185,15 @@ func (b *weightedTargetBalancer) Close() {
 
 func (b *weightedTargetBalancer) ExitIdle() {
 	b.bg.ExitIdle()
+}
+
+// UpdateState implements balancergroup.BalancerStateAggregator. It forwards
+// child state updates to the weighted state aggregator and instructs any child
+// that reports IDLE to exit IDLE asynchronously (to avoid deadlocking on
+// balancergroup's outgoingMu or the child's mutex).
+func (b *weightedTargetBalancer) UpdateState(id string, state balancer.State) {
+	b.stateAggregator.UpdateState(id, state)
+	if state.ConnectivityState == connectivity.Idle {
+		go b.bg.ExitIdleOne(id)
+	}
 }
