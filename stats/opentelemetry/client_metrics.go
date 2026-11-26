@@ -68,22 +68,37 @@ func (h *clientMetricsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-// getOrCreateCallInfo returns the existing callInfo from context if present,
-// or creates and attaches a new one.
-func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (context.Context, *callInfo) {
-	ci := getCallInfo(ctx)
-	if ci == nil {
-		ci = &callInfo{
-			target: cc.CanonicalTarget(),
-			method: determineMethod(method, opts...),
-		}
-		ctx = context.WithValue(ctx, callInfoKey{}, ci)
+// newCallInfo creates a callInfo for the RPC described by cc, method and opts,
+// and returns a context carrying it.
+//
+// A new callInfo is always created, even if ctx already carries one. ctx can
+// be derived from the context of another RPC (for example, a stream's
+// Context()), and reusing that RPC's callInfo would attribute this RPC's
+// telemetry to the wrong method and target.
+func newCallInfo(ctx context.Context, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) context.Context {
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: determineMethod(method, opts...),
 	}
-	return ctx, ci
+	return context.WithValue(ctx, callInfoKey{}, ci)
+}
+
+// callInfoUnaryInterceptor attaches a new callInfo to the context of every
+// unary RPC. It must run before the metrics and tracing interceptors, which
+// share the callInfo it creates.
+func callInfoUnaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	return invoker(newCallInfo(ctx, cc, method, opts...), method, req, reply, cc, opts...)
+}
+
+// callInfoStreamInterceptor attaches a new callInfo to the context of every
+// streaming RPC. It must run before the metrics and tracing interceptors,
+// which share the callInfo it creates.
+func callInfoStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	return streamer(newCallInfo(ctx, cc, method, opts...), desc, cc, method, opts...)
 }
 
 func (h *clientMetricsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ctx, ci := getOrCreateCallInfo(ctx, cc, method, opts...)
+	ci := getCallInfo(ctx)
 
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -113,7 +128,7 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 }
 
 func (h *clientMetricsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	ctx, ci := getOrCreateCallInfo(ctx, cc, method, opts...)
+	ci := getCallInfo(ctx)
 
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -159,8 +174,12 @@ func (h *clientMetricsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for metrics.
-func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	ctx, ri := getOrCreateClientRPCInfo(ctx, info)
+func (h *clientMetricsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	ri := clientRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("context passed into client side stats handler (TagRPC) has no client attempt data present")
+		return ctx
+	}
 	// Numerous stats handlers can be used for the same channel. This callback
 	// ensures that all label updates are propagated to the rpc attempt info across
 	// derived contexts.

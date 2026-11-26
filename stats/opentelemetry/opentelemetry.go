@@ -124,6 +124,18 @@ type MetricsOptions struct {
 func DialOption(o Options) grpc.DialOption {
 	var metricsOpts, tracingOpts []grpc.DialOption
 
+	if !o.isMetricsEnabled() && !o.isTracingEnabled() {
+		return joinDialOptions()
+	}
+	// The callInfo interceptors and the rpcInfo stats handler must come first,
+	// so that the metrics and tracing interceptors and stats handlers see the
+	// callInfo and rpcInfo of the current RPC and attempt.
+	callInfoOpts := []grpc.DialOption{
+		grpc.WithChainUnaryInterceptor(callInfoUnaryInterceptor),
+		grpc.WithChainStreamInterceptor(callInfoStreamInterceptor),
+		grpc.WithStatsHandler(clientRPCInfoHandler{}),
+	}
+
 	if o.isMetricsEnabled() {
 		metricsHandler := &clientMetricsHandler{options: o}
 		metricsHandler.initializeMetrics()
@@ -134,7 +146,7 @@ func DialOption(o Options) grpc.DialOption {
 		tracingHandler.initializeTraces()
 		tracingOpts = append(tracingOpts, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.WithStatsHandler(tracingHandler))
 	}
-	return joinDialOptions(append(metricsOpts, tracingOpts...)...)
+	return joinDialOptions(append(append(callInfoOpts, metricsOpts...), tracingOpts...)...)
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -216,12 +228,36 @@ func serverRPCInfo(ctx context.Context) *rpcInfo {
 	return ri
 }
 
-func getOrCreateClientRPCInfo(ctx context.Context, info *stats.RPCTagInfo) (context.Context, *rpcInfo) {
-	ri := clientRPCInfo(ctx)
-	if ri != nil {
-		return ctx, ri
-	}
-	ri = &rpcInfo{
+// clientRPCInfoHandler is a stats.Handler that attaches a new rpcInfo to the
+// context of every client RPC attempt. It must be registered before the
+// metrics and tracing stats handlers, which share the rpcInfo it creates.
+//
+// A new rpcInfo is always created, even if the context already carries one.
+// The context can be derived from the context of another RPC (for example, a
+// stream's Context()), and reusing that RPC's rpcInfo would attribute this
+// attempt's telemetry to the other RPC.
+type clientRPCInfoHandler struct{}
+
+// TagRPC attaches a new rpcInfo for this attempt to ctx.
+func (clientRPCInfoHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	return newClientRPCInfo(ctx, info)
+}
+
+// HandleRPC exists to satisfy stats.Handler.
+func (clientRPCInfoHandler) HandleRPC(context.Context, stats.RPCStats) {}
+
+// TagConn exists to satisfy stats.Handler.
+func (clientRPCInfoHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+// HandleConn exists to satisfy stats.Handler.
+func (clientRPCInfoHandler) HandleConn(context.Context, stats.ConnStats) {}
+
+// newClientRPCInfo returns a context carrying a new rpcInfo for the client RPC
+// attempt described by info.
+func newClientRPCInfo(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	ri := &rpcInfo{
 		ai: &attemptInfo{
 			startTime: time.Now(),
 			method:    removeLeadingSlash(info.FullMethodName),
@@ -234,7 +270,7 @@ func getOrCreateClientRPCInfo(ctx context.Context, info *stats.RPCTagInfo) (cont
 			},
 		},
 	}
-	return context.WithValue(ctx, clientRPCInfoKey{}, ri), ri
+	return context.WithValue(ctx, clientRPCInfoKey{}, ri)
 }
 
 func getOrCreateServerRPCInfo(ctx context.Context, info *stats.RPCTagInfo, options MetricsOptions) (context.Context, *rpcInfo) {

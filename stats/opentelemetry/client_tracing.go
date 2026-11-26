@@ -48,8 +48,6 @@ func (h *clientTracingHandler) initializeTraces() {
 }
 
 func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
-
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
 	err := invoker(ctx, method, req, reply, cc, opts...)
@@ -58,8 +56,6 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 }
 
 func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
-
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
 	callback := func(err error) { h.finishTrace(err, span) }
@@ -124,7 +120,11 @@ func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	ctx, ri := getOrCreateClientRPCInfo(ctx, info)
+	ri := clientRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("context passed into client side stats handler (TagRPC) has no client attempt data present")
+		return ctx
+	}
 	ci := getCallInfo(ctx)
 	if ci == nil {
 		logger.Error("context passed into client side stats handler (TagRPC) has no call info")
