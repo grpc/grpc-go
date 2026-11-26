@@ -1078,89 +1078,133 @@ func (s) TestResourceNotFoundResolverError(t *testing.T) {
 	}
 }
 
-// Tests scenarios involving removal of a cluster resource from the management
-// server.
-//
-//   - when the cluster resource is removed after a previous good
-//     update from the management server, the cds LB policy is expected to put
-//     the channel in TRANSIENT_FAILURE.
-//   - when the cluster resource is re-sent by the management server, RPCs
-//     should start succeeding.
-func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cdsResourceCanceledCh := make(chan struct{}, 1)
-	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-		if req.GetTypeUrl() == version.V3ClusterURL {
-			if len(req.GetResourceNames()) == 0 {
-				select {
-				case cdsResourceCanceledCh <- struct{}{}:
-				case <-ctx.Done():
+// Tests scenarios where a cluster resource that was previously good can no
+// longer be used, either because it is removed from the management server, or
+// because the xDS dependency manager reports an error for it. Verifies that the
+// cds LB policy closes its child policy (and thereby the connections to the
+// backends), that the CDS watch is not cancelled, that the channel moves to
+// TRANSIENT_FAILURE, that RPCs fail with a meaningful error containing the xDS
+// node ID, and that RPCs succeed once a good cluster resource is received.
+func (s) TestClusterUpdate_ClusterError(t *testing.T) {
+	tests := []struct {
+		desc string
+		// breakCluster modifies resources such that the cluster resource with
+		// the given name can no longer be used, and returns the error that RPCs
+		// are expected to fail with.
+		breakCluster func(resources *e2e.UpdateOptions, clusterName string) (wantErr string)
+	}{
+		{
+			desc: "cluster resource removed",
+			breakCluster: func(resources *e2e.UpdateOptions, clusterName string) string {
+				resources.Clusters = nil
+				return fmt.Sprintf("resource %q of type %q has been removed", clusterName, "ClusterResource")
+			},
+		},
+		{
+			desc: "aggregate cluster graph with no leaf clusters",
+			breakCluster: func(resources *e2e.UpdateOptions, clusterName string) string {
+				// An aggregate cluster in a cycle with no leaf clusters. The
+				// resources are valid on their own and are not NACKed, but the
+				// xDS dependency manager reports an error for the cluster.
+				resources.Clusters = []*v3clusterpb.Cluster{
+					makeAggregateClusterResource(clusterName, []string{clusterName + "-B"}),
+					makeAggregateClusterResource(clusterName+"-B", []string{clusterName}),
 				}
+				return "aggregate cluster graph has no leaf clusters"
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			cdsResourceCanceledCh := make(chan struct{}, 1)
+			onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+				if req.GetTypeUrl() == version.V3ClusterURL && len(req.GetResourceNames()) == 0 {
+					select {
+					case cdsResourceCanceledCh <- struct{}{}:
+					case <-ctx.Done():
+					}
+				}
+				return nil
 			}
-		}
-		return nil
-	}
-	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, onStreamReq)
+			mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, onStreamReq)
 
-	// Start a test service backend.
-	server := stubserver.StartTestService(t, nil)
-	t.Cleanup(server.Stop)
+			// Start a test service backend whose listener allows the test to
+			// observe connections being accepted and closed.
+			lis := testutils.NewListenerWrapper(t, nil)
+			server := stubserver.StartTestService(t, &stubserver.StubServer{
+				Listener:   lis,
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+			})
+			t.Cleanup(server.Stop)
 
-	// Configure default resources in the management server.
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
-		NodeID:     nodeID,
-		Host:       host,
-		Port:       testutils.ParsePort(t, server.Address),
-	})
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
+			// Configure good resources in the management server and verify
+			// that a successful RPC can be made.
+			goodResources := func() e2e.UpdateOptions {
+				return e2e.DefaultClientResources(e2e.ResourceParams{
+					DialTarget: target,
+					NodeID:     nodeID,
+					Host:       host,
+					Port:       testutils.ParsePort(t, server.Address),
+				})
+			}
+			resources := goodResources()
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+			client := testgrpc.NewTestServiceClient(cc)
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+				t.Fatalf("EmptyCall() failed: %v", err)
+			}
+			val, err := lis.NewConnCh.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout waiting for a connection to the backend: %v", err)
+			}
+			conn := val.(*testutils.ConnWrapper)
 
-	// Verify that a successful RPC can be made.
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
-	}
+			// Update the management server such that the cluster resource can
+			// no longer be used.
+			wantErr := test.breakCluster(&resources, resources.Clusters[0].Name)
+			resources.SkipValidation = true
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
 
-	// Remove the cluster resource from the management server, triggering a
-	// resource-not-found error.
-	oldClusters := resources.Clusters
-	resources.Clusters = nil
-	resources.SkipValidation = true
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
+			// Verify that the connection to the backend is closed. This
+			// happens only when the cds LB policy closes its child policy.
+			if _, err := conn.CloseCh.Receive(ctx); err != nil {
+				t.Fatalf("Timeout waiting for the connection to the backend to be closed: %v", err)
+			}
 
-	// Verify that the watch for the cluster resource is not cancelled.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-cdsResourceCanceledCh:
-		t.Fatal("Watch for cluster resource is cancelled when not expected to")
-	}
+			// Verify that the watch for the cluster resource is not cancelled.
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			select {
+			case <-sCtx.Done():
+			case <-cdsResourceCanceledCh:
+				t.Fatal("Watch for cluster resource is cancelled when not expected to")
+			}
 
-	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+			// Verify that the channel moves to TRANSIENT_FAILURE, and that RPCs
+			// fail with Unavailable and an error message containing the
+			// expected error and the xDS node ID.
+			testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+			_, err = client.EmptyCall(ctx, &testpb.Empty{})
+			if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
+				t.Fatal(err)
+			}
 
-	// Ensure RPC fails with Unavailable status code and the error message is
-	// meaningful and contains the xDS node ID.
-	wantErr := fmt.Sprintf("resource %q of type %q has been removed", oldClusters[0].Name, "ClusterResource")
-	_, err := client.EmptyCall(ctx, &testpb.Empty{})
-	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
-		t.Fatal(err)
-	}
-
-	// Re-add the cluster resource to the management server.
-	resources.Clusters = oldClusters
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify that a successful RPC can be made.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
+			// Restore the good cluster resource and verify that RPCs succeed.
+			// This requires the cds LB policy to create a new child policy.
+			if err := mgmtServer.Update(ctx, goodResources()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+				t.Fatalf("EmptyCall() failed after restoring the cluster resource: %v", err)
+			}
+		})
 	}
 }
 
