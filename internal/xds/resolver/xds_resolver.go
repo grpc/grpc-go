@@ -423,27 +423,20 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		if err != nil {
 			// Stop the config selector if an error occurs during construction
 			// to ensure that interceptors that were created successfully before
-			// the error are cleaned up.
+			// the error are cleaned up, and that references taken on clusters
+			// and plugins before the error are released.
 			cs.stop()
 		}
 	}()
 
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
-		interceptors := []httpfilter.ClientInterceptor{}
 		// TODO: Carve out the common logic between the ClusterSpecifierPlugin
 		// and WeightedClusters.
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
 			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 			if err != nil {
-				// Clean up any interceptors that were successfully built
-				// for the current route before this error occurred. Note
-				// that this is not handled by the call to cs.stop() in the
-				// deferred function.
-				for _, i := range interceptors {
-					i.Close()
-				}
 				return nil, err
 			}
 			routeCluster := &routeCluster{
@@ -453,21 +446,19 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 			rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 			cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 			clusters.Add(rc, 1)
-			ci := r.addOrGetActiveClusterInfo(clusterName, "")
+			// Take a single reference per plugin for this config selector, so
+			// that cs.stop() releases exactly the references that were taken.
+			ci, ok := cs.plugins[clusterName]
+			if !ok {
+				ci = r.acquireClusterInfo(clusterName, "")
+				cs.plugins[clusterName] = ci
+			}
 			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
-			cs.plugins[clusterName] = ci
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
 				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 				if err != nil {
-					// Clean up any interceptors that were successfully built
-					// for the current route before this error occurred. Note
-					// that this is not handled by the call to cs.stop() in the
-					// deferred function.
-					for _, i := range interceptors {
-						i.Close()
-					}
 					return nil, err
 				}
 				routeCluster := &routeCluster{
@@ -477,9 +468,15 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 				cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 				clusters.Add(rc, int64(wc.Weight))
-				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
+				// Take a single reference per cluster for this config selector,
+				// even if the cluster appears in multiple routes, so that
+				// cs.stop() releases exactly the references that were taken.
+				ci, ok := cs.clusters[clusterName]
+				if !ok {
+					ci = r.acquireClusterInfo(clusterName, wc.Name)
+					cs.clusters[clusterName] = ci
+				}
 				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
-				cs.clusters[clusterName] = ci
 			}
 		}
 		cs.routes[i].clusters = clusters
@@ -494,16 +491,6 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		cs.routes[i].retryConfig = rt.RetryConfig
 		cs.routes[i].hashPolicies = rt.HashPolicies
 		cs.routes[i].autoHostRewrite = rt.AutoHostRewrite
-	}
-
-	// Account for this config selector's clusters. Do this after no further
-	// errors may occur. Note: cs.clusters are pointers to entries in
-	// activeClusters.
-	for _, ci := range cs.clusters {
-		ci.refCount.Add(1)
-	}
-	for _, ci := range cs.plugins {
-		ci.refCount.Add(1)
 	}
 
 	// Cleanup filter instances that are no longer specified in the current
@@ -544,22 +531,24 @@ func (r *xdsResolver) pruneActiveClustersAndPlugins() {
 	}
 }
 
-// addOrGetActiveClusterInfo returns the clusterInfo for the provided key,
-// creating it if it does not exist. It accepts the following parameters:
+// acquireClusterInfo returns the clusterInfo for the provided key, creating it
+// if it does not exist, and takes a reference on it. It accepts the following
+// parameters:
 //   - key: Formatted as "cluster:<name>" or "cluster_specifier_plugin:<name>",
 //     this is the lookup key for the activeClusters or activePlugins maps.
 //   - name: The actual xDS resource name used to initiate a CDS watch.
 //     If empty (e.g., for plugins), no resource watch is triggered.
 //
-// This function manages entry creation and xDS subscriptions but does not
-// increment the reference count of the returned clusterInfo.
-func (r *xdsResolver) addOrGetActiveClusterInfo(key string, name string) *clusterInfo {
+// This function manages entry creation and xDS subscriptions. The caller is
+// responsible for releasing the reference taken on the returned clusterInfo.
+func (r *xdsResolver) acquireClusterInfo(key string, name string) *clusterInfo {
 	if name == "" {
 		ci, ok := r.activePlugins[key]
 		if !ok {
 			ci = &clusterInfo{}
 			r.activePlugins[key] = ci
 		}
+		ci.refCount.Add(1)
 		return ci
 	}
 	ci, ok := r.activeClusters[key]
@@ -567,6 +556,7 @@ func (r *xdsResolver) addOrGetActiveClusterInfo(key string, name string) *cluste
 		ci = &clusterInfo{unsubscribe: r.dm.SubscribeToCluster(name)}
 		r.activeClusters[key] = ci
 	}
+	ci.refCount.Add(1)
 	return ci
 }
 
