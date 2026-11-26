@@ -174,7 +174,7 @@ func (h *clientMetricsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for metrics.
-func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+func (h *clientMetricsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	ri := clientRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("context passed into client side stats handler (TagRPC) has no client attempt data present")
