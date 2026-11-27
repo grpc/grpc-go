@@ -448,8 +448,14 @@ func MaxMsgSize(m int) ServerOption {
 	return MaxRecvMsgSize(m)
 }
 
-// MaxRecvMsgSize returns a ServerOption to set the max message size in bytes the server can receive.
-// If this is not set, gRPC uses the default 4MB.
+// MaxRecvMsgSize returns a ServerOption that sets the maximum size in bytes of
+// each message the server receives, including messages in a stream. The default
+// is 4 MiB (4 * 1024 * 1024 bytes).
+//
+// For compressed messages, both the compressed payload and the decompressed
+// message must fit within the limit. If a message exceeds the limit, the RPC
+// fails with [codes.ResourceExhausted]. Use [MaxCallRecvMsgSize] to set the
+// client's receive limit.
 func MaxRecvMsgSize(m int) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.maxReceiveMessageSize = m
